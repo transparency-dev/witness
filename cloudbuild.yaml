@@ -1,0 +1,25 @@
+timeout: 1200s
+options:
+  volumes:
+  - name: go-modules
+    path: /go
+  env:
+  - GOPROXY=https://proxy.golang.org
+  - PROJECT_ROOT=github.com/transparency-dev/witness
+  - GOPATH=/go
+
+# Cloud Build logs sent to GCS bucket
+logsBucket: 'gs://trillian-cloudbuild-logs'
+
+steps:
+- id: 'lint'
+  name: "golangci/golangci-lint"
+  args: ["golangci-lint","run"]
+
+- id: 'unit tests'
+  name: 'golang:1.20'
+  args: ['go', 'test', './...']
+
+- id: 'build'
+  name: 'golang:1.20'
+  args: ['go', 'build', './...']
