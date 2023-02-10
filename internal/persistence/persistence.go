@@ -62,5 +62,5 @@ type LogStateWriteOps interface {
 
 	// Terminates the write operation, freeing all resources.
 	// This method MUST be called.
-	Close()
+	Close() error
 }

@@ -23,14 +23,14 @@ import (
 	"net/http"
 
 	"github.com/golang/glog"
-	i_note "github.com/transparency-dev/witness/internal/note"
-	ih "github.com/transparency-dev/witness/internal/http"
-	wsql "github.com/transparency-dev/witness/internal/persistence/sql"
-	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/rfc6962"
+	ih "github.com/transparency-dev/witness/internal/http"
+	i_note "github.com/transparency-dev/witness/internal/note"
+	wsql "github.com/transparency-dev/witness/internal/persistence/sql"
+	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -138,6 +138,8 @@ func Main(ctx context.Context, opts ServerOpts) error {
 	}()
 	<-ctx.Done()
 	glog.Info("Server shutting down")
-	hServer.Shutdown(ctx)
+	if err := hServer.Shutdown(ctx); err != nil {
+		return fmt.Errorf("failed to shutdown server: %v", err)
+	}
 	return <-e
 }

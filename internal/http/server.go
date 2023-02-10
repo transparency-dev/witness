@@ -21,9 +21,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/golang/glog"
+	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/witness"
-	"github.com/gorilla/mux"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -73,7 +74,9 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write(chkpt)
+	if _, err := w.Write(chkpt); err != nil {
+		glog.Warningf("Error writing response: %v", err)
+	}
 }
 
 // getCheckpoint returns a checkpoint stored for a given log.
@@ -87,7 +90,9 @@ func (s *Server) getCheckpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write(chkpt)
+	if _, err := w.Write(chkpt); err != nil {
+		glog.Warningf("Error writing response: %v", err)
+	}
 }
 
 // getLogs returns a list of all logs the witness is aware of.
@@ -103,7 +108,9 @@ func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/json")
-	w.Write(logList)
+	if _, err := w.Write(logList); err != nil {
+		glog.Warningf("Error writing response: %v", err)
+	}
 }
 
 // RegisterHandlers registers HTTP handlers for witness endpoints.

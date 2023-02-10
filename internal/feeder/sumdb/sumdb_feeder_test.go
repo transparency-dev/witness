@@ -143,7 +143,9 @@ func TestTileBroker(t *testing.T) {
 			if got, want := len(tile.leaves), test.wantLeaves; got != want {
 				t.Errorf("got %d leaves, wanted %d", got, want)
 			}
-			broker.tile(test.i)
+			if _, err := broker.tile(test.i); err != nil {
+				t.Fatalf("failed to get tile: %v", err)
+			}
 			if lookupTimes != 1 {
 				t.Errorf("broker cache not working")
 			}

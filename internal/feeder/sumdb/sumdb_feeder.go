@@ -152,7 +152,9 @@ func (t tile) hash(n compact.NodeID) []byte {
 		panic(fmt.Sprintf("index %d out of range of %d leaves", right, len(t.leaves)))
 	}
 	for _, l := range t.leaves[left:right] {
-		r.Append(l[:], nil)
+		if err := r.Append(l[:], nil); err != nil {
+			panic(fmt.Sprintf("couldn't append leaf: %v", err))
+		}
 	}
 	root, err := r.GetRootHash(nil)
 	if err != nil {

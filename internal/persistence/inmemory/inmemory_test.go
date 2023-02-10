@@ -21,7 +21,6 @@ import (
 
 	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
-	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -60,7 +59,7 @@ func TestWriteOpsConcurrent(t *testing.T) {
 				}
 			}
 			// Ignore any error on Set because we expect some.
-			w.Set([]byte(fmt.Sprintf("success %d", i)), nil)
+			_ = w.Set([]byte(fmt.Sprintf("success %d", i)), nil)
 			return nil
 		})
 	}
