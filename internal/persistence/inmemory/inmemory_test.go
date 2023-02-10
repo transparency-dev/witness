@@ -19,7 +19,6 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 	"golang.org/x/sync/errgroup"
