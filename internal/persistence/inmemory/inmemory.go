@@ -131,5 +131,6 @@ func (rw *readWriter) Set(c []byte, rng []byte) error {
 	return rw.write(rw.read, *rw.toStore)
 }
 
-func (rw *readWriter) Close() {
+func (rw *readWriter) Close() error {
+	return nil
 }

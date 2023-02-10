@@ -28,7 +28,11 @@ import (
 // TestGetLogs exposes a test that can be invoked by tests for specific implementations of persistence.
 func TestGetLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
 	lsp, close := lspFactory()
-	defer close()
+	defer func() {
+		if err := close(); err != nil {
+			t.Fatalf("close(): %v", err)
+		}
+	}()
 	if err := lsp.Init(); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
@@ -52,7 +56,11 @@ func TestGetLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistenc
 // TestWriteOps exposes a test that can be invoked by tests for specific implementations of persistence.
 func TestWriteOps(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
 	lsp, close := lspFactory()
-	defer close()
+	defer func() {
+		if err := close(); err != nil {
+			t.Fatalf("close(): %v", err)
+		}
+	}()
 	if err := lsp.Init(); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}

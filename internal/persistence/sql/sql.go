@@ -110,8 +110,8 @@ func (w *writer) Set(c []byte, rng []byte) error {
 	return w.tx.Commit()
 }
 
-func (w *writer) Close() {
-	w.tx.Rollback()
+func (w *writer) Close() error {
+	return w.tx.Rollback()
 }
 
 func getLatestCheckpoint(queryRow func(query string, args ...interface{}) *sql.Row, logID string) ([]byte, []byte, error) {

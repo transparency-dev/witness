@@ -23,11 +23,11 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle"
 	"github.com/transparency-dev/merkle/compact"
 	"github.com/transparency-dev/merkle/proof"
+	"github.com/transparency-dev/witness/internal/persistence"
 	"golang.org/x/mod/sumdb/note"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -246,7 +246,9 @@ func verifyRange(next *log.Checkpoint, prev *log.Checkpoint, h merkle.LogHasher,
 		return nil, fmt.Errorf("can't form delta compact range: %v", err)
 	}
 	// Merge the delta range into the existing one and compare root hashes.
-	rng.AppendRange(delta, nil)
+	if err := rng.AppendRange(delta, nil); err != nil {
+		return nil, fmt.Errorf("failed to append range: %v", err)
+	}
 	if err := verifyRangeHash(next.Hash, rng); err != nil {
 		return nil, fmt.Errorf("new root hash doesn't verify: %v", err)
 	}
