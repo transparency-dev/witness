@@ -17,9 +17,9 @@ steps:
   args: ["golangci-lint","run"]
 
 - id: 'unit tests'
-  name: 'golang:1.20'
+  name: 'golang:1.19'
   args: ['go', 'test', './...']
 
 - id: 'build'
-  name: 'golang:1.20'
+  name: 'golang:1.19'
   args: ['go', 'build', './...']
