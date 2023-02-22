@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o /build/bin/witness ./witness/golang/cmd/witness
+RUN go build -o /build/bin/witness ./cmd/witness
 
 # Build release image
 FROM alpine

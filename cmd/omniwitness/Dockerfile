@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o omniwitness ./witness/golang/cmd/omniwitness
+RUN go build -o omniwitness ./cmd/omniwitness
 
 # Build release image
 FROM alpine
