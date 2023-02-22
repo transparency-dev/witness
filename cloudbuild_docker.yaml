@@ -1,0 +1,49 @@
+# This cloudbuild script builds docker images we expect users to
+# commonly deploy, and stores these in artifact registry.
+# This builds the images multi-arch so they run on x64 and Raspberry Pi.
+timeout: 3600s
+options:
+  machineType: E2_HIGHCPU_32
+  volumes:
+  - name: go-modules
+    path: /go
+  env:
+  - GOPROXY=https://proxy.golang.org
+  - PROJECT_ROOT=github.com/transparency-dev/witness
+  - GOPATH=/go
+  - 'DOCKER_CLI_EXPERIMENTAL=enabled'
+
+# Cloud Build logs sent to GCS bucket
+logsBucket: 'gs://transparency-cloudbuild-logs'
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['run', '--privileged', 'linuxkit/binfmt:v0.8']
+    id: 'initialize-qemu'
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['buildx', 'create', '--name', 'mybuilder']
+    id: 'create-builder'
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['buildx', 'use', 'mybuilder']
+    id: 'select-builder'
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['buildx', 'inspect', '--bootstrap']
+    id: 'show-target-build-platforms'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'buildx',
+      'build',
+      '--platform', '$_DOCKER_BUILDX_PLATFORMS',
+      '-t', 'us-docker.pkg.dev/transparency-dev/docker/omniwitness:latest',
+      '--cache-from', 'us-docker.pkg.dev/transparency-dev/docker/omniwitness:latest',
+      '-f', './cmd/omniwitness/Dockerfile',
+      '--push',
+      '.'
+    ]
+    waitFor:
+      - show-target-build-platforms
+    id: 'build-omniwitness-image'
+
+substitutions:
+  _DOCKER_BUILDX_PLATFORMS: 'linux/amd64,linux/arm/v7'
