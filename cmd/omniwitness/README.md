@@ -40,7 +40,7 @@ This is optional, but recommended in order to push your checkpoints to as wide
 an audience as possible and strengthen the network.
 Checkpoints will be pushed to the distributors using GitHub pull requests.
 This means that GitHub credentials must be provided.
-It is strongly recommended to set up a secondary account for this purpose.
+It is strongly recommended to set up a dedicated account for this purpose.
 
 GitHub setup:
   * Create a personal access token with `repo` and `workflow` permissions at https://github.com/settings/tokens
