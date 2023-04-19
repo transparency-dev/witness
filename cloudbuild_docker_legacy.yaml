@@ -32,8 +32,8 @@ steps:
       'buildx',
       'build',
       '--platform', '$_DOCKER_BUILDX_PLATFORMS',
-      '-t', 'us-docker.pkg.dev/transparency-dev/docker/omniwitness:latest',
-      '--cache-from', 'us-docker.pkg.dev/transparency-dev/docker/omniwitness:latest',
+      '-t', 'gcr.io/trillian-opensource-ci/omniwitness:latest',
+      '--cache-from', 'gcr.io/trillian-opensource-ci/omniwitness:latest',
       '-f', './cmd/omniwitness/Dockerfile',
       '--push',
       '.'
