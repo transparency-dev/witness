@@ -26,12 +26,11 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
-	wimpl "github.com/transparency-dev/witness/cmd/witness/impl"
 	ihttp "github.com/transparency-dev/witness/internal/http"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
-	"github.com/gorilla/mux"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
@@ -139,7 +138,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	// Witness
-	witCfg := wimpl.LogConfig{}
+	witCfg := LogConfig{}
 	if err := yaml.Unmarshal(ConfigWitness, &witCfg); err != nil {
 		return fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}

@@ -14,7 +14,16 @@
 
 package omniwitness
 
-import _ "embed" // embed is needed to embed files as constants
+import (
+	_ "embed" // embed is needed to embed files as constants
+	"errors"
+	"fmt"
+
+	logfmt "github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/merkle/rfc6962"
+	i_note "github.com/transparency-dev/witness/internal/note"
+	"github.com/transparency-dev/witness/internal/witness"
+)
 
 var (
 	// ConfigFeederPixel is the config for the feeder for Pixel BT.
@@ -34,6 +43,55 @@ var (
 	ConfigFeederSumDB []byte
 
 	// ConfigWitness is the config for the witness used in the omniwitness.
+	// Its schema is LogConfig
 	//go:embed witness_configs/witness.yaml
 	ConfigWitness []byte
 )
+
+// LogConfig contains a list of LogInfo (configuration options for a log).
+type LogConfig struct {
+	Logs []LogInfo `yaml:"Logs"`
+}
+
+// AsLogMap loads the log configuration information into a map, keyed by log ID.
+func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
+	logMap := make(map[string]witness.LogInfo)
+	h := rfc6962.DefaultHasher
+	for _, log := range config.Logs {
+		// TODO(smeiklej): Extend witness to handle other hashing strategies.
+		if log.HashStrategy != "default" {
+			return nil, errors.New("can't handle non-default hashing strategies")
+		}
+		logV, err := i_note.NewVerifier(log.PublicKeyType, log.PublicKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
+		}
+		logInfo := witness.LogInfo{
+			SigV:       logV,
+			Origin:     log.Origin,
+			Hasher:     h,
+			UseCompact: log.UseCompact,
+		}
+		logID := log.LogID
+		if len(logID) == 0 {
+			logID = logfmt.ID(log.Origin, []byte(log.PublicKey))
+		}
+		if oldLog, found := logMap[logID]; found {
+			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
+		}
+		logMap[logID] = logInfo
+	}
+	return logMap, nil
+}
+
+// LogInfo contains the configuration options for a log: its identifier, hashing
+// strategy, and public key.
+type LogInfo struct {
+	// LogID is optional and will be defaulted to logfmt.ID() if not present.
+	LogID         string `yaml:"LogID"`
+	Origin        string `yaml:"Origin"`
+	HashStrategy  string `yaml:"HashStrategy"`
+	PublicKey     string `yaml:"PublicKey"`
+	PublicKeyType string `yaml:"PublicKeyType"`
+	UseCompact    bool   `yaml:"UseCompact"`
+}

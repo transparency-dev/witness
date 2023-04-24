@@ -25,31 +25,12 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
-	logfmt "github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/merkle/rfc6962"
 	ih "github.com/transparency-dev/witness/internal/http"
-	i_note "github.com/transparency-dev/witness/internal/note"
 	wsql "github.com/transparency-dev/witness/internal/persistence/sql"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
 )
-
-// LogConfig contains a list of LogInfo (configuration options for a log).
-type LogConfig struct {
-	Logs []LogInfo `yaml:"Logs"`
-}
-
-// LogInfo contains the configuration options for a log: its identifier, hashing
-// strategy, and public key.
-type LogInfo struct {
-	// LogID is optional and will be defaulted to logfmt.ID() if not present.
-	LogID         string `yaml:"LogID"`
-	Origin        string `yaml:"Origin"`
-	HashStrategy  string `yaml:"HashStrategy"`
-	PublicKey     string `yaml:"PublicKey"`
-	PublicKeyType string `yaml:"PublicKeyType"`
-	UseCompact    bool   `yaml:"UseCompact"`
-}
 
 // ServerOpts are the options for a server (specified in main.go).
 type ServerOpts struct {
@@ -60,38 +41,7 @@ type ServerOpts struct {
 	// The signer for the witness.
 	Signer note.Signer
 	// The log configuration information.
-	Config LogConfig
-}
-
-// AsLogMap loads the log configuration information into a map, keyed by log ID.
-func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
-	logMap := make(map[string]witness.LogInfo)
-	h := rfc6962.DefaultHasher
-	for _, log := range config.Logs {
-		// TODO(smeiklej): Extend witness to handle other hashing strategies.
-		if log.HashStrategy != "default" {
-			return nil, errors.New("can't handle non-default hashing strategies")
-		}
-		logV, err := i_note.NewVerifier(log.PublicKeyType, log.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
-		}
-		logInfo := witness.LogInfo{
-			SigV:       logV,
-			Origin:     log.Origin,
-			Hasher:     h,
-			UseCompact: log.UseCompact,
-		}
-		logID := log.LogID
-		if len(logID) == 0 {
-			logID = logfmt.ID(log.Origin, []byte(log.PublicKey))
-		}
-		if oldLog, found := logMap[logID]; found {
-			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
-		}
-		logMap[logID] = logInfo
-	}
-	return logMap, nil
+	Config omniwitness.LogConfig
 }
 
 // Main runs the witness until the context is canceled.

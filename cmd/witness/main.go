@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/transparency-dev/witness/cmd/witness/impl"
+	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
 	"gopkg.in/yaml.v2"
 )
@@ -53,7 +54,7 @@ func main() {
 	if err != nil {
 		glog.Exitf("Failed to read from config file: %v", err)
 	}
-	var js impl.LogConfig
+	var js omniwitness.LogConfig
 	if err := yaml.Unmarshal(fileData, &js); err != nil {
 		glog.Exitf("Failed to parse config file as proper YAML: %v", err)
 	}
