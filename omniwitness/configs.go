@@ -72,10 +72,7 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 			Hasher:     h,
 			UseCompact: log.UseCompact,
 		}
-		logID := log.LogID
-		if len(logID) == 0 {
-			logID = logfmt.ID(log.Origin, []byte(log.PublicKey))
-		}
+		logID := logfmt.ID(log.Origin, []byte(log.PublicKey))
 		if oldLog, found := logMap[logID]; found {
 			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
 		}
@@ -87,8 +84,6 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 // LogInfo contains the configuration options for a log: its identifier, hashing
 // strategy, and public key.
 type LogInfo struct {
-	// LogID is optional and will be defaulted to logfmt.ID() if not present.
-	LogID         string `yaml:"LogID"`
 	Origin        string `yaml:"Origin"`
 	HashStrategy  string `yaml:"HashStrategy"`
 	PublicKey     string `yaml:"PublicKey"`
