@@ -16,7 +16,6 @@ package omniwitness
 
 import (
 	_ "embed" // embed is needed to embed files as constants
-	"errors"
 	"fmt"
 
 	logfmt "github.com/transparency-dev/formats/log"
@@ -58,10 +57,6 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 	logMap := make(map[string]witness.LogInfo)
 	h := rfc6962.DefaultHasher
 	for _, log := range config.Logs {
-		// TODO(smeiklej): Extend witness to handle other hashing strategies.
-		if log.HashStrategy != "default" {
-			return nil, errors.New("can't handle non-default hashing strategies")
-		}
 		logV, err := i_note.NewVerifier(log.PublicKeyType, log.PublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
@@ -85,7 +80,6 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 // strategy, and public key.
 type LogInfo struct {
 	Origin        string `yaml:"Origin"`
-	HashStrategy  string `yaml:"HashStrategy"`
 	PublicKey     string `yaml:"PublicKey"`
 	PublicKeyType string `yaml:"PublicKeyType"`
 	UseCompact    bool   `yaml:"UseCompact"`
