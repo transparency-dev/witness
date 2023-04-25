@@ -65,7 +65,7 @@ type LogInfo struct {
 	Origin        string `yaml:"Origin"`
 	PublicKey     string `yaml:"PublicKey"`
 	PublicKeyType string `yaml:"PublicKeyType"`
-	Url           string `yaml:"URL"`
+	URL           string `yaml:"URL"`
 	Feeder        Feeder `yaml:"Feeder"`
 	UseCompact    bool   `yaml:"UseCompact"`
 }

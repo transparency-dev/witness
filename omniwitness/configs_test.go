@@ -30,8 +30,8 @@ func Test(t *testing.T) {
 		if l.Feeder == 0 {
 			t.Errorf("log %q has unknown feeder", l.Origin)
 		}
-		if len(l.Url) == 0 {
-			t.Errorf("log %q has no URL", l.Url)
+		if len(l.URL) == 0 {
+			t.Errorf("log %q has no URL", l.URL)
 		}
 	}
 }

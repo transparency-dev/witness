@@ -101,7 +101,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		lc := config.Log{
 			ID:            log.ID(l.Origin, []byte(l.PublicKey)),
 			Origin:        l.Origin,
-			URL:           l.Url,
+			URL:           l.URL,
 			PublicKey:     l.PublicKey,
 			PublicKeyType: l.PublicKeyType,
 		}
