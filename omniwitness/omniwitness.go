@@ -246,7 +246,7 @@ const (
 )
 
 var (
-	Feeder_value = map[string]uint8{
+	feederByName = map[string]Feeder{
 		"serverless": 1,
 		"sumdb":      2,
 		"pixel":      3,
@@ -283,7 +283,7 @@ func (f Feeder) FeedFunc() logFeeder {
 // ParseFeeder takes a string and returns a valid enum or an error.
 func ParseFeeder(f string) (Feeder, error) {
 	f = strings.TrimSpace(strings.ToLower(f))
-	value, ok := Feeder_value[f]
+	value, ok := feederByName[f]
 	if !ok {
 		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
 	}
