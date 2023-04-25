@@ -23,10 +23,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
+	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	ihttp "github.com/transparency-dev/witness/internal/http"
 	"github.com/transparency-dev/witness/internal/persistence"
@@ -93,6 +95,9 @@ type OperatorConfig struct {
 	GithubToken string
 }
 
+// logFeeder is the de-facto interface that feeders implement.
+type logFeeder func(context.Context, config.Log, feeder.Witness, *http.Client, time.Duration) error
+
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
@@ -100,49 +105,26 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
 
-	type logFeeder func(context.Context, config.Log, feeder.Witness, *http.Client, time.Duration) error
 	feeders := make(map[config.Log]logFeeder)
 
-	// Feeder: SumDB
-	sumdbFeederConfig := multiLogFeederConfig{}
-	if err := yaml.Unmarshal(ConfigFeederSumDB, &sumdbFeederConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal sumdb config: %v", err)
-	}
-	for _, l := range sumdbFeederConfig.Logs {
-		feeders[l] = sumdb.FeedLog
-	}
-
-	// Feeder: PixelBT
-	pixelFeederConfig := singleLogFeederConfig{}
-	if err := yaml.Unmarshal(ConfigFeederPixel, &pixelFeederConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal pixel config: %v", err)
-	}
-	feeders[pixelFeederConfig.Log] = pixelbt.FeedLog
-
-	// Feeder: Rekor
-	rekorFeederConfig := multiLogFeederConfig{}
-	if err := yaml.Unmarshal(ConfigFeederRekor, &rekorFeederConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal rekor config: %v", err)
-	}
-	for _, l := range rekorFeederConfig.Logs {
-		feeders[l] = rekor.FeedLog
-	}
-
-	// Feeder: Serverless
-	serverlessFeederConfig := multiLogFeederConfig{}
-	if err := yaml.Unmarshal(ConfigFeederServerless, &serverlessFeederConfig); err != nil {
-		return fmt.Errorf("failed to unmarshal serverless config: %v", err)
-	}
-	for _, l := range serverlessFeederConfig.Logs {
-		feeders[l] = serverless.FeedLog
-	}
-
-	// Witness
-	witCfg := LogConfig{}
-	if err := yaml.Unmarshal(ConfigWitness, &witCfg); err != nil {
+	logCfg := LogConfig{}
+	if err := yaml.Unmarshal(ConfigLogs, &logCfg); err != nil {
 		return fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}
-	knownLogs, err := witCfg.AsLogMap()
+
+	for _, l := range logCfg.Logs {
+		// TODO(mhutchinson): deprecate config.Log as its a subset of LogInfo.
+		lc := config.Log{
+			ID:            log.ID(l.Origin, []byte(l.PublicKey)),
+			Origin:        l.Origin,
+			URL:           l.Url,
+			PublicKey:     l.PublicKey,
+			PublicKeyType: l.PublicKeyType,
+		}
+		feeders[lc] = l.Feeder.FeedFunc()
+	}
+
+	knownLogs, err := logCfg.AsLogMap()
 	if err != nil {
 		return fmt.Errorf("failed to convert witness config to map: %v", err)
 	}
@@ -267,6 +249,61 @@ func runDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, log
 		defer glog.Infof("Distributor %q goroutine done", opts.Repo)
 		return distribute(opts)
 	})
+}
+
+// Feeder is an enum of the known feeder types.
+type Feeder uint8
+
+const (
+	Serverless Feeder = iota + 1
+	SumDB
+	Pixel
+	Rekor
+)
+
+var (
+	Feeder_value = map[string]uint8{
+		"serverless": 1,
+		"sumdb":      2,
+		"pixel":      3,
+		"rekor":      4,
+	}
+)
+
+// UnmarshalYAML populates the log from yaml using the unmarshal func provided.
+func (f *Feeder) UnmarshalYAML(unmarshal func(interface{}) error) (err error) {
+	var raw string
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	if *f, err = ParseFeeder(raw); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f Feeder) FeedFunc() logFeeder {
+	switch f {
+	case Serverless:
+		return serverless.FeedLog
+	case SumDB:
+		return sumdb.FeedLog
+	case Pixel:
+		return pixelbt.FeedLog
+	case Rekor:
+		return rekor.FeedLog
+	}
+	panic(fmt.Sprintf("unkown feeder enum: %q", f))
+}
+
+// ParseFeeder takes a string and returns a valid enum or an error.
+func ParseFeeder(f string) (Feeder, error) {
+	f = strings.TrimSpace(strings.ToLower(f))
+	value, ok := Feeder_value[f]
+	if !ok {
+		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
+	}
+	return Feeder(value), nil
 }
 
 // witnessAdapter binds the internal witness implementation to the feeder interface.
