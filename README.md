@@ -33,10 +33,6 @@ The witness provides three API endpoints (as defined in [api/http.go](api/http.g
 Most users wanting to run a witness will simply deploy the [OmniWitness](cmd/omniwitness),
 which is preconfigured to witness all known logs using the checkpoint format.
 
-## Witnessing a custom log
-
-Advanced users with a use-case not covered by the OmniWitness can run a witness using [`cmd/witness/`](./cmd/witness/).
-
 ## Support
 * Mailing list: https://groups.google.com/forum/#!forum/trillian-transparency
 * Slack: https://gtrillian.slack.com/ (invitation)
