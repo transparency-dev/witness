@@ -68,22 +68,6 @@ const (
 	distributeInterval = 5 * time.Minute
 )
 
-// singleLogFeederConfig encapsulates the feeder config for a feeder that can only
-// feed a single log.
-type singleLogFeederConfig struct {
-	// Log defines the source log to feed from.
-	Log config.Log `yaml:"Log"`
-}
-
-// multiLogFeederConfig encapsulates the feeder config for a feeder that can support
-// multiple logs.
-// TODO(mhutchinson): why do we do this to ourselves with similar but different configs?!
-// See if we can standardize on them all being plural.
-type multiLogFeederConfig struct {
-	// Log defines the source log to feed from.
-	Logs []config.Log `yaml:"Logs"`
-}
-
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
 type OperatorConfig struct {
