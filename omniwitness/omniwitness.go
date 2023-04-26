@@ -247,10 +247,10 @@ const (
 
 var (
 	feederByName = map[string]Feeder{
-		"serverless": 1,
-		"sumdb":      2,
-		"pixel":      3,
-		"rekor":      4,
+		"serverless": Serverless,
+		"sumdb":      SumDB,
+		"pixel":      Pixel,
+		"rekor":      Rekor,
 	}
 )
 
@@ -277,7 +277,7 @@ func (f Feeder) FeedFunc() logFeeder {
 	case Rekor:
 		return rekor.FeedLog
 	}
-	panic(fmt.Sprintf("unkown feeder enum: %q", f))
+	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }
 
 // ParseFeeder takes a string and returns a valid enum or an error.
@@ -287,7 +287,7 @@ func ParseFeeder(f string) (Feeder, error) {
 	if !ok {
 		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
 	}
-	return Feeder(value), nil
+	return value, nil
 }
 
 // witnessAdapter binds the internal witness implementation to the feeder interface.
