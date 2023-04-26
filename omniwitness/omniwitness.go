@@ -97,7 +97,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	for _, l := range logCfg.Logs {
-		// TODO(mhutchinson): deprecate config.Log as its a subset of LogInfo.
+		// TODO(mhutchinson): deprecate config.Log as it's a subset of LogInfo.
 		lc := config.Log{
 			ID:            log.ID(l.Origin, []byte(l.PublicKey)),
 			Origin:        l.Origin,
