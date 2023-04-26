@@ -25,26 +25,10 @@ import (
 )
 
 var (
-	// ConfigFeederPixel is the config for the feeder for Pixel BT.
-	//go:embed feeder_configs/pixel.yaml
-	ConfigFeederPixel []byte
-
-	// ConfigFeederRekor is the config for the feeder for Rekor.
-	//go:embed feeder_configs/rekor.yaml
-	ConfigFeederRekor []byte
-
-	// ConfigFeederServerless is the config for the feeder for serverless logs.
-	//go:embed feeder_configs/serverless.yaml
-	ConfigFeederServerless []byte
-
-	// ConfigFeederSumDB is the config for the feeder for SumDB.
-	//go:embed feeder_configs/sumdb.yaml
-	ConfigFeederSumDB []byte
-
-	// ConfigWitness is the config for the witness used in the omniwitness.
+	// ConfigLogs is the config for the witness used in the omniwitness.
 	// Its schema is LogConfig
-	//go:embed witness_configs/witness.yaml
-	ConfigWitness []byte
+	//go:embed logs.yaml
+	ConfigLogs []byte
 )
 
 // LogConfig contains a list of LogInfo (configuration options for a log).
@@ -76,11 +60,12 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 	return logMap, nil
 }
 
-// LogInfo contains the configuration options for a log: its identifier, hashing
-// strategy, and public key.
+// LogInfo contains the details about a log.
 type LogInfo struct {
 	Origin        string `yaml:"Origin"`
 	PublicKey     string `yaml:"PublicKey"`
 	PublicKeyType string `yaml:"PublicKeyType"`
+	URL           string `yaml:"URL"`
+	Feeder        Feeder `yaml:"Feeder"`
 	UseCompact    bool   `yaml:"UseCompact"`
 }
