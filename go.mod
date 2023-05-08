@@ -9,7 +9,7 @@ require (
 	github.com/google/go-github/v39 v39.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/mattn/go-sqlite3 v1.14.16
-	github.com/transparency-dev/merkle v0.0.1
+	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/crypto v0.8.0 // indirect
 	golang.org/x/mod v0.10.0
 	golang.org/x/oauth2 v0.7.0
