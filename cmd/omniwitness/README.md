@@ -1,6 +1,6 @@
 # The OmniWitness
 
-The OmniWitness is a witness that will monitor all [known](../../omniwitness/feeder_configs/) logs that use
+The OmniWitness is a witness that will monitor all [known](../../omniwitness/logs.yaml) logs that use
 the [generic checkpoint format](https://github.com/transparency-dev/formats/tree/main/log).
 
 The OmniWitness is opinionated on which logs and distributors will be used, and it is envisioned that eventually all productionized logs will use the generic checkpoint format and be witnessed by the OmniWitness.
