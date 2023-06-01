@@ -17,10 +17,10 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o omniwitness ./cmd/omniwitness
+RUN go build -o bin/omniwitness ./cmd/omniwitness
 
 # Build release image
 FROM alpine
 
-COPY --from=builder /build/omniwitness /bin/omniwitness
+COPY --from=builder /build/bin/omniwitness /bin/omniwitness
 ENTRYPOINT ["/bin/omniwitness"]
