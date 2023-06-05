@@ -1,7 +1,7 @@
 version: '3.2'
 services:
   witness:
-    image: gcr.io/trillian-opensource-ci/omniwitness-monolith:${WITNESS_VERSION}
+    image: gcr.io/trillian-opensource-ci/omniwitness:${WITNESS_VERSION}
     volumes:
         - type: volume
           source: data
