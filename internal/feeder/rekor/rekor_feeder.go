@@ -86,7 +86,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		// Each Rekor feeder will request the same log info.
 		// TODO: Explore if it's feasible to request this once for all Rekor feeders.
 		li := logInfo{}
-		if err := getJSON(ctx, c, lURL, "api/v1/log", &li); err != nil {
+		if err := getJSON(ctx, c, lURL, "api/v1/log?stable=true", &li); err != nil {
 			return nil, fmt.Errorf("failed to fetch log info: %v", err)
 		}
 		// Active shard
