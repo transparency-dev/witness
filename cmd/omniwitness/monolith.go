@@ -45,6 +45,8 @@ var (
 	githubEmail = flag.String("gh_email", "", "The email that witnessed checkopoint git commits should be done under")
 	githubToken = flag.String("gh_token", "", "The github auth token to allow checkpoint distribution via PRs")
 
+	restDistributorBaseURL = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
+
 	httpTimeout = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 )
 
@@ -75,6 +77,8 @@ func main() {
 		GithubUser:  *githubUser,
 		GithubEmail: *githubEmail,
 		GithubToken: *githubToken,
+
+		RestDistributorBaseURL: *restDistributorBaseURL,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {
