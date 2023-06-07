@@ -53,6 +53,7 @@ type logAndVerifier struct {
 	sigV   note.Verifier
 }
 
+// NewDistributor creates a new Distributor from the given configuration.
 func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, wit Witness) (*Distributor, error) {
 	lvs := make([]logAndVerifier, len(logs), len(logs))
 	for i, l := range logs {
@@ -74,17 +75,12 @@ func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witS
 	}, nil
 }
 
+// Distributor distributes checkpoints to a REST API.
 type Distributor struct {
-	// URL is the base URL of the distributor.
-	// This must support a URL of the form #HTTPCheckpointByWitness.
 	baseURL string
 	client  *http.Client
-	// Logs identifies the list of source logs whose checkpoints are being distributed.
-	logs []logAndVerifier
-
-	// WitSigV can verify the cosignatures from the witness we're distributing from.
+	logs    []logAndVerifier
 	witSigV note.Verifier
-	// Witness is a client for talking to the witness we're distributing from.
 	witness Witness
 }
 
