@@ -51,7 +51,7 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 			Hasher:     h,
 			UseCompact: log.UseCompact,
 		}
-		logID := logfmt.ID(log.Origin, []byte(log.PublicKey))
+		logID := logfmt.ID(log.Origin)
 		if oldLog, found := logMap[logID]; found {
 			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
 		}
