@@ -40,6 +40,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	dist_gh "github.com/transparency-dev/witness/internal/distribute/github"
+	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
@@ -77,6 +78,11 @@ type OperatorConfig struct {
 	GithubUser  string
 	GithubEmail string
 	GithubToken string
+
+	// RestDistributorBaseURL is optional, and if provided gives the base URL
+	// to a distributor that takes witnessed checkpoints via a PUT request.
+	// TODO(mhutchinson): This should be baked into the code when there is a public distributor.
+	RestDistributorBaseURL string
 }
 
 // logFeeder is the de-facto interface that feeders implement.
@@ -148,9 +154,17 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			})
 		}
 
-		runDistributors(ctx, httpClient, g, distLogs, bw, operatorConfig)
+		runGitHubDistributors(ctx, httpClient, g, distLogs, bw, operatorConfig)
 	} else {
-		glog.Info("No GitHub user specified; skipping deployment of distributors")
+		glog.Info("No GitHub user specified; skipping deployment of GitHub distributors")
+	}
+	if operatorConfig.RestDistributorBaseURL != "" {
+		glog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
+		logs := make([]config.Log, len(feeders))
+		for l := range feeders {
+			logs = append(logs, l)
+		}
+		runRestDistributors(ctx, g, httpClient, logs, operatorConfig, bw)
 	}
 
 	r := mux.NewRouter()
@@ -175,7 +189,29 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []dist_gh.Log, witness dist_gh.Witness, operatorConfig OperatorConfig) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, logs []config.Log, operatorConfig OperatorConfig, bw witnessAdapter) {
+	g.Go(func() error {
+		d, err := rest.NewDistributor(operatorConfig.RestDistributorBaseURL, httpClient, logs, operatorConfig.WitnessVerifier, bw)
+		if err != nil {
+			glog.Errorf("NewDistributor: %v", err)
+		}
+		if err := d.DistributeOnce(ctx); err != nil {
+			glog.Errorf("DistributeOnce: %v", err)
+		}
+		for {
+			select {
+			case <-time.After(distributeInterval):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			if err := d.DistributeOnce(ctx); err != nil {
+				glog.Errorf("DistributeOnce: %v", err)
+			}
+		}
+	})
+}
+
+func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []dist_gh.Log, witness dist_gh.Witness, operatorConfig OperatorConfig) {
 	distribute := func(opts *dist_gh.DistributeOptions) error {
 		if err := dist_gh.DistributeOnce(ctx, opts); err != nil {
 			glog.Errorf("DistributeOnce: %v", err)
