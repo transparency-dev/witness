@@ -111,7 +111,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l logAndVerifier) er
 	if err != nil {
 		return fmt.Errorf("GetLatestCheckpoint(): %v", err)
 	}
-	_, wcpRaw, witnessNote, err := log.ParseCheckpoint(wRaw, l.config.Origin, l.sigV, d.witSigV)
+	_, _, witnessNote, err := log.ParseCheckpoint(wRaw, l.config.Origin, l.sigV, d.witSigV)
 	if err != nil {
 		return fmt.Errorf("couldn't parse witnessed checkpoint: %v", err)
 	}
@@ -119,11 +119,11 @@ func (d *Distributor) distributeForLog(ctx context.Context, l logAndVerifier) er
 		return fmt.Errorf("checkpoint has %d witness sigs, want %d", nWitSigs, want)
 	}
 
-	u, err := url.Parse(fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witSigV.Name())))
+	u, err := url.Parse(d.baseURL + fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witSigV.Name())))
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %v", err)
 	}
-	req, err := http.NewRequest("PUT", u.String(), bytes.NewReader(wcpRaw))
+	req, err := http.NewRequest("PUT", u.String(), bytes.NewReader(wRaw))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
