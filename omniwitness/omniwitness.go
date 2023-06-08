@@ -160,13 +160,11 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 	if operatorConfig.RestDistributorBaseURL != "" {
 		glog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		g.Go(func() error {
-			logs := make([]config.Log, len(feeders))
-			for l := range feeders {
-				logs = append(logs, l)
-			}
-			return runRestDistributors(ctx, logs, operatorConfig, httpClient, bw)
-		})
+		logs := make([]config.Log, len(feeders))
+		for l := range feeders {
+			logs = append(logs, l)
+		}
+		runRestDistributors(ctx, g, httpClient, logs, operatorConfig, bw)
 	}
 
 	r := mux.NewRouter()
@@ -191,24 +189,26 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, logs []config.Log, operatorConfig OperatorConfig, httpClient *http.Client, bw witnessAdapter) error {
-	d, err := rest.NewDistributor(operatorConfig.RestDistributorBaseURL, httpClient, logs, operatorConfig.WitnessVerifier, bw)
-	if err != nil {
-		glog.Errorf("NewDistributor: %v", err)
-	}
-	if err := d.DistributeOnce(ctx); err != nil {
-		glog.Errorf("DistributeOnce: %v", err)
-	}
-	for {
-		select {
-		case <-time.After(distributeInterval):
-		case <-ctx.Done():
-			return ctx.Err()
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, logs []config.Log, operatorConfig OperatorConfig, bw witnessAdapter) {
+	g.Go(func() error {
+		d, err := rest.NewDistributor(operatorConfig.RestDistributorBaseURL, httpClient, logs, operatorConfig.WitnessVerifier, bw)
+		if err != nil {
+			glog.Errorf("NewDistributor: %v", err)
 		}
 		if err := d.DistributeOnce(ctx); err != nil {
 			glog.Errorf("DistributeOnce: %v", err)
 		}
-	}
+		for {
+			select {
+			case <-time.After(distributeInterval):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			if err := d.DistributeOnce(ctx); err != nil {
+				glog.Errorf("DistributeOnce: %v", err)
+			}
+		}
+	})
 }
 
 func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []dist_gh.Log, witness dist_gh.Witness, operatorConfig OperatorConfig) {
