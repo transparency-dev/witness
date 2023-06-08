@@ -161,7 +161,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if operatorConfig.RestDistributorBaseURL != "" {
 		glog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
 		g.Go(func() error {
-			logs := make([]config.Log, 0, len(feeders))
+			logs := make([]config.Log, len(feeders))
 			for l := range feeders {
 				logs = append(logs, l)
 			}

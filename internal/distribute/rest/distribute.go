@@ -55,16 +55,16 @@ type logAndVerifier struct {
 
 // NewDistributor creates a new Distributor from the given configuration.
 func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, wit Witness) (*Distributor, error) {
-	lvs := make([]logAndVerifier, len(logs), len(logs))
-	for i, l := range logs {
+	lvs := make([]logAndVerifier, len(logs))
+	for _, l := range logs {
 		logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)
 		if err != nil {
 			return nil, err
 		}
-		lvs[i] = logAndVerifier{
+		lvs = append(lvs, logAndVerifier{
 			config: l,
 			sigV:   logSigV,
-		}
+		})
 	}
 	return &Distributor{
 		baseURL: baseURL,
