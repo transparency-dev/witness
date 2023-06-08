@@ -40,7 +40,7 @@ const (
 	HTTPCheckpointByWitness = "/distributor/v0/logs/%s/byWitness/%s/checkpoint"
 )
 
-// Witness describes the operations the feeder needs to interact with a witness.
+// Witness describes the operations the redistributor needs to interact with a witness.
 type Witness interface {
 	// GetLatestCheckpoint returns the latest checkpoint the witness holds for the given logID.
 	// Must return os.ErrNotExists if the logID is known, but it has no checkpoint for that log.
@@ -84,7 +84,8 @@ type Distributor struct {
 	witness Witness
 }
 
-// DistributeOnce a) polls the witness b) updates the fork c) proposes a PR if needed.
+// DistributeOnce polls the witness for all logs and pushes the latest checkpoint to the
+// RESTful distributor.
 func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
 	for _, log := range d.logs {
