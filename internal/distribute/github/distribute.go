@@ -25,12 +25,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/golang/glog"
 
-	"github.com/transparency-dev/witness/internal/github"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/github"
+	"github.com/transparency-dev/witness/internal/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -64,13 +66,33 @@ type DistributeOptions struct {
 	Witness Witness
 }
 
+var (
+	doOnce               sync.Once
+	counterDistGHAttempt monitoring.Counter
+	counterDistGHSuccess monitoring.Counter
+)
+
+// InitMetrics defines the metrics for the GitHub distributor. Must be called before
+// DistributeOnce in order to have any effect. Only the first call to this method has any effect.
+func InitMetrics(mf monitoring.MetricFactory) {
+	doOnce.Do(func() {
+		const logIDLabel = "logid"
+		const repoIDLabel = "repoid"
+		counterDistGHAttempt = mf.NewCounter("distribute_github_attempt", "Number of attempts the GitHub distributor has made for the the repo and log ID", repoIDLabel, logIDLabel)
+		counterDistGHSuccess = mf.NewCounter("distribute_github_success", "Number of times the GitHub distributor has succeeded for the repo and log ID", repoIDLabel, logIDLabel)
+	})
+}
+
 // DistributeOnce a) polls the witness b) updates the fork c) proposes a PR if needed.
 func DistributeOnce(ctx context.Context, opts *DistributeOptions) error {
 	numErrs := 0
 	for _, log := range opts.Logs {
+		counterDistGHAttempt.Inc(opts.Repo.Upstream(), log.Config.ID)
 		if err := distributeForLog(ctx, log, opts); err != nil {
 			glog.Warningf("Failed to distribute %q (%s): %v", opts.Repo, log.SigV.Name(), err)
 			numErrs++
+		} else {
+			counterDistGHSuccess.Inc(opts.Repo.Upstream(), log.Config.ID)
 		}
 	}
 	if numErrs > 0 {

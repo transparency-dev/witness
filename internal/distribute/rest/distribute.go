@@ -23,10 +23,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/monitoring"
 	i_note "github.com/transparency-dev/witness/internal/note"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -51,6 +53,22 @@ type Witness interface {
 type logAndVerifier struct {
 	config config.Log
 	sigV   note.Verifier
+}
+
+var (
+	doOnce                 sync.Once
+	counterDistRestAttempt monitoring.Counter
+	counterDistRestSuccess monitoring.Counter
+)
+
+// InitMetrics defines the metrics for the omniwitness and all dependencies. Must be called before
+// Main in order to have any effect. Only the first call to this method has any effect.
+func InitMetrics(mf monitoring.MetricFactory) {
+	doOnce.Do(func() {
+		const logIDLabel = "logid"
+		counterDistRestAttempt = mf.NewCounter("distribute_rest_attempt", "Number of attempts the RESTful distributor has made for the log ID", logIDLabel)
+		counterDistRestSuccess = mf.NewCounter("distribute_rest_success", "Number of times the RESTful distributor has succeeded for the log ID", logIDLabel)
+	})
 }
 
 // NewDistributor creates a new Distributor from the given configuration.
