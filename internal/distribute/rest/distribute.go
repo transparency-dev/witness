@@ -61,9 +61,7 @@ var (
 	counterDistRestSuccess monitoring.Counter
 )
 
-// InitMetrics defines the metrics for the omniwitness and all dependencies. Must be called before
-// Main in order to have any effect. Only the first call to this method has any effect.
-func InitMetrics() {
+func initMetrics() {
 	doOnce.Do(func() {
 		mf := monitoring.GetMetricFactory()
 		const logIDLabel = "logid"
@@ -74,7 +72,7 @@ func InitMetrics() {
 
 // NewDistributor creates a new Distributor from the given configuration.
 func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, wit Witness) (*Distributor, error) {
-	InitMetrics()
+	initMetrics()
 	lvs := make([]logAndVerifier, 0, len(logs))
 	for _, l := range logs {
 		logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)

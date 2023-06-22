@@ -72,9 +72,7 @@ var (
 	counterDistGHSuccess monitoring.Counter
 )
 
-// InitMetrics defines the metrics for the GitHub distributor. Must be called before
-// DistributeOnce in order to have any effect. Only the first call to this method has any effect.
-func InitMetrics() {
+func initMetrics() {
 	doOnce.Do(func() {
 		mf := monitoring.GetMetricFactory()
 		const logIDLabel = "logid"
@@ -86,7 +84,7 @@ func InitMetrics() {
 
 // DistributeOnce a) polls the witness b) updates the fork c) proposes a PR if needed.
 func DistributeOnce(ctx context.Context, opts *DistributeOptions) error {
-	InitMetrics()
+	initMetrics()
 	numErrs := 0
 	for _, log := range opts.Logs {
 		counterDistGHAttempt.Inc(opts.Repo.Upstream(), log.Config.ID)
