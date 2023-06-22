@@ -48,12 +48,6 @@ type Witness interface {
 	GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error)
 }
 
-// logAndVerifier represents a log known to the distributor.
-type logAndVerifier struct {
-	config config.Log
-	sigV   note.Verifier
-}
-
 var (
 	doOnce                 sync.Once
 	counterDistRestAttempt monitoring.Counter
