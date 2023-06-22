@@ -70,7 +70,12 @@ func main() {
 
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
-			if err := http.ListenAndServe(*metricsAddr, nil); err != http.ErrServerClosed {
+			srv := &http.Server{
+				Addr:         *metricsAddr,
+				ReadTimeout:  5 * time.Second,
+				WriteTimeout: 10 * time.Second,
+			}
+			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 				glog.Errorf("Error serving metrics: %v", err)
 			}
 		}()
