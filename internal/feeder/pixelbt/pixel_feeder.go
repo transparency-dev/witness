@@ -25,12 +25,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/transparency-dev/witness/internal/feeder"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/tlog"
-
-	i_note "github.com/transparency-dev/witness/internal/note"
 )
 
 const (
@@ -45,10 +43,6 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
 		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
-	}
-	logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)
-	if err != nil {
-		return err
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -90,7 +84,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  logSigV,
+		LogSigVerifier:  l.Verifier,
 		Witness:         w,
 	}
 	if interval > 0 {

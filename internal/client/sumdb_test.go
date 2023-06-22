@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
 )
 
@@ -48,9 +49,13 @@ kn9DgqDhXzoZMM8828SQsbuovr/WRn7QfFd5Qe1rpwA=
 )
 
 func TestLeavesAtOffset(t *testing.T) {
+	v, err := note.NewVerifier("sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8")
+	if err != nil {
+		t.Fatal(err)
+	}
 	sumdb := &SumDBClient{
-		vkey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
-		height: 2,
+		verifiers: note.VerifierList(v),
+		height:    2,
 		fetcher: &FakeFetcher{
 			values: map[string]string{"/tile/2/data/000": leafData},
 		},
@@ -74,9 +79,13 @@ func TestLeavesAtOffset(t *testing.T) {
 }
 
 func TestLatestCheckpoint(t *testing.T) {
+	v, err := note.NewVerifier("sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8")
+	if err != nil {
+		t.Fatal(err)
+	}
 	sumdb := &SumDBClient{
-		vkey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
-		height: 2,
+		verifiers: note.VerifierList(v),
+		height:    2,
 		fetcher: &FakeFetcher{
 			values: map[string]string{"/latest": checkpointData},
 		},
@@ -105,9 +114,13 @@ func TestTileHashes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to decode hash data: %v", err)
 	}
+	v, err := note.NewVerifier("sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8")
+	if err != nil {
+		t.Fatal(err)
+	}
 	sumdb := &SumDBClient{
-		vkey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
-		height: 2,
+		verifiers: note.VerifierList(v),
+		height:    2,
 		fetcher: &FakeFetcher{
 			values: map[string]string{"/tile/2/0/000": string(hashData)},
 		},

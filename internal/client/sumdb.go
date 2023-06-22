@@ -47,16 +47,16 @@ type Checkpoint struct {
 
 // SumDBClient provides access to information from the Sum DB.
 type SumDBClient struct {
-	height  int
-	vkey    string
-	fetcher Fetcher
+	height    int
+	verifiers note.Verifiers
+	fetcher   Fetcher
 }
 
 // NewSumDB creates a new client that fetches tiles of the given height.
-func NewSumDB(height int, vkey, url string, c *http.Client) *SumDBClient {
+func NewSumDB(height int, verifier note.Verifier, url string, c *http.Client) *SumDBClient {
 	return &SumDBClient{
-		height: height,
-		vkey:   vkey,
+		height:    height,
+		verifiers: note.VerifierList(verifier),
 		fetcher: &HTTPFetcher{
 			c:       c,
 			baseURL: url,
@@ -76,13 +76,7 @@ func (c *SumDBClient) LatestCheckpoint() (*Checkpoint, error) {
 
 // ParseCheckpointNote parses a previously acquired raw checkpoint note data.
 func (c *SumDBClient) ParseCheckpointNote(checkpoint []byte) (*Checkpoint, error) {
-	verifier, err := note.NewVerifier(c.vkey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create verifier: %w", err)
-	}
-	verifiers := note.VerifierList(verifier)
-
-	note, err := note.Open(checkpoint, verifiers)
+	note, err := note.Open(checkpoint, c.verifiers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open note: %w", err)
 	}

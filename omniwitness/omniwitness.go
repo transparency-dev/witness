@@ -28,7 +28,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
-	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	ihttp "github.com/transparency-dev/witness/internal/http"
 	"github.com/transparency-dev/witness/internal/persistence"
@@ -47,7 +46,6 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 	"github.com/transparency-dev/witness/internal/github"
-	i_note "github.com/transparency-dev/witness/internal/note"
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
@@ -95,6 +93,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
 
+	logs := make([]config.Log, 0)
 	feeders := make(map[config.Log]logFeeder)
 
 	logCfg := LogConfig{}
@@ -103,15 +102,12 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	for _, l := range logCfg.Logs {
-		// TODO(mhutchinson): deprecate config.Log as it's a subset of LogInfo.
-		lc := config.Log{
-			ID:            log.ID(l.Origin),
-			Origin:        l.Origin,
-			URL:           l.URL,
-			PublicKey:     l.PublicKey,
-			PublicKeyType: l.PublicKeyType,
+		lc, err := config.NewLog(l.Origin, l.PublicKey, l.PublicKeyType, l.URL)
+		if err != nil {
+			return fmt.Errorf("invalid log configuration: %v", err)
 		}
 		feeders[lc] = l.Feeder.FeedFunc()
+		logs = append(logs, lc)
 	}
 
 	knownLogs, err := logCfg.AsLogMap()
@@ -141,20 +137,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	if operatorConfig.GithubUser != "" {
-		var distLogs = []dist_gh.Log{}
-		for config := range feeders {
-			// TODO(mhutchinson): This verifier could be created inside the distributor.
-			logSigV, err := i_note.NewVerifier(config.PublicKeyType, config.PublicKey)
-			if err != nil {
-				return err
-			}
-			distLogs = append(distLogs, dist_gh.Log{
-				Config: config,
-				SigV:   logSigV,
-			})
-		}
-
-		runGitHubDistributors(ctx, httpClient, g, distLogs, bw, operatorConfig)
+		runGitHubDistributors(ctx, httpClient, g, logs, bw, operatorConfig)
 	} else {
 		glog.Info("No GitHub user specified; skipping deployment of GitHub distributors")
 	}
@@ -211,7 +194,7 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 	})
 }
 
-func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []dist_gh.Log, witness dist_gh.Witness, operatorConfig OperatorConfig) {
+func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []config.Log, witness dist_gh.Witness, operatorConfig OperatorConfig) {
 	distribute := func(opts *dist_gh.DistributeOptions) error {
 		if err := dist_gh.DistributeOnce(ctx, opts); err != nil {
 			glog.Errorf("DistributeOnce: %v", err)

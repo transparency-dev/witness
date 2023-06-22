@@ -36,13 +36,6 @@ import (
 	"golang.org/x/mod/sumdb/note"
 )
 
-// Log represents a log known to the distributor.
-type Log struct {
-	Config config.Log
-	// SigV can verify the source log signatures.
-	SigV note.Verifier
-}
-
 // Witness describes the operations the feeder needs to interact with a witness.
 type Witness interface {
 	// GetLatestCheckpoint returns the latest checkpoint the witness holds for the given logID.
@@ -58,7 +51,7 @@ type DistributeOptions struct {
 	DistributorPath string
 
 	// Logs identifies the list of source logs whose checkpoints are being distributed.
-	Logs []Log
+	Logs []config.Log
 
 	// WitSigV can verify the cosignatures from the witness we're distributing from.
 	WitSigV note.Verifier
@@ -87,12 +80,12 @@ func DistributeOnce(ctx context.Context, opts *DistributeOptions) error {
 	initMetrics()
 	numErrs := 0
 	for _, log := range opts.Logs {
-		counterDistGHAttempt.Inc(opts.Repo.Upstream(), log.Config.ID)
+		counterDistGHAttempt.Inc(opts.Repo.Upstream(), log.ID)
 		if err := distributeForLog(ctx, log, opts); err != nil {
-			glog.Warningf("Failed to distribute %q (%s): %v", opts.Repo, log.SigV.Name(), err)
+			glog.Warningf("Failed to distribute %q (%s): %v", opts.Repo, log.Verifier.Name(), err)
 			numErrs++
 		} else {
-			counterDistGHSuccess.Inc(opts.Repo.Upstream(), log.Config.ID)
+			counterDistGHSuccess.Inc(opts.Repo.Upstream(), log.ID)
 		}
 	}
 	if numErrs > 0 {
@@ -101,20 +94,20 @@ func DistributeOnce(ctx context.Context, opts *DistributeOptions) error {
 	return nil
 }
 
-func distributeForLog(ctx context.Context, l Log, opts *DistributeOptions) error {
+func distributeForLog(ctx context.Context, l config.Log, opts *DistributeOptions) error {
 	// Ensure the branch exists for us to use to raise a PR
-	wl := strings.Map(safeBranchChars, fmt.Sprintf("%s_%s", opts.WitSigV.Name(), l.Config.ID))
+	wl := strings.Map(safeBranchChars, fmt.Sprintf("%s_%s", opts.WitSigV.Name(), l.ID))
 	witnessBranch := fmt.Sprintf("witness_%s", wl)
 	if err := opts.Repo.CreateOrUpdateBranch(ctx, witnessBranch); err != nil {
 		return fmt.Errorf("failed to create witness branch %q: %v", witnessBranch, err)
 	}
-	logID := l.Config.ID
+	logID := l.ID
 
 	wRaw, err := opts.Witness.GetLatestCheckpoint(ctx, logID)
 	if err != nil {
 		return err
 	}
-	wCp, wcpRaw, witnessNote, err := log.ParseCheckpoint(wRaw, l.Config.Origin, l.SigV, opts.WitSigV)
+	wCp, wcpRaw, witnessNote, err := log.ParseCheckpoint(wRaw, l.Origin, l.Verifier, opts.WitSigV)
 	if err != nil {
 		return fmt.Errorf("couldn't parse witnessed checkpoint: %v", err)
 	}
@@ -128,7 +121,7 @@ func distributeForLog(ctx context.Context, l Log, opts *DistributeOptions) error
 		return fmt.Errorf("couldn't determine whether to distribute: %v", err)
 	}
 	if found {
-		glog.V(1).Infof("%q (%s): CP already present in distributor, not raising PR.", opts.Repo, l.SigV.Name())
+		glog.V(1).Infof("%q (%s): CP already present in distributor, not raising PR.", opts.Repo, l.Verifier.Name())
 		return nil
 	}
 
@@ -145,7 +138,7 @@ func distributeForLog(ctx context.Context, l Log, opts *DistributeOptions) error
 		return fmt.Errorf("failed to commit updated checkpoint.witnessed file: %v", err)
 	}
 
-	glog.V(1).Infof("%q (%s): Creating PR", opts.Repo, l.SigV.Name())
+	glog.V(1).Infof("%q (%s): Creating PR", opts.Repo, l.Verifier.Name())
 	return opts.Repo.CreatePR(ctx, fmt.Sprintf("[Witness] %s: %s@%d", opts.WitSigV.Name(), wCp.Origin, wCp.Size), witnessBranch)
 }
 
