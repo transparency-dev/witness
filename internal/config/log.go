@@ -18,64 +18,34 @@
 package config
 
 import (
-	"errors"
-	"fmt"
-	"net/url"
-
 	"github.com/transparency-dev/formats/log"
+	i_note "github.com/transparency-dev/witness/internal/note"
+	"golang.org/x/mod/sumdb/note"
 )
 
-// Log describes a verifiable log in a config file.
+// NewLog creates a Log from the given origin, public key & type, and URL.
+func NewLog(origin, pk, pkType, url string) (Log, error) {
+	id := log.ID(origin)
+	logV, err := i_note.NewVerifier(pkType, pk)
+	if err != nil {
+		return Log{}, err
+	}
+	return Log{
+		ID:       id,
+		Origin:   origin,
+		Verifier: logV,
+		URL:      url,
+	}, nil
+}
+
+// Log describes a verifiable log.
 type Log struct {
-	// ID is used to refer to the log in directory paths.
-	// This field should not be manually set in configs, instead it will be
-	// derived automatically by logfmt.ID.
-	ID string `yaml:"ID"`
-	// PublicKey used to verify checkpoints from this log.
-	PublicKey string `yaml:"PublicKey"`
-	// PublicKeyType identifies the format of the key present in the PublicKey field.
-	// If unset, the key should be assumed to be in a format which `note.NewVerifier`
-	// understands.
-	PublicKeyType string `yaml:"PublicKeyType"`
+	// ID is the canonical ID for the log.
+	ID string
+	// Verifier is a signature verifier for log checkpoints.
+	Verifier note.Verifier
 	// Origin is the expected first line of checkpoints from the log.
-	Origin string `yaml:"Origin"`
+	Origin string
 	// URL is the URL of the root of the log.
-	// This is optional if direct log communication is not required.
-	URL string `yaml:"URL"`
-}
-
-// Validate checks that the log configuration is valid.
-func (l Log) Validate() error {
-	if l.ID == "" {
-		return errors.New("missing field: ID")
-	}
-	if l.PublicKey == "" {
-		return errors.New("missing field: PublicKey")
-	}
-	if l.Origin == "" {
-		return errors.New("missing field: Origin")
-	}
-	if l.URL != "" {
-		if _, err := url.Parse(l.URL); err != nil {
-			return fmt.Errorf("unparseable URL: %v", err)
-		}
-	}
-	return nil
-}
-
-// UnmarshalYAML populates the log from yaml using the unmarshal func provided.
-func (l *Log) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type rawLog Log
-	raw := rawLog{}
-	if err := unmarshal(&raw); err != nil {
-		return err
-	}
-
-	if len(raw.ID) > 0 {
-		return errors.New("the ID field should not be manually configured")
-	}
-	raw.ID = log.ID(raw.Origin)
-
-	*l = Log(raw)
-	return nil
+	URL string
 }

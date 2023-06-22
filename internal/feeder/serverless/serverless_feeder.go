@@ -24,13 +24,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/google/trillian-examples/serverless/client"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/rfc6962"
-
-	i_note "github.com/transparency-dev/witness/internal/note"
+	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/feeder"
 )
 
 // FeedLog periodically feeds checkpoints from the log to the witness.
@@ -39,10 +37,6 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
 		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
-	}
-	logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)
-	if err != nil {
-		return err
 	}
 	f := newFetcher(c, lURL)
 	h := rfc6962.DefaultHasher
@@ -71,7 +65,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  logSigV,
+		LogSigVerifier:  l.Verifier,
 		Witness:         w,
 	}
 	if interval > 0 {

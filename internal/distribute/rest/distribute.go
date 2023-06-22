@@ -29,7 +29,6 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/monitoring"
-	i_note "github.com/transparency-dev/witness/internal/note"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -73,21 +72,10 @@ func initMetrics() {
 // NewDistributor creates a new Distributor from the given configuration.
 func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, wit Witness) (*Distributor, error) {
 	initMetrics()
-	lvs := make([]logAndVerifier, 0, len(logs))
-	for _, l := range logs {
-		logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("NewVerifier(%s, %s): %v", l.PublicKeyType, l.PublicKey, err)
-		}
-		lvs = append(lvs, logAndVerifier{
-			config: l,
-			sigV:   logSigV,
-		})
-	}
 	return &Distributor{
 		baseURL: baseURL,
 		client:  client,
-		logs:    lvs,
+		logs:    logs,
 		witSigV: witSigV,
 		witness: wit,
 	}, nil
@@ -97,7 +85,7 @@ func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witS
 type Distributor struct {
 	baseURL string
 	client  *http.Client
-	logs    []logAndVerifier
+	logs    []config.Log
 	witSigV note.Verifier
 	witness Witness
 }
@@ -108,7 +96,7 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
 	for _, log := range d.logs {
 		if err := d.distributeForLog(ctx, log); err != nil {
-			glog.Warningf("Failed to distribute %q (%s): %v", d.baseURL, log.config.Origin, err)
+			glog.Warningf("Failed to distribute %q (%s): %v", d.baseURL, log.Origin, err)
 			numErrs++
 		}
 	}
@@ -118,15 +106,15 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	return nil
 }
 
-func (d *Distributor) distributeForLog(ctx context.Context, l logAndVerifier) error {
-	logID := l.config.ID
+func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error {
+	logID := l.ID
 	counterDistRestAttempt.Inc(logID)
 
 	wRaw, err := d.witness.GetLatestCheckpoint(ctx, logID)
 	if err != nil {
 		return fmt.Errorf("GetLatestCheckpoint(): %v", err)
 	}
-	_, _, witnessNote, err := log.ParseCheckpoint(wRaw, l.config.Origin, l.sigV, d.witSigV)
+	_, _, witnessNote, err := log.ParseCheckpoint(wRaw, l.Origin, l.Verifier, d.witSigV)
 	if err != nil {
 		return fmt.Errorf("couldn't parse witnessed checkpoint: %v", err)
 	}

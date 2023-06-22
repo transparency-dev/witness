@@ -26,6 +26,7 @@ import (
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/monitoring"
+	i_note "github.com/transparency-dev/witness/internal/note"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -45,10 +46,9 @@ func TestDistributeOnce(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	log := config.Log{
-		Origin:    "Log Checkpoint v0",
-		PublicKey: "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT",
-		ID:        "thisisthelogid",
+	log, err := config.NewLog("Log Checkpoint v0", "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT", i_note.Note, "http://example.com/log62")
+	if err != nil {
+		t.Fatal(err)
 	}
 	logs := []config.Log{log}
 	wV, err := note.NewVerifier(wPK)

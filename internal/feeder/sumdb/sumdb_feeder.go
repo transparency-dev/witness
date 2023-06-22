@@ -29,8 +29,6 @@ import (
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/tlog"
-
-	i_note "github.com/transparency-dev/witness/internal/note"
 )
 
 const (
@@ -47,11 +45,7 @@ var (
 // FeedLog continually feeds checkpoints from the given log into the witness.
 // This method blocks until the context is done.
 func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client, interval time.Duration) error {
-	sdb := client.NewSumDB(tileHeight, l.PublicKey, l.URL, c)
-	logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)
-	if err != nil {
-		return err
-	}
+	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
 
 	fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
 		broker := newTileBroker(to.Size, sdb.TileHashes)
@@ -84,7 +78,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCheckpoint,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  logSigV,
+		LogSigVerifier:  l.Verifier,
 		Witness:         w,
 	}
 
