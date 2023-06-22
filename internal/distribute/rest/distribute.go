@@ -23,10 +23,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/monitoring"
 	i_note "github.com/transparency-dev/witness/internal/note"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -53,8 +55,24 @@ type logAndVerifier struct {
 	sigV   note.Verifier
 }
 
+var (
+	doOnce                 sync.Once
+	counterDistRestAttempt monitoring.Counter
+	counterDistRestSuccess monitoring.Counter
+)
+
+func initMetrics() {
+	doOnce.Do(func() {
+		mf := monitoring.GetMetricFactory()
+		const logIDLabel = "logid"
+		counterDistRestAttempt = mf.NewCounter("distribute_rest_attempt", "Number of attempts the RESTful distributor has made for the log ID", logIDLabel)
+		counterDistRestSuccess = mf.NewCounter("distribute_rest_success", "Number of times the RESTful distributor has succeeded for the log ID", logIDLabel)
+	})
+}
+
 // NewDistributor creates a new Distributor from the given configuration.
 func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, wit Witness) (*Distributor, error) {
+	initMetrics()
 	lvs := make([]logAndVerifier, 0, len(logs))
 	for _, l := range logs {
 		logSigV, err := i_note.NewVerifier(l.PublicKeyType, l.PublicKey)
@@ -101,11 +119,8 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 }
 
 func (d *Distributor) distributeForLog(ctx context.Context, l logAndVerifier) error {
-	// This will be used on both the witness and the distributor.
-	// At the moment the ID is arbitrary and is up to the discretion of the operators
-	// of these parties. We should address this. If we don't manage to do so in time,
-	// we'll need to allow this ID to be configured separately for each entity.
 	logID := l.config.ID
+	counterDistRestAttempt.Inc(logID)
 
 	wRaw, err := d.witness.GetLatestCheckpoint(ctx, logID)
 	if err != nil {
@@ -139,5 +154,6 @@ func (d *Distributor) distributeForLog(ctx context.Context, l logAndVerifier) er
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad status response (%s): %q", resp.Status, body)
 	}
+	counterDistRestSuccess.Inc(logID)
 	return nil
 }

@@ -94,6 +94,10 @@ func (r Repository) String() string {
 	return fmt.Sprintf("%s → %s", r.fork, r.upstream)
 }
 
+func (r Repository) Upstream() string {
+	return r.upstream.String()
+}
+
 // CreateOrUpdateBranch attempts to create a new branch on the fork repo if it doesn't already exist, or
 // rebase it onto HEAD if it does.
 func (r *Repository) CreateOrUpdateBranch(ctx context.Context, branchName string) error {

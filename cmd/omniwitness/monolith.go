@@ -25,6 +25,9 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/transparency-dev/witness/internal/monitoring"
+	"github.com/transparency-dev/witness/internal/monitoring/prometheus"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	psql "github.com/transparency-dev/witness/internal/persistence/sql"
@@ -35,8 +38,9 @@ import (
 )
 
 var (
-	addr   = flag.String("listen", ":8080", "Address to listen on")
-	dbFile = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
+	addr        = flag.String("listen", ":8080", "Address to listen on")
+	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
+	dbFile      = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
 
 	signingKey  = flag.String("private_key", "", "The note-compatible signing key to use")
 	verifierKey = flag.String("public_key", "", "The note-compatible verifier key to use")
@@ -53,6 +57,30 @@ var (
 func main() {
 	flag.Parse()
 	ctx := context.Background()
+
+	if *metricsAddr == "" {
+		glog.Info("No metrics_listen address provided so skipping prometheus setup")
+		mf := monitoring.InertMetricFactory{}
+		monitoring.SetMetricFactory(mf)
+	} else {
+		mf := prometheus.MetricFactory{
+			Prefix: "omniwitness_",
+		}
+		monitoring.SetMetricFactory(mf)
+
+		go func() {
+			http.Handle("/metrics", promhttp.Handler())
+			srv := &http.Server{
+				Addr:         *metricsAddr,
+				ReadTimeout:  5 * time.Second,
+				WriteTimeout: 10 * time.Second,
+			}
+			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+				glog.Errorf("Error serving metrics: %v", err)
+			}
+		}()
+		glog.Infof("Prometheus configured to listen on %q", *metricsAddr)
+	}
 
 	httpListener, err := net.Listen("tcp", *addr)
 	if err != nil {

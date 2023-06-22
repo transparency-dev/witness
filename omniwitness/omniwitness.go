@@ -193,7 +193,7 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 	g.Go(func() error {
 		d, err := rest.NewDistributor(operatorConfig.RestDistributorBaseURL, httpClient, logs, operatorConfig.WitnessVerifier, bw)
 		if err != nil {
-			glog.Errorf("NewDistributor: %v", err)
+			return fmt.Errorf("NewDistributor: %v", err)
 		}
 		if err := d.DistributeOnce(ctx); err != nil {
 			glog.Errorf("DistributeOnce: %v", err)
