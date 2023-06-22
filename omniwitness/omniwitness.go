@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -88,10 +87,6 @@ type OperatorConfig struct {
 
 // logFeeder is the de-facto interface that feeders implement.
 type logFeeder func(context.Context, config.Log, feeder.Witness, *http.Client, time.Duration) error
-
-var (
-	doOnce sync.Once
-)
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
