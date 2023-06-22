@@ -32,7 +32,6 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	ihttp "github.com/transparency-dev/witness/internal/http"
-	"github.com/transparency-dev/witness/internal/monitoring"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
@@ -94,21 +93,9 @@ var (
 	doOnce sync.Once
 )
 
-// InitMetrics defines the metrics for the omniwitness and all dependencies. Must be called before
-// Main in order to have any effect. Only the first call to this method has any effect.
-func InitMetrics(mf monitoring.MetricFactory) {
-	doOnce.Do(func() {
-		dist_gh.InitMetrics(mf)
-		rest.InitMetrics(mf)
-	})
-}
-
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
-	// Ensure that we have initialized the counters.
-	InitMetrics(monitoring.InertMetricFactory{})
-
 	// This error group will be used to run all top level processes.
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)

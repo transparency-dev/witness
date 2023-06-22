@@ -59,13 +59,14 @@ func main() {
 	ctx := context.Background()
 
 	if *metricsAddr == "" {
+		glog.Info("No metrics_listen address provided so skipping prometheus setup")
 		mf := monitoring.InertMetricFactory{}
-		omniwitness.InitMetrics(mf)
+		monitoring.SetMetricFactory(mf)
 	} else {
 		mf := prometheus.MetricFactory{
 			Prefix: "omniwitness_",
 		}
-		omniwitness.InitMetrics(mf)
+		monitoring.SetMetricFactory(mf)
 
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
@@ -73,6 +74,7 @@ func main() {
 				glog.Errorf("Error serving metrics: %v", err)
 			}
 		}()
+		glog.Infof("Prometheus configured to listen on %q", *metricsAddr)
 	}
 
 	httpListener, err := net.Listen("tcp", *addr)

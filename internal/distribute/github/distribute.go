@@ -74,8 +74,9 @@ var (
 
 // InitMetrics defines the metrics for the GitHub distributor. Must be called before
 // DistributeOnce in order to have any effect. Only the first call to this method has any effect.
-func InitMetrics(mf monitoring.MetricFactory) {
+func InitMetrics() {
 	doOnce.Do(func() {
+		mf := monitoring.GetMetricFactory()
 		const logIDLabel = "logid"
 		const repoIDLabel = "repoid"
 		counterDistGHAttempt = mf.NewCounter("distribute_github_attempt", "Number of attempts the GitHub distributor has made for the the repo and log ID", repoIDLabel, logIDLabel)
@@ -85,6 +86,7 @@ func InitMetrics(mf monitoring.MetricFactory) {
 
 // DistributeOnce a) polls the witness b) updates the fork c) proposes a PR if needed.
 func DistributeOnce(ctx context.Context, opts *DistributeOptions) error {
+	InitMetrics()
 	numErrs := 0
 	for _, log := range opts.Logs {
 		counterDistGHAttempt.Inc(opts.Repo.Upstream(), log.Config.ID)
@@ -108,10 +110,6 @@ func distributeForLog(ctx context.Context, l Log, opts *DistributeOptions) error
 	if err := opts.Repo.CreateOrUpdateBranch(ctx, witnessBranch); err != nil {
 		return fmt.Errorf("failed to create witness branch %q: %v", witnessBranch, err)
 	}
-	// This will be used on both the witness and the distributor.
-	// At the moment the ID is arbitrary and is up to the discretion of the operators
-	// of these parties. We should address this. If we don't manage to do so in time,
-	// we'll need to allow this ID to be configured separately for each entity.
 	logID := l.Config.ID
 
 	wRaw, err := opts.Witness.GetLatestCheckpoint(ctx, logID)

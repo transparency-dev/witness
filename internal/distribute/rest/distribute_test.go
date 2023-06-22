@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
+	"github.com/transparency-dev/witness/internal/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -37,6 +38,7 @@ const (
 )
 
 func TestDistributeOnce(t *testing.T) {
+	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	fd := &fakeDistributor{}
 	r := mux.NewRouter()
 	r.HandleFunc(fmt.Sprintf(rest.HTTPCheckpointByWitness, "{logid:[a-zA-Z0-9-]+}", "{witid:[^ +]+}"), fd.update).Methods("PUT")

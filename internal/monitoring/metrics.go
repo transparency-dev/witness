@@ -14,7 +14,40 @@
 
 // Package monitoring contains interfaces and bindings for collecting metrics
 // about behaviour of the witness.
+// This package is a stripped down fork of the monitoring code from trillian.
+// If more types of metrics are needed then it could be that copying all of
+// that code is the pragmatic solution.
 package monitoring
+
+import "sync"
+
+var (
+	once sync.Once
+	mf   MetricFactory
+)
+
+// SetMetricFactory sets a singleton instance of a MetricFactory that will
+// be used throughout the application. Only the first call to this method
+// will have any effect and it _must_ be called.
+func SetMetricFactory(imf MetricFactory) {
+	if imf == nil {
+		panic("MetricFactory cannot be nil")
+	}
+	once.Do(func() {
+		mf = imf
+	})
+}
+
+// GetMetricFactory returns the singleton MetricFactory for this application.
+// Code should not call this during static initialization as the main program
+// is unlikely to have configured the factory by this time. The recommended
+// pattern is to call this in a `sync.Once` before initializing counters.
+func GetMetricFactory() MetricFactory {
+	if mf == nil {
+		panic("SetMetricFactory not called before GetMetricFactory")
+	}
+	return mf
+}
 
 // MetricFactory allows the creation of different types of metric.
 type MetricFactory interface {
