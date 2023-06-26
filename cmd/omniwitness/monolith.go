@@ -26,11 +26,11 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/transparency-dev/witness/internal/monitoring"
-	"github.com/transparency-dev/witness/internal/monitoring/prometheus"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	psql "github.com/transparency-dev/witness/internal/persistence/sql"
+	"github.com/transparency-dev/witness/monitoring"
+	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
 
