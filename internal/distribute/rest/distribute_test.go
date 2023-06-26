@@ -25,8 +25,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
-	"github.com/transparency-dev/witness/internal/monitoring"
 	i_note "github.com/transparency-dev/witness/internal/note"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 

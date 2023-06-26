@@ -21,7 +21,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/transparency-dev/witness/internal/monitoring"
+	"github.com/transparency-dev/witness/monitoring"
 )
 
 // MetricFactory allows the creation of Prometheus-based metrics.
