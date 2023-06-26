@@ -27,7 +27,10 @@ type InertMetricFactory struct{}
 
 // NewCounter creates a new inert Counter.
 func (imf InertMetricFactory) NewCounter(name, help string, labelNames ...string) Counter {
-	return &InertCounter{}
+	return &InertCounter{
+		labelCount: len(labelNames),
+		vals:       make(map[string]uint64),
+	}
 }
 
 // InertCounter is an internal-only implementation of both the Counter and Gauge interfaces.
