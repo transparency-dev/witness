@@ -136,6 +136,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad status response (%s): %q", resp.Status, body)
 	}
+	glog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), logID)
 	counterDistRestSuccess.Inc(logID)
 	return nil
 }
