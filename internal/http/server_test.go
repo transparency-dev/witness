@@ -27,11 +27,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/mux"
+	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"github.com/transparency-dev/witness/internal/witness"
-	"github.com/gorilla/mux"
-	"github.com/transparency-dev/merkle/rfc6962"
 	"golang.org/x/mod/sumdb/note"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
