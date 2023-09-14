@@ -24,9 +24,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/trillian-examples/serverless/client"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/rfc6962"
+	"github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 )

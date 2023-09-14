@@ -20,9 +20,9 @@ require (
 )
 
 require (
-	github.com/google/trillian-examples v0.0.0-20230419170052-1d4b6bbacc57
 	github.com/prometheus/client_golang v1.16.0
-	github.com/transparency-dev/formats v0.0.0-20230607101544-c064fae4cff6
+	github.com/transparency-dev/formats v0.0.0-20230914071414-5732692f1e50
+	github.com/transparency-dev/serverless-log v0.0.0-20230914155322-9b6f31f76f1f
 )
 
 require (
