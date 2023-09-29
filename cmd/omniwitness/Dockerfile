@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine@sha256:ec31b7fbaf32583af4f4f8c9e0cabc651247624bf962adbb7fa1b54c9c03d5e4 AS builder
+FROM golang:1.21-alpine@sha256:4bc6541af94a67d9dcabba9826c36e4e9497dacf4e8755ac503000b6ff75318f AS builder
 RUN apk add --no-cache gcc musl-dev
 
 ARG GOFLAGS=""
