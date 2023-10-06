@@ -11,7 +11,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/crypto v0.13.0 // indirect
-	golang.org/x/mod v0.12.0
+	golang.org/x/mod v0.13.0
 	golang.org/x/oauth2 v0.12.0
 	golang.org/x/sync v0.3.0
 	google.golang.org/grpc v1.58.2
