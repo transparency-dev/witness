@@ -7,16 +7,28 @@ version: 2
 updates:
 - package-ecosystem: gomod
   directory: /
+  groups:
+    all-go-deps:
+      patterns:
+        - "*"
   schedule:
     interval: daily
 
 - package-ecosystem: github-actions
   directory: /
+  groups:
+    all-gha-deps:
+      patterns:
+        - "*"
   schedule:
     interval: daily
 
 - package-ecosystem: docker
   directory: /cmd/omniwitness
+  groups:
+    all-docker-deps:
+      patterns:
+        - "*"
   schedule:
     interval: daily
 
