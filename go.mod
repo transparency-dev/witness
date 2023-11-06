@@ -7,13 +7,13 @@ require (
 	github.com/golang/glog v1.1.2
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-github/v39 v39.2.0
-	github.com/gorilla/mux v1.8.0
-	github.com/mattn/go-sqlite3 v1.14.17
+	github.com/gorilla/mux v1.8.1
+	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/crypto v0.14.0 // indirect
-	golang.org/x/mod v0.13.0
+	golang.org/x/mod v0.14.0
 	golang.org/x/oauth2 v0.13.0
-	golang.org/x/sync v0.4.0
+	golang.org/x/sync v0.5.0
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
