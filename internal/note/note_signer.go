@@ -68,21 +68,59 @@ func NewSignerForCosignatureV1(skey string) (*Signer, error) {
 			sig = append(sig, ed25519.Sign(key, m)...)
 			return sig, nil
 		}
-		s.verify = func(msg, sig []byte) bool {
-			if len(sig) != 8+ed25519.SignatureSize {
-				return false
-			}
-			t := binary.LittleEndian.Uint64(sig)
-			sig = sig[8:]
-			m, err := formatCosignatureV1(t, msg)
-			if err != nil {
-				return false
-			}
-			return ed25519.Verify(key.Public().(ed25519.PublicKey), m, sig)
-		}
+		s.verify = verifyCosigV1(pubkey[1:])
 	}
 
 	return s, nil
+}
+
+// NewVerifierForCosignatureV1 constructs a new Verifier for timestamped
+// cosignature/v1 signatures from a standard Ed25519 encoded verifier key.
+//
+// (The returned Verifier has a different key hash from a non-timestamped one,
+// meaning it will differ from the key hash in the input encoding.)
+func NewVerifierForCosignatureV1(vkey string) (note.Verifier, error) {
+	name, vkey, _ := strings.Cut(vkey, "+")
+	hash16, key64, _ := strings.Cut(vkey, "+")
+	key, err := base64.StdEncoding.DecodeString(key64)
+	if len(hash16) != 8 || err != nil || !isValidName(name) || len(key) == 0 {
+		return nil, errVerifierID
+	}
+
+	v := &verifier{
+		name: name,
+	}
+
+	alg, key := key[0], key[1:]
+	switch alg {
+	default:
+		return nil, errVerifierAlg
+
+	case algEd25519:
+		if len(key) != 32 {
+			return nil, errVerifierID
+		}
+		v.keyHash = keyHashEd25519(name, append([]byte{algEd25519CosignatureV1}, key...))
+		v.v = verifyCosigV1(key)
+	}
+
+	return v, nil
+}
+
+// verifyCosigV1 returns a verify function based on key.
+func verifyCosigV1(key []byte) func(msg, sig []byte) bool {
+	return func(msg, sig []byte) bool {
+		if len(sig) != 8+ed25519.SignatureSize {
+			return false
+		}
+		t := binary.LittleEndian.Uint64(sig)
+		sig = sig[8:]
+		m, err := formatCosignatureV1(t, msg)
+		if err != nil {
+			return false
+		}
+		return ed25519.Verify(key, m, sig)
+	}
 }
 
 func formatCosignatureV1(t uint64, msg []byte) ([]byte, error) {
@@ -110,8 +148,10 @@ func formatCosignatureV1(t uint64, msg []byte) ([]byte, error) {
 }
 
 var (
-	errSignerID  = errors.New("malformed verifier id")
-	errSignerAlg = errors.New("unknown verifier algorithm")
+	errSignerID    = errors.New("malformed signer id")
+	errSignerAlg   = errors.New("unknown signer algorithm")
+	errVerifierID  = errors.New("malformed verifier id")
+	errVerifierAlg = errors.New("unknown verifier algorithm")
 )
 
 type Signer struct {
