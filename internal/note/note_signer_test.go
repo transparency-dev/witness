@@ -32,3 +32,47 @@ func TestSignerRoundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestVerifierInvalidSig(t *testing.T) {
+	skey, _, err := note.GenerateKey(rand.Reader, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewSignerForCosignatureV1(skey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := "test\n123\nf+7CoKgXKE/tNys9TTXcr/ad6U/K3xvznmzew9y6SP0=\n"
+	if _, err := note.Sign(&note.Note{Text: msg}, s); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := note.Open([]byte("nobbled"), note.VerifierList(s.Verifier())); err == nil {
+		t.Fatal("Verifier validated incorrect signature")
+	}
+}
+
+func TestSigCoversExtensionLines(t *testing.T) {
+	skey, _, err := note.GenerateKey(rand.Reader, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewSignerForCosignatureV1(skey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := "test\n123\nf+7CoKgXKE/tNys9TTXcr/ad6U/K3xvznmzew9y6SP0=\nExtendo\n"
+	n, err := note.Sign(&note.Note{Text: msg}, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n[len(n)-2] = '@'
+	if _, err := note.Open(n, note.VerifierList(s.Verifier())); err == nil {
+		t.Fatal("Signature did not cover extension lines")
+	}
+}

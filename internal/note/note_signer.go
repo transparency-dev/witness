@@ -93,18 +93,20 @@ func formatCosignatureV1(t uint64, msg []byte) ([]byte, error) {
 	//      origin line
 	//      NNNNNNNNN
 	//      tree hash
+	//      ...
 	//
 	// where TTTTTTTTTT is the current UNIX timestamp, and the following
-	// three lines are the first three lines of the note. All other
-	// lines are not processed by the witness, so are not signed.
+	// lines are the lines of the note.
+	//
+	// While the witness signs all lines of the note, it's important to
+	// understand that the witness is asserting observation of correct
+	// append-only operation of the log based on the first three lines;
+	// no semantic statement is made about any extra "extension" lines.
 
-	lines := bytes.Split(msg, []byte("\n"))
-	if len(lines) < 3 {
+	if lines := bytes.Split(msg, []byte("\n")); len(lines) < 3 {
 		return nil, errors.New("cosigned note format invalid")
 	}
-	return []byte(fmt.Sprintf(
-		"cosignature/v1\ntime %d\n%s\n%s\n%s\n",
-		t, lines[0], lines[1], lines[2])), nil
+	return []byte(fmt.Sprintf("cosignature/v1\ntime %d\n%s", t, msg)), nil
 }
 
 var (
