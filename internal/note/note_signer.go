@@ -22,6 +22,7 @@ import (
 
 const (
 	algEd25519              = 1
+	algECDSAWithSHA256      = 2
 	algEd25519CosignatureV1 = 4
 )
 

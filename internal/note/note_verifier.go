@@ -36,8 +36,6 @@ const (
 	// ECDSA is an ECDSA signature over SHA256.
 	// This signature type has been agreed to be represented by algo ID 2 by the note authors.
 	ECDSA = "ecdsa"
-
-	algECDSAWithSHA256 = 2
 )
 
 // NewVerifier returns a verifier for the given key type and key.
