@@ -108,9 +108,8 @@ func formatCosignatureV1(t uint64, msg []byte) ([]byte, error) {
 }
 
 var (
-	errSignerID   = errors.New("malformed verifier id")
-	errSignerAlg  = errors.New("unknown verifier algorithm")
-	errSignerHash = errors.New("invalid verifier hash")
+	errSignerID  = errors.New("malformed verifier id")
+	errSignerAlg = errors.New("unknown verifier algorithm")
 )
 
 type Signer struct {
