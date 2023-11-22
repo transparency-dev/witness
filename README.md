@@ -3,7 +3,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/transparency-dev/witness.svg)](https://pkg.go.dev/github.com/transparency-dev/witness)
 [![Go Report Card](https://goreportcard.com/badge/github.com/transparency-dev/witness)](https://goreportcard.com/report/github.com/transparency-dev/witness)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/transparency-dev/witness/badge)](https://securityscorecards.dev/viewer/?uri=github.com/transparency-dev/witness)
-[![Slack Status](https://img.shields.io/badge/Slack-Chat-blue.svg)](https://gtrillian.slack.com/)
+[![Slack Status](https://img.shields.io/badge/Slack-Chat-blue.svg)](https://transparency-dev.slack.com/)
 
 ## Overview
 
@@ -34,4 +34,4 @@ which is preconfigured to witness all known logs using the checkpoint format.
 
 ## Support
 * Mailing list: https://groups.google.com/forum/#!forum/trillian-transparency
-* Slack: https://gtrillian.slack.com/ (invitation)
+- Slack: https://transparency-dev.slack.com/ ([invitation](https://join.slack.com/t/transparency-dev/shared_invite/zt-27pkqo21d-okUFhur7YZ0rFoJVIOPznQ))
