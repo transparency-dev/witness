@@ -46,6 +46,7 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 	"github.com/transparency-dev/witness/internal/github"
+	i_note "github.com/transparency-dev/witness/internal/note"
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
@@ -70,8 +71,7 @@ const (
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
 type OperatorConfig struct {
-	WitnessSigner   note.Signer
-	WitnessVerifier note.Verifier
+	WitnessKey string
 
 	GithubUser  string
 	GithubEmail string
@@ -110,13 +110,22 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		logs = append(logs, lc)
 	}
 
+	signerLegacy, err := note.NewSigner(operatorConfig.WitnessKey)
+	if err != nil {
+		return fmt.Errorf("failed to init signer v0: %v", err)
+	}
+	signerCosigV1, err := i_note.NewSignerForCosignatureV1(operatorConfig.WitnessKey)
+	if err != nil {
+		return fmt.Errorf("failed to init signer v1: %v", err)
+	}
+
 	knownLogs, err := logCfg.AsLogMap()
 	if err != nil {
 		return fmt.Errorf("failed to convert witness config to map: %v", err)
 	}
 	witness, err := witness.New(witness.Opts{
 		Persistence: p,
-		Signer:      operatorConfig.WitnessSigner,
+		Signers:     []note.Signer{signerLegacy, signerCosigV1},
 		KnownLogs:   knownLogs,
 	})
 	if err != nil {
@@ -137,7 +146,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	if operatorConfig.GithubUser != "" {
-		runGitHubDistributors(ctx, httpClient, g, logs, bw, operatorConfig)
+		runGitHubDistributors(ctx, httpClient, g, logs, bw, operatorConfig, signerCosigV1.Verifier())
 	} else {
 		glog.Info("No GitHub user specified; skipping deployment of GitHub distributors")
 	}
@@ -147,7 +156,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		for l := range feeders {
 			logs = append(logs, l)
 		}
-		runRestDistributors(ctx, g, httpClient, logs, operatorConfig, bw)
+		runRestDistributors(ctx, g, httpClient, logs, operatorConfig.RestDistributorBaseURL, bw, signerCosigV1.Verifier())
 	}
 
 	r := mux.NewRouter()
@@ -172,9 +181,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, logs []config.Log, operatorConfig OperatorConfig, bw witnessAdapter) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, logs []config.Log, distributorBaseURL string, bw witnessAdapter, witnessV note.Verifier) {
 	g.Go(func() error {
-		d, err := rest.NewDistributor(operatorConfig.RestDistributorBaseURL, httpClient, logs, operatorConfig.WitnessVerifier, bw)
+		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, bw)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}
@@ -194,7 +203,7 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 	})
 }
 
-func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []config.Log, witness dist_gh.Witness, operatorConfig OperatorConfig) {
+func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []config.Log, witness dist_gh.Witness, operatorConfig OperatorConfig, witnessV note.Verifier) {
 	distribute := func(opts *dist_gh.DistributeOptions) error {
 		if err := dist_gh.DistributeOnce(ctx, opts); err != nil {
 			glog.Errorf("DistributeOnce: %v", err)
@@ -228,7 +237,7 @@ func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Grou
 			Repo:            repo,
 			DistributorPath: distributorPath,
 			Logs:            logs,
-			WitSigV:         operatorConfig.WitnessVerifier,
+			WitSigV:         witnessV,
 			Witness:         witness,
 		}, nil
 	}

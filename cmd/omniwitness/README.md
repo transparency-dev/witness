@@ -58,7 +58,6 @@ The `.env` file required for the Docker service is a key-value format with this 
 
 ```
 WITNESS_PRIVATE_KEY=PRIVATE+KEY+YourTokenHere+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-WITNESS_PUBLIC_KEY=YourTokenHere+01234567+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 GITHUB_AUTH_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 GIT_USERNAME=johndoe
@@ -67,7 +66,7 @@ GIT_EMAIL=johndoe@example.com
 WITNESS_VERSION=latest
 ```
 
-`WITNESS_PRIVATE_KEY` and `WITNESS_PUBLIC_KEY` should be generated as documented in [Witness Key Generation](#witness-key-generation).
+`WITNESS_PRIVATE_KEY` should be generated as documented in [Witness Key Generation](#witness-key-generation).
 
 If you wish to use the distributors to push to GitHub, follow the steps in [GitHub Credentials](#github-credentials) and then:
   * The token should be set as `GITHUB_AUTH_TOKEN`
@@ -81,14 +80,13 @@ If you have some reason to run the OmniWitness outside of Docker, then you can r
 ### Simple
 
 The simplest possible configuration brings up the OmniWitness to follow all of the logs,
-but the witnessed checkpoints will not be distributed and can only be disovered via the
+but the witnessed checkpoints will not be distributed and can only be discovered via the
 witness HTTP endpoints.
 You will need to have followed the steps in [Witness Key Generation](#witness-key-generation).
 
 ```
 go run github.com/transparency-dev/witness/cmd/omniwitness@master --alsologtostderr --v=1 \
   --private_key PRIVATE+KEY+my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  --public_key my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   --db_file ~/witness.db
 ```
 
@@ -103,7 +101,6 @@ This is described in [GitHub Credentials](#github-credentials).
 ```
 go run github.com/transparency-dev/witness/cmd/omniwitness@master --alsologtostderr --v=1 \
   --private_key PRIVATE+KEY+my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  --public_key my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   --gh_user my-github-user \
   --gh_email foo@example.com \
   --gh_token ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \

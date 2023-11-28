@@ -32,7 +32,6 @@ import (
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
-	"golang.org/x/mod/sumdb/note"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 )
@@ -42,8 +41,7 @@ var (
 	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 	dbFile      = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
 
-	signingKey  = flag.String("private_key", "", "The note-compatible signing key to use")
-	verifierKey = flag.String("public_key", "", "The note-compatible verifier key to use")
+	signingKey = flag.String("private_key", "", "The note-compatible signing key to use")
 
 	githubUser  = flag.String("gh_user", "", "The github user account to propose witnessed PRs from")
 	githubEmail = flag.String("gh_email", "", "The email that witnessed checkopoint git commits should be done under")
@@ -90,17 +88,8 @@ func main() {
 		Timeout: *httpTimeout,
 	}
 
-	signer, err := note.NewSigner(*signingKey)
-	if err != nil {
-		glog.Exitf("Failed to init signer: %v", err)
-	}
-	verifier, err := note.NewVerifier(*verifierKey)
-	if err != nil {
-		glog.Exitf("Failed to init verifier: %v", err)
-	}
 	opConfig := omniwitness.OperatorConfig{
-		WitnessSigner:   signer,
-		WitnessVerifier: verifier,
+		WitnessKey: *signingKey,
 
 		GithubUser:  *githubUser,
 		GithubEmail: *githubEmail,
