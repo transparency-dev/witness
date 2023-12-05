@@ -41,8 +41,6 @@ github.com/prometheus/common v0.44.0/go.mod h1:ofAIvZbQ1e/nugmZGz4/qCb9Ap1VoSTIO
 github.com/prometheus/procfs v0.11.1 h1:xRC8Iq1yyca5ypa9n1EZnWZkt7dwcoRPQwX/5gwaUuI=
 github.com/prometheus/procfs v0.11.1/go.mod h1:eesXgaPo1q7lBpVMoMy0ZOFTth9hBn4W/y0/p/ScXhY=
 github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
-github.com/transparency-dev/formats v0.0.0-20230914071414-5732692f1e50 h1:FVMl+jA2NBlbUm5XjLJNMrSLqbA/SpeXhKoirj3MMwg=
-github.com/transparency-dev/formats v0.0.0-20230914071414-5732692f1e50/go.mod h1:J2NdDb6IhKIvF6MwCvKikz9/QStRylEtS2mv+En+jBg=
 github.com/transparency-dev/formats v0.0.0-20231205184308-949529efd6b3 h1:Mpx9pqc7bKrx2QQxKL3SPbLIGH4gTBR1ZFrNuKq3CcY=
 github.com/transparency-dev/formats v0.0.0-20231205184308-949529efd6b3/go.mod h1:tY9Z9oBaYdQt4NWIhsFAtv0altwLk+K9Gg/2tbS0eBQ=
 github.com/transparency-dev/merkle v0.0.2 h1:Q9nBoQcZcgPamMkGn7ghV8XiTZ/kRxn1yCG81+twTK4=
