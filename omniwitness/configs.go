@@ -19,8 +19,8 @@ import (
 	"fmt"
 
 	logfmt "github.com/transparency-dev/formats/log"
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
-	i_note "github.com/transparency-dev/witness/internal/note"
 	"github.com/transparency-dev/witness/internal/witness"
 )
 
@@ -41,7 +41,7 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 	logMap := make(map[string]witness.LogInfo)
 	h := rfc6962.DefaultHasher
 	for _, log := range config.Logs {
-		logV, err := i_note.NewVerifier(log.PublicKeyType, log.PublicKey)
+		logV, err := f_note.NewVerifier(log.PublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
 		}
@@ -62,10 +62,9 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 
 // LogInfo contains the details about a log.
 type LogInfo struct {
-	Origin        string `yaml:"Origin"`
-	PublicKey     string `yaml:"PublicKey"`
-	PublicKeyType string `yaml:"PublicKeyType"`
-	URL           string `yaml:"URL"`
-	Feeder        Feeder `yaml:"Feeder"`
-	UseCompact    bool   `yaml:"UseCompact"`
+	Origin     string `yaml:"Origin"`
+	PublicKey  string `yaml:"PublicKey"`
+	URL        string `yaml:"URL"`
+	Feeder     Feeder `yaml:"Feeder"`
+	UseCompact bool   `yaml:"UseCompact"`
 }
