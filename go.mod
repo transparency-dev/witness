@@ -21,7 +21,7 @@ require (
 
 require (
 	github.com/prometheus/client_golang v1.17.0
-	github.com/transparency-dev/formats v0.0.0-20230914071414-5732692f1e50
+	github.com/transparency-dev/formats v0.0.0-20231205184308-949529efd6b3
 	github.com/transparency-dev/serverless-log v0.0.0-20230914155322-9b6f31f76f1f
 )
 
