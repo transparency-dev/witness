@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 
+	f_note "github.com/transparency-dev/formats/note"
 	dist_gh "github.com/transparency-dev/witness/internal/distribute/github"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder"
@@ -46,7 +47,6 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 	"github.com/transparency-dev/witness/internal/github"
-	i_note "github.com/transparency-dev/witness/internal/note"
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
@@ -102,7 +102,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	for _, l := range logCfg.Logs {
-		lc, err := config.NewLog(l.Origin, l.PublicKey, l.PublicKeyType, l.URL)
+		lc, err := config.NewLog(l.Origin, l.PublicKey, l.URL)
 		if err != nil {
 			return fmt.Errorf("invalid log configuration: %v", err)
 		}
@@ -114,7 +114,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if err != nil {
 		return fmt.Errorf("failed to init signer v0: %v", err)
 	}
-	signerCosigV1, err := i_note.NewSignerForCosignatureV1(operatorConfig.WitnessKey)
+	signerCosigV1, err := f_note.NewSignerForCosignatureV1(operatorConfig.WitnessKey)
 	if err != nil {
 		return fmt.Errorf("failed to init signer v1: %v", err)
 	}

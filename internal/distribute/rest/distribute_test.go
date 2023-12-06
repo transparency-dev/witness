@@ -25,7 +25,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
-	i_note "github.com/transparency-dev/witness/internal/note"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -46,7 +45,7 @@ func TestDistributeOnce(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	log, err := config.NewLog("Log Checkpoint v0", "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT", i_note.Note, "http://example.com/log62")
+	log, err := config.NewLog("Log Checkpoint v0", "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT", "http://example.com/log62")
 	if err != nil {
 		t.Fatal(err)
 	}
