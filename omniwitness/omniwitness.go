@@ -39,14 +39,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	f_note "github.com/transparency-dev/formats/note"
-	dist_gh "github.com/transparency-dev/witness/internal/distribute/github"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
-	"github.com/transparency-dev/witness/internal/github"
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
@@ -73,10 +71,6 @@ const (
 type OperatorConfig struct {
 	WitnessKey string
 
-	GithubUser  string
-	GithubEmail string
-	GithubToken string
-
 	// RestDistributorBaseURL is optional, and if provided gives the base URL
 	// to a distributor that takes witnessed checkpoints via a PUT request.
 	// TODO(mhutchinson): This should be baked into the code when there is a public distributor.
@@ -93,7 +87,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
 
-	logs := make([]config.Log, 0)
 	feeders := make(map[config.Log]logFeeder)
 
 	logCfg := LogConfig{}
@@ -107,7 +100,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			return fmt.Errorf("invalid log configuration: %v", err)
 		}
 		feeders[lc] = l.Feeder.FeedFunc()
-		logs = append(logs, lc)
 	}
 
 	signerLegacy, err := note.NewSigner(operatorConfig.WitnessKey)
@@ -145,11 +137,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		})
 	}
 
-	if operatorConfig.GithubUser != "" {
-		runGitHubDistributors(ctx, httpClient, g, logs, bw, operatorConfig, signerCosigV1.Verifier())
-	} else {
-		glog.Info("No GitHub user specified; skipping deployment of GitHub distributors")
-	}
 	if operatorConfig.RestDistributorBaseURL != "" {
 		glog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
 		logs := make([]config.Log, 0, len(feeders))
@@ -200,66 +187,6 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 				glog.Errorf("DistributeOnce: %v", err)
 			}
 		}
-	})
-}
-
-func runGitHubDistributors(ctx context.Context, c *http.Client, g *errgroup.Group, logs []config.Log, witness dist_gh.Witness, operatorConfig OperatorConfig, witnessV note.Verifier) {
-	distribute := func(opts *dist_gh.DistributeOptions) error {
-		if err := dist_gh.DistributeOnce(ctx, opts); err != nil {
-			glog.Errorf("DistributeOnce: %v", err)
-		}
-		for {
-			select {
-			case <-time.After(distributeInterval):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			if err := dist_gh.DistributeOnce(ctx, opts); err != nil {
-				glog.Errorf("DistributeOnce: %v", err)
-			}
-		}
-	}
-
-	createOpts := func(upstreamOwner, repoName, mainBranch, distributorPath string) (*dist_gh.DistributeOptions, error) {
-		dr := github.RepoID{
-			Owner:    upstreamOwner,
-			RepoName: repoName,
-		}
-		fork := github.RepoID{
-			Owner:    operatorConfig.GithubUser,
-			RepoName: repoName,
-		}
-		repo, err := github.NewRepository(ctx, c, dr, mainBranch, fork, operatorConfig.GithubUser, operatorConfig.GithubEmail, operatorConfig.GithubToken)
-		if err != nil {
-			return nil, fmt.Errorf("NewRepository: %v", err)
-		}
-		return &dist_gh.DistributeOptions{
-			Repo:            repo,
-			DistributorPath: distributorPath,
-			Logs:            logs,
-			WitSigV:         witnessV,
-			Witness:         witness,
-		}, nil
-	}
-
-	g.Go(func() error {
-		opts, err := createOpts("mhutchinson", "mhutchinson-distributor", "main", "distributor")
-		if err != nil {
-			return fmt.Errorf("createOpts(mhutchinson): %v", err)
-		}
-		glog.Infof("Distributor %q goroutine started", opts.Repo)
-		defer glog.Infof("Distributor %q goroutine done", opts.Repo)
-		return distribute(opts)
-	})
-
-	g.Go(func() error {
-		opts, err := createOpts("WolseyBankWitness", "rediffusion", "main", ".")
-		if err != nil {
-			return fmt.Errorf("createOpts(WolseyBankWitness): %v", err)
-		}
-		glog.Infof("Distributor %q goroutine started", opts.Repo)
-		defer glog.Infof("Distributor %q goroutine done", opts.Repo)
-		return distribute(opts)
 	})
 }
 
