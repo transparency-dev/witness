@@ -89,12 +89,7 @@ func main() {
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKey: *signingKey,
-
-		GithubUser:  *githubUser,
-		GithubEmail: *githubEmail,
-		GithubToken: *githubToken,
-
+		WitnessKey:             *signingKey,
 		RestDistributorBaseURL: *restDistributorBaseURL,
 	}
 	var p persistence.LogStatePersistence
