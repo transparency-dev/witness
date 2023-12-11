@@ -62,8 +62,8 @@ type LogStateWriteOps = persistence.LogStateWriteOps
 const (
 	// Interval between attempts to feed checkpoints
 	// TODO(mhutchinson): Make this configurable
-	defaultFeedInterval       = 5 * time.Minute
-	defaultDistributeInterval = 5 * time.Minute
+	defaultFeedInterval       = 1 * time.Minute
+	defaultDistributeInterval = 1 * time.Minute
 )
 
 // OperatorConfig allows the bare minimum operator-specific configuration.
