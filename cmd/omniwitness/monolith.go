@@ -41,15 +41,9 @@ var (
 	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 	dbFile      = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
 
-	signingKey = flag.String("private_key", "", "The note-compatible signing key to use")
-
-	githubUser  = flag.String("gh_user", "", "The github user account to propose witnessed PRs from")
-	githubEmail = flag.String("gh_email", "", "The email that witnessed checkopoint git commits should be done under")
-	githubToken = flag.String("gh_token", "", "The github auth token to allow checkpoint distribution via PRs")
-
+	signingKey             = flag.String("private_key", "", "The note-compatible signing key to use")
 	restDistributorBaseURL = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
-
-	httpTimeout = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
+	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 )
 
 func main() {
