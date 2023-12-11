@@ -87,7 +87,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
 
-	logs := make([]config.Log, 0)
 	feeders := make(map[config.Log]logFeeder)
 
 	logCfg := LogConfig{}
@@ -101,7 +100,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			return fmt.Errorf("invalid log configuration: %v", err)
 		}
 		feeders[lc] = l.Feeder.FeedFunc()
-		logs = append(logs, lc)
 	}
 
 	signerLegacy, err := note.NewSigner(operatorConfig.WitnessKey)
