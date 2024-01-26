@@ -7,7 +7,7 @@ require (
 	github.com/golang/glog v1.2.0
 	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/mattn/go-sqlite3 v1.14.19
+	github.com/mattn/go-sqlite3 v1.14.20
 	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
