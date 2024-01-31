@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"golang.org/x/mod/sumdb/note"
@@ -71,7 +72,7 @@ type logOpts struct {
 
 func newWitness(t *testing.T, logs []logOpts) *Witness {
 	// Set up Opts for the witness.
-	ns, err := note.NewSigner(wSK)
+	ns, err := f_note.NewSignerForCosignatureV1(wSK)
 	if err != nil {
 		t.Fatalf("couldn't create a witness signer: %v", err)
 	}
@@ -235,7 +236,7 @@ func TestGetChkpt(t *testing.T) {
 				if err != nil {
 					t.Errorf("failed to get latest: %v", err)
 				}
-				wV, err := note.NewVerifier(wPK)
+				wV, err := f_note.NewVerifierForCosignatureV1(wPK)
 				if err != nil {
 					t.Fatalf("couldn't create a witness verifier: %v", err)
 				}

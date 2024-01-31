@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/monitoring"
@@ -50,7 +51,7 @@ func TestDistributeOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := []config.Log{log}
-	wV, err := note.NewVerifier(wPK)
+	wV, err := f_note.NewVerifierForCosignatureV1(wPK)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ func TestDistributeOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wSign, err := note.NewSigner(wSK)
+	wSign, err := f_note.NewSignerForCosignatureV1(wSK)
 	if err != nil {
 		t.Fatal(err)
 	}
