@@ -43,4 +43,4 @@ steps:
     id: 'build-omniwitness-image'
 
 substitutions:
-  _DOCKER_BUILDX_PLATFORMS: 'linux/amd64,linux/arm/v7'
+  _DOCKER_BUILDX_PLATFORMS: 'linux/amd64
