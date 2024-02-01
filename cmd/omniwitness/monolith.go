@@ -47,7 +47,10 @@ var (
 )
 
 func main() {
+	klog.InitFlags(nil)
 	flag.Parse()
+	defer klog.Flush()
+
 	ctx := context.Background()
 
 	if *metricsAddr == "" {
