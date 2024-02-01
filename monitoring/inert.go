@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 // InertMetricFactory creates inert metrics for testing.
@@ -46,7 +46,7 @@ func (m *InertCounter) Inc(labelVals ...string) {
 	defer m.mu.Unlock()
 	key, err := keyForLabels(labelVals, m.labelCount)
 	if err != nil {
-		glog.Error(err.Error())
+		klog.Error(err.Error())
 		return
 	}
 	m.vals[key] += 1

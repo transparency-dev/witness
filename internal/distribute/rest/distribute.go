@@ -25,11 +25,11 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -90,7 +90,7 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
 	for _, log := range d.logs {
 		if err := d.distributeForLog(ctx, log); err != nil {
-			glog.Warningf("Failed to distribute %q (%s): %v", d.baseURL, log.Origin, err)
+			klog.Warningf("Failed to distribute %q (%s): %v", d.baseURL, log.Origin, err)
 			numErrs++
 		}
 	}
@@ -136,7 +136,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad status response (%s): %q", resp.Status, body)
 	}
-	glog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), logID)
+	klog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), logID)
 	counterDistRestSuccess.Inc(logID)
 	return nil
 }

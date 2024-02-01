@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"golang.org/x/mod/sumdb/note"
+	"k8s.io/klog/v2"
 )
 
 // ErrNoSignaturesAdded is returned when the witness has already signed the presented checkpoint.
@@ -79,7 +79,7 @@ func FeedOnce(ctx context.Context, opts FeedOpts) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read input checkpoint: %v", err)
 	}
 
-	glog.V(2).Infof("CP to feed:\n%s", string(cp))
+	klog.V(2).Infof("CP to feed:\n%s", string(cp))
 
 	cpSubmit, _, _, err := log.ParseCheckpoint(cp, opts.LogOrigin, opts.LogSigVerifier)
 	if err != nil {
@@ -106,7 +106,7 @@ func Run(ctx context.Context, interval time.Duration, opts FeedOpts) error {
 			defer cancel()
 
 			if _, err := FeedOnce(ctx, opts); err != nil {
-				glog.Errorf("Feeding log %q failed: %v", opts.LogSigVerifier.Name(), err)
+				klog.Errorf("Feeding log %q failed: %v", opts.LogSigVerifier.Name(), err)
 			}
 		}()
 
@@ -130,7 +130,7 @@ func submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint,
 		latestCPRaw, err := opts.Witness.GetLatestCheckpoint(ctx, opts.LogID)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			e := fmt.Errorf("failed to fetch latest CP from witness: %v", err)
-			glog.Warning(e.Error())
+			klog.Warning(e.Error())
 			return e
 		}
 
@@ -140,7 +140,7 @@ func submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint,
 			cp, _, _, err := log.ParseCheckpoint(latestCPRaw, opts.LogOrigin, opts.LogSigVerifier)
 			if err != nil {
 				e := fmt.Errorf("failed to parse CP from witness: %v", err)
-				glog.Warning(e.Error())
+				klog.Warning(e.Error())
 				return e
 			}
 			latestCP = *cp
@@ -149,27 +149,27 @@ func submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint,
 				return backoff.Permanent(fmt.Errorf("witness checkpoint size (%d) > submit checkpoint size (%d)", latestCP.Size, cpSubmit.Size))
 			}
 			if latestCP.Size == cpSubmit.Size && bytes.Equal(latestCP.Hash, cpSubmit.Hash) {
-				glog.V(1).Infof("%q unchanged - @%d: %x", logName, latestCP.Size, latestCP.Hash)
+				klog.V(1).Infof("%q unchanged - @%d: %x", logName, latestCP.Size, latestCP.Hash)
 				returnCp = latestCPRaw
 				return nil
 			}
 		}
 
-		glog.V(1).Infof("\"%s: %s\" grew - @%d: %x → @%d: %x", logName, cpSubmit.Origin, latestCP.Size, latestCP.Hash, cpSubmit.Size, cpSubmit.Hash)
+		klog.V(1).Infof("\"%s: %s\" grew - @%d: %x → @%d: %x", logName, cpSubmit.Origin, latestCP.Size, latestCP.Hash, cpSubmit.Size, cpSubmit.Hash)
 
 		// The witness may be configured to expect a compact-range type proof, so we need to always
 		// try to build one, even if the witness doesn't have a "latest" checkpoint for this log.
 		conP, err = opts.FetchProof(ctx, latestCP, cpSubmit)
 		if err != nil {
 			e := fmt.Errorf("failed to fetch consistency proof: %v", err)
-			glog.Warning(e.Error())
+			klog.Warning(e.Error())
 			return e
 		}
-		glog.V(2).Infof("%q %d -> %d proof: %x", logName, latestCP.Size, cpSubmit.Size, conP)
+		klog.V(2).Infof("%q %d -> %d proof: %x", logName, latestCP.Size, cpSubmit.Size, conP)
 
 		if returnCp, err = opts.Witness.Update(ctx, opts.LogID, cpRaw, conP); err != nil {
 			e := fmt.Errorf("failed to submit checkpoint to witness: %v", err)
-			glog.Warning(e.Error())
+			klog.Warning(e.Error())
 			return e
 		}
 		return nil
