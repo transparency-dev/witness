@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/compact"
 	"github.com/transparency-dev/merkle/rfc6962"
@@ -29,6 +28,7 @@ import (
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/tlog"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -193,7 +193,7 @@ func (tb *tileBroker) tile(i tileIndex) (tile, error) {
 		return t, nil
 	}
 	partial := tb.pts[i]
-	glog.V(2).Infof("Looking up %s (partial=%d) from remote", i, partial)
+	klog.V(2).Infof("Looking up %s (partial=%d) from remote", i, partial)
 	hs, err := tb.lookup(i.level, i.offset, partial)
 	if err != nil {
 		return tile{}, fmt.Errorf("lookup failed: %v", err)

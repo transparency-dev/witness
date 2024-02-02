@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
 	ihttp "github.com/transparency-dev/witness/internal/http"
@@ -37,6 +36,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
+	"k8s.io/klog/v2"
 
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
@@ -141,14 +141,14 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		c, f := c, f
 		// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
 		g.Go(func() error {
-			glog.Infof("Feeder %q goroutine started", c.Origin)
-			defer glog.Infof("Feeder %q goroutine done", c.Origin)
+			klog.Infof("Feeder %q goroutine started", c.Origin)
+			defer klog.Infof("Feeder %q goroutine done", c.Origin)
 			return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
 		})
 	}
 
 	if operatorConfig.RestDistributorBaseURL != "" {
-		glog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
+		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
 		logs := make([]config.Log, 0, len(feeders))
 		for l := range feeders {
 			logs = append(logs, l)
@@ -163,14 +163,14 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		Handler: r,
 	}
 	g.Go(func() error {
-		glog.Info("HTTP server goroutine started")
-		defer glog.Info("HTTP server goroutine done")
+		klog.Info("HTTP server goroutine started")
+		defer klog.Info("HTTP server goroutine done")
 		return srv.Serve(httpListener)
 	})
 	g.Go(func() error {
 		// This goroutine brings down the HTTP server when ctx is done.
-		glog.Info("HTTP server-shutdown goroutine started")
-		defer glog.Info("HTTP server-shutdown goroutine done")
+		klog.Info("HTTP server-shutdown goroutine started")
+		defer klog.Info("HTTP server-shutdown goroutine done")
 		<-ctx.Done()
 		return srv.Shutdown(ctx)
 	})
@@ -185,7 +185,7 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 			return fmt.Errorf("NewDistributor: %v", err)
 		}
 		if err := d.DistributeOnce(ctx); err != nil {
-			glog.Errorf("DistributeOnce: %v", err)
+			klog.Errorf("DistributeOnce: %v", err)
 		}
 		for {
 			select {
@@ -194,7 +194,7 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 				return ctx.Err()
 			}
 			if err := d.DistributeOnce(ctx); err != nil {
-				glog.Errorf("DistributeOnce: %v", err)
+				klog.Errorf("DistributeOnce: %v", err)
 			}
 		}
 	})

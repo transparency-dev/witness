@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle"
 	"github.com/transparency-dev/merkle/compact"
@@ -31,6 +30,7 @@ import (
 	"golang.org/x/mod/sumdb/note"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog/v2"
 )
 
 // Opts is the options passed to a witness.
@@ -179,7 +179,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		if !bytes.Equal(next.Hash, prev.Hash) {
 			// Code analysis complains about the next line, but it's fine; we've already bailed out
 			// further up the method if the log ID was not found.
-			glog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logID, prev, next) // lgtm [go/log-injection]
+			klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logID, prev, next) // lgtm [go/log-injection]
 			return prevRaw, status.Errorf(codes.FailedPrecondition, "checkpoint for same size log with differing hash (got %x, have %x)", next.Hash, prev.Hash)
 		}
 		// If it's identical to the previous one do nothing.

@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
@@ -32,6 +31,7 @@ import (
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
+	"k8s.io/klog/v2"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 )
@@ -47,11 +47,14 @@ var (
 )
 
 func main() {
+	klog.InitFlags(nil)
 	flag.Parse()
+	defer klog.Flush()
+
 	ctx := context.Background()
 
 	if *metricsAddr == "" {
-		glog.Info("No metrics_listen address provided so skipping prometheus setup")
+		klog.Info("No metrics_listen address provided so skipping prometheus setup")
 		mf := monitoring.InertMetricFactory{}
 		monitoring.SetMetricFactory(mf)
 	} else {
@@ -68,15 +71,15 @@ func main() {
 				WriteTimeout: 10 * time.Second,
 			}
 			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-				glog.Errorf("Error serving metrics: %v", err)
+				klog.Errorf("Error serving metrics: %v", err)
 			}
 		}()
-		glog.Infof("Prometheus configured to listen on %q", *metricsAddr)
+		klog.Infof("Prometheus configured to listen on %q", *metricsAddr)
 	}
 
 	httpListener, err := net.Listen("tcp", *addr)
 	if err != nil {
-		glog.Fatalf("failed to listen on %q", *addr)
+		klog.Fatalf("failed to listen on %q", *addr)
 	}
 	httpClient := &http.Client{
 		Timeout: *httpTimeout,
@@ -89,19 +92,19 @@ func main() {
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {
 		// Start up local database.
-		glog.Infof("Connecting to local DB at %q", *dbFile)
+		klog.Infof("Connecting to local DB at %q", *dbFile)
 		db, err := sql.Open("sqlite3", *dbFile)
 		if err != nil {
-			glog.Exitf("Failed to connect to DB: %v", err)
+			klog.Exitf("Failed to connect to DB: %v", err)
 		}
 		// Avoid "database locked" issues with multiple concurrent updates.
 		db.SetMaxOpenConns(1)
 		p = psql.NewPersistence(db)
 	} else {
-		glog.Warning("No persistence configured for witness. Reboots will lose guarantees of witness correctness. Use --db_file for production deployments.")
+		klog.Warning("No persistence configured for witness. Reboots will lose guarantees of witness correctness. Use --db_file for production deployments.")
 		p = inmemory.NewPersistence()
 	}
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
-		glog.Exitf("Main failed: %v", err)
+		klog.Exitf("Main failed: %v", err)
 	}
 }

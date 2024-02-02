@@ -21,12 +21,12 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/witness"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog/v2"
 )
 
 // Server is the core handler implementation of the witness.
@@ -75,7 +75,7 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	if _, err := w.Write(chkpt); err != nil {
-		glog.Warningf("Error writing response: %v", err)
+		klog.Warningf("Error writing response: %v", err)
 	}
 }
 
@@ -91,7 +91,7 @@ func (s *Server) getCheckpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	if _, err := w.Write(chkpt); err != nil {
-		glog.Warningf("Error writing response: %v", err)
+		klog.Warningf("Error writing response: %v", err)
 	}
 }
 
@@ -109,7 +109,7 @@ func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/json")
 	if _, err := w.Write(logList); err != nil {
-		glog.Warningf("Error writing response: %v", err)
+		klog.Warningf("Error writing response: %v", err)
 	}
 }
 

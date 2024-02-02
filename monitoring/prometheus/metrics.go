@@ -19,9 +19,9 @@ package prometheus
 import (
 	"fmt"
 
-	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/transparency-dev/witness/monitoring"
+	"k8s.io/klog/v2"
 )
 
 // MetricFactory allows the creation of Prometheus-based metrics.
@@ -67,7 +67,7 @@ type Counter struct {
 func (m *Counter) Inc(labelVals ...string) {
 	labels, err := labelsFor(m.labelNames, labelVals)
 	if err != nil {
-		glog.Error(err.Error())
+		klog.Error(err.Error())
 		return
 	}
 	if m.vec != nil {

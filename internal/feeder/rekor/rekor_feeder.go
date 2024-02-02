@@ -27,10 +27,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"k8s.io/klog/v2"
 )
 
 // inactiveShardLogInfo is a presentation of the JSON object returned
@@ -159,7 +159,7 @@ func getJSON(ctx context.Context, c *http.Client, base *url.URL, path string, s 
 		return fmt.Errorf("failed to read body from %q: %v", u.String(), err)
 	}
 	if err := json.Unmarshal(raw, s); err != nil {
-		glog.Infof("Got body:\n%s", string(raw))
+		klog.Infof("Got body:\n%s", string(raw))
 		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 	return nil
