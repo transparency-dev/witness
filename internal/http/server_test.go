@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
@@ -74,7 +75,7 @@ type logOpts struct {
 
 func newWitness(t *testing.T, logs []logOpts) *witness.Witness {
 	// Set up Opts for the witness.
-	ns, err := note.NewSigner(wSK)
+	ns, err := f_note.NewSignerForCosignatureV1(wSK)
 	if err != nil {
 		t.Fatalf("couldn't create a witness signer: %v", err)
 	}
