@@ -21,17 +21,38 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle"
 	"github.com/transparency-dev/merkle/compact"
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/witness/internal/persistence"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
+
+var (
+	doOnce                         sync.Once
+	counterUpdateAttempt           monitoring.Counter
+	counterUpdateSuccess           monitoring.Counter
+	counterInvalidConsistency      monitoring.Counter
+	counterInconsistentCheckpoints monitoring.Counter
+)
+
+func initMetrics() {
+	doOnce.Do(func() {
+		mf := monitoring.GetMetricFactory()
+		const logIDLabel = "logid"
+		counterUpdateAttempt = mf.NewCounter("witness_update_request", "Number of attempted requests made to update checkpoints for the log ID", logIDLabel)
+		counterUpdateSuccess = mf.NewCounter("witness_update_success", "Number of successful requests made to update checkpoints for the log ID", logIDLabel)
+		counterInvalidConsistency = mf.NewCounter("witness_update_invalid_consistency", "Number of times the witness received a bad consistency proof for the log ID", logIDLabel)
+		counterInconsistentCheckpoints = mf.NewCounter("witness_update_inconsistency_checkpoints", "Number of times the witness received inconsistency checkpoints for the log ID", logIDLabel)
+	})
+}
 
 // Opts is the options passed to a witness.
 type Opts struct {
@@ -124,6 +145,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "log %q not found", logID)
 	}
+	counterUpdateAttempt.Inc(logID)
 	// Check the signatures on the raw checkpoint and parse it
 	// into the log.Checkpoint format.
 	next, nextNote, err := w.parse(nextRaw, logID)
@@ -155,6 +177,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 			if err := setInitChkptData(write, logInfo, next, signed, cProof); err != nil {
 				return nil, status.Errorf(codes.Internal, "couldn't set TOFU checkpoint: %v", err)
 			}
+			counterUpdateSuccess.Inc(logID)
 			return signed, nil
 		}
 		return nil, status.Errorf(codes.Internal, "couldn't retrieve latest checkpoint: %v", err)
@@ -180,9 +203,11 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 			// Code analysis complains about the next line, but it's fine; we've already bailed out
 			// further up the method if the log ID was not found.
 			klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logID, prev, next) // lgtm [go/log-injection]
+			counterInconsistentCheckpoints.Inc(logID)
 			return prevRaw, status.Errorf(codes.FailedPrecondition, "checkpoint for same size log with differing hash (got %x, have %x)", next.Hash, prev.Hash)
 		}
 		// If it's identical to the previous one do nothing.
+		counterUpdateSuccess.Inc(logID)
 		return prevRaw, nil
 	}
 	// The only remaining option is next.Size > prev.Size. This might be
@@ -191,6 +216,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	if logInfo.UseCompact {
 		nextRange, err := verifyRange(next, prev, logInfo.Hasher, prevRange, cProof)
 		if err != nil {
+			counterInvalidConsistency.Inc(logID)
 			return prevRaw, status.Errorf(codes.FailedPrecondition, "failed to verify compact range: %v", err)
 		}
 		// If the proof is good store nextRaw and the new range.
@@ -202,11 +228,13 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		if err := write.Set(signed, r); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to store new checkpoint: %v", err)
 		}
+		counterUpdateSuccess.Inc(logID)
 		return signed, nil
 	}
 	// If we're not using compact ranges then use consistency proofs.
 	if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
 		// Complain if the checkpoints aren't consistent.
+		counterInvalidConsistency.Inc(logID)
 		return prevRaw, status.Errorf(codes.FailedPrecondition, "failed to verify consistency proof: %v", err)
 	}
 	// If the consistency proof is good we store the witness cosigned nextRaw.
@@ -217,6 +245,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	if err := write.Set(signed, nil); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to store new checkpoint: %v", err)
 	}
+	counterUpdateSuccess.Inc(logID)
 	return signed, nil
 }
 
