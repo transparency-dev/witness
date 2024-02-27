@@ -25,6 +25,7 @@ import (
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -117,6 +118,7 @@ func dh(h string, expLen int) []byte {
 }
 
 func TestGetLogs(t *testing.T) {
+	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	for _, test := range []struct {
 		desc   string
 		logIDs []string
@@ -176,6 +178,7 @@ func TestGetLogs(t *testing.T) {
 }
 
 func TestGetChkpt(t *testing.T) {
+	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	for _, test := range []struct {
 		desc      string
 		setID     string
