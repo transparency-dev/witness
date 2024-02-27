@@ -50,7 +50,7 @@ func initMetrics() {
 		counterUpdateAttempt = mf.NewCounter("witness_update_request", "Number of attempted requests made to update checkpoints for the log ID", logIDLabel)
 		counterUpdateSuccess = mf.NewCounter("witness_update_success", "Number of successful requests made to update checkpoints for the log ID", logIDLabel)
 		counterInvalidConsistency = mf.NewCounter("witness_update_invalid_consistency", "Number of times the witness received a bad consistency proof for the log ID", logIDLabel)
-		counterInconsistentCheckpoints = mf.NewCounter("witness_update_inconsistency_checkpoints", "Number of times the witness received inconsistency checkpoints for the log ID", logIDLabel)
+		counterInconsistentCheckpoints = mf.NewCounter("witness_update_inconsistent_checkpoints", "Number of times the witness received inconsistent checkpoints for the log ID", logIDLabel)
 	})
 }
 
