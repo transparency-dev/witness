@@ -87,6 +87,8 @@ type Witness struct {
 
 // New creates a new witness, which initially has no logs to follow.
 func New(wo Opts) (*Witness, error) {
+	initMetrics()
+
 	// Create the chkpts table if needed.
 	if err := wo.Persistence.Init(); err != nil {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
