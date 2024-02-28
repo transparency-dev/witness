@@ -33,6 +33,7 @@ import (
 	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
@@ -128,6 +129,7 @@ func createTestEnv(w *witness.Witness) (*httptest.Server, func()) {
 }
 
 func TestGetLogs(t *testing.T) {
+	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	for _, test := range []struct {
 		desc       string
 		logIDs     []string
