@@ -160,7 +160,10 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	s := ihttp.NewServer(witness)
 	s.RegisterHandlers(r)
 	srv := http.Server{
-		Handler: r,
+		Handler:      r,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  5 * time.Minute,
 	}
 	g.Go(func() error {
 		klog.Info("HTTP server goroutine started")
