@@ -32,8 +32,18 @@ Logs:
     PublicKey: lvfs+7908d142+ASnlGgOh+634tcE/2Lp3wV7k/cLoU6ncawmb/BLC1oMU
     Feeder: serverless
     UseCompact: false
+  - Origin: transparency.dev/armored-witness/firmware_transparency/ci/1
+    URL: https://api.transparency.dev/armored-witness-firmware/ci/log/1/
+    PublicKey: transparency.dev-aw-ftlog-ci+f5479c1e+AR6gW0mycDtL17iM2uvQUThJsoiuSRirstEj9a5AdCCu
+    Feeder: serverless
+    UseCompact: false
   - Origin: transparency.dev/armored-witness/firmware_transparency/ci/2
     URL: https://api.transparency.dev/armored-witness-firmware/ci/log/2/
     PublicKey: transparency.dev-aw-ftlog-ci-2+f77c6276+AZXqiaARpwF4MoNOxx46kuiIRjrML0PDTm+c7BLaAMt6
+    Feeder: serverless
+    UseCompact: false
+  - Origin: transparency.dev/armored-witness/firmware_transparency/ci/3
+    URL: https://api.transparency.dev/armored-witness-firmware/ci/log/3/
+    PublicKey: transparency.dev-aw-ftlog-ci-3+3f689522+Aa1Eifq6rRC8qiK+bya07yV1fXyP156pEMsX7CFBC6gg
     Feeder: serverless
     UseCompact: false
