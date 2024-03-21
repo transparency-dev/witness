@@ -28,6 +28,10 @@ import (
 	"golang.org/x/mod/sumdb/note"
 )
 
+func TestBigFailure(t *testing.T) {
+	t.Fatal("this test intentionally fails")
+}
+
 func TestFeedOnce(t *testing.T) {
 	ctx := context.Background()
 	for _, test := range []struct {
