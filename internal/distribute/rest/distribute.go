@@ -128,6 +128,9 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if err != nil {
 		return fmt.Errorf("failed to do http request: %v", err)
 	}
+	if resp.Request.Method != "PUT" {
+		return fmt.Errorf("PUT request to %q was converted to %s request to %q", u.String(), resp.Request.Method, resp.Request.URL)
+	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
