@@ -88,7 +88,7 @@ func newFetcher(c *http.Client, root *url.URL) client.Fetcher {
 		fallthrough
 	case "https":
 		get = func(ctx context.Context, u *url.URL) ([]byte, error) {
-			req, err := http.NewRequest("GET", u.String(), nil)
+			req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 			if err != nil {
 				return nil, err
 			}

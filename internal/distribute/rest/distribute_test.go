@@ -42,7 +42,7 @@ func TestDistributeOnce(t *testing.T) {
 	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	fd := &fakeDistributor{}
 	r := mux.NewRouter()
-	r.HandleFunc(fmt.Sprintf(rest.HTTPCheckpointByWitness, "{logid:[a-zA-Z0-9-]+}", "{witid:[^ +]+}"), fd.update).Methods("PUT")
+	r.HandleFunc(fmt.Sprintf(rest.HTTPCheckpointByWitness, "{logid:[a-zA-Z0-9-]+}", "{witid:[^ +]+}"), fd.update).Methods(http.MethodPut)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
