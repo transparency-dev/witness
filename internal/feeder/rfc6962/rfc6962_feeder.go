@@ -38,17 +38,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// signedTreeHead represents the structure returned by the get-sth CT method
-// after base64 decoding; see sections 3.5 and 4.3.
-type signedTreeHead struct {
-	Version           int    `json:"sth_version"`         // The version of the protocol to which the STH conforms
-	TreeSize          uint64 `json:"tree_size"`           // The number of entries in the new tree
-	Timestamp         uint64 `json:"timestamp"`           // The time at which the STH was created
-	SHA256RootHash    []byte `json:"sha256_root_hash"`    // The root hash of the log's Merkle tree
-	TreeHeadSignature []byte `json:"tree_head_signature"` // Log's signature over a TLS-encoded TreeHeadSignature
-	LogID             []byte `json:"log_id"`              // The SHA256 hash of the log's public key
-}
-
 // proof is a partial representation of the JSON struct returned by the CT
 // get-sth-consistency request.
 type proof struct {
@@ -111,7 +100,6 @@ func getJSON(ctx context.Context, c *http.Client, base *url.URL, path string, s 
 		return fmt.Errorf("failed to get: %v", err)
 	}
 	if err := json.Unmarshal(raw, s); err != nil {
-		klog.Infof("Got body:\n%s", string(raw))
 		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 	return nil
@@ -133,7 +121,11 @@ func get(ctx context.Context, c *http.Client, base *url.URL, path string) ([]byt
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request to %q: %v", u.String(), err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		if err := rsp.Body.Close(); err != nil {
+			klog.Infof("Close: %v", err)
+		}
+	}()
 
 	if rsp.StatusCode == 404 {
 		return nil, os.ErrNotExist
