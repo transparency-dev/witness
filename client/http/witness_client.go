@@ -53,7 +53,7 @@ func (w Witness) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL: %v", err)
 	}
-	req, err := http.NewRequest("GET", u.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -85,7 +85,7 @@ func (w Witness) Update(ctx context.Context, logID string, cp []byte, proof [][]
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL: %v", err)
 	}
-	req, err := http.NewRequest("PUT", u.String(), bytes.NewReader(reqBody))
+	req, err := http.NewRequest(http.MethodPut, u.String(), bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -93,7 +93,7 @@ func (w Witness) Update(ctx context.Context, logID string, cp []byte, proof [][]
 	if err != nil {
 		return nil, fmt.Errorf("failed to do http request: %v", err)
 	}
-	if resp.Request.Method != "PUT" {
+	if resp.Request.Method != http.MethodPut {
 		return nil, fmt.Errorf("PUT request to %q was converted to %s request to %q", u.String(), resp.Request.Method, resp.Request.URL)
 	}
 	defer resp.Body.Close()

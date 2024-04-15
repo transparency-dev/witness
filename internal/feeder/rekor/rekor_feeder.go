@@ -134,7 +134,7 @@ func getJSON(ctx context.Context, c *http.Client, base *url.URL, path string, s 
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %v", err)
 	}
-	req, err := http.NewRequest("GET", u.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}

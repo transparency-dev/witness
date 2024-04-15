@@ -124,7 +124,7 @@ func fetch(ctx context.Context, c *http.Client, base *url.URL, path string) ([]b
 		return nil, fmt.Errorf("failed to parse URL: %v", err)
 	}
 	klog.V(2).Infof("GET %s", u.String())
-	req, err := http.NewRequest("GET", u.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}

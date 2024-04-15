@@ -120,7 +120,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %v", err)
 	}
-	req, err := http.NewRequest("PUT", u.String(), bytes.NewReader(wRaw))
+	req, err := http.NewRequest(http.MethodPut, u.String(), bytes.NewReader(wRaw))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
@@ -128,7 +128,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if err != nil {
 		return fmt.Errorf("failed to do http request: %v", err)
 	}
-	if resp.Request.Method != "PUT" {
+	if resp.Request.Method != http.MethodPut {
 		return fmt.Errorf("PUT request to %q was converted to %s request to %q", u.String(), resp.Request.Method, resp.Request.URL)
 	}
 	defer resp.Body.Close()
