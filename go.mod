@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/prometheus/client_golang v1.19.0
-	github.com/transparency-dev/formats v0.0.0-20231205184308-949529efd6b3
+	github.com/transparency-dev/formats v0.0.0-20240415152152-3372d765e9e4
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	k8s.io/klog/v2 v2.120.1
 )
@@ -26,10 +26,12 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/google/certificate-transparency-go v1.1.8 // indirect
 	github.com/kr/text v0.1.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de // indirect
 )
