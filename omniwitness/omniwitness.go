@@ -43,6 +43,7 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
+	"github.com/transparency-dev/witness/internal/feeder/rfc6962"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 )
@@ -211,6 +212,7 @@ const (
 	SumDB
 	Pixel
 	Rekor
+	RFC6962
 )
 
 var (
@@ -219,6 +221,7 @@ var (
 		"sumdb":      SumDB,
 		"pixel":      Pixel,
 		"rekor":      Rekor,
+		"rfc6962":    RFC6962,
 	}
 )
 
@@ -244,6 +247,8 @@ func (f Feeder) FeedFunc() logFeeder {
 		return pixelbt.FeedLog
 	case Rekor:
 		return rekor.FeedLog
+	case RFC6962:
+		return rfc6962.FeedLog
 	}
 	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }

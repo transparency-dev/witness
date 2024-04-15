@@ -42,3 +42,8 @@ Logs:
     PublicKey: transparency.dev-aw-ftlog-ci-3+3f689522+Aa1Eifq6rRC8qiK+bya07yV1fXyP156pEMsX7CFBC6gg
     Feeder: serverless
     UseCompact: false
+  - Origin: ct.googleapis.com/logs/us1/argon2024
+    URL: https://ct.googleapis.com/logs/us1/argon2024/
+    PublicKey: ct.googleapis.com/logs/us1/argon2024+7deb49d0+BTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABB25bKnLaZTFXOa2pgO70rjcVEMXKJkMBgFQHZ1kwFlGK9zIAx0FtC2oCfeZQe0E++VXuiYE9hFSzhRlOy92K8A=
+    Feeder: rfc6962
+    UseCompact: false
