@@ -18,10 +18,15 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/x509"
 	"database/sql"
+	"encoding/pem"
 	"flag"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -43,6 +48,8 @@ var (
 
 	signingKey             = flag.String("private_key", "", "The note-compatible signing key to use")
 	restDistributorBaseURL = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
+	bastionAddr            = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
+	bastionKeyPath         = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
 	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 )
 
@@ -85,9 +92,19 @@ func main() {
 		Timeout: *httpTimeout,
 	}
 
+	var bastionKey ed25519.PrivateKey
+	if *bastionKeyPath != "" {
+		bastionKey, err = readPrivateKey(*bastionKeyPath)
+		if err != nil {
+			klog.Exitf("Failed to read provided bastion key file %q: %v", *bastionKeyPath, err)
+		}
+	}
+
 	opConfig := omniwitness.OperatorConfig{
 		WitnessKey:             *signingKey,
 		RestDistributorBaseURL: *restDistributorBaseURL,
+		BastionAddr:            *bastionAddr,
+		BastionKey:             bastionKey,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {
@@ -107,4 +124,28 @@ func main() {
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)
 	}
+}
+
+func readPrivateKey(f string) (ed25519.PrivateKey, error) {
+	p, err := os.ReadFile(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from %q: %v", f, err)
+	}
+
+	b, _ := pem.Decode(p)
+	if b == nil || b.Type != "PRIVATE KEY" {
+		return nil, fmt.Errorf("invalid private key file %q: %v", f, err)
+	}
+
+	k, err := x509.ParsePKCS8PrivateKey(b.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key: %v", err)
+	}
+
+	e, ok := k.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("incorrect private key type %T, must be ed25519", e)
+	}
+	return e, nil
+
 }
