@@ -16,7 +16,7 @@ require (
 )
 
 require (
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/transparency-dev/formats v0.0.0-20231205184308-949529efd6b3
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	k8s.io/klog/v2 v2.120.1
