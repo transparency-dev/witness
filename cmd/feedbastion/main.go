@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"time"
 
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -34,9 +33,8 @@ import (
 )
 
 var (
-	bastionURL  = flag.String("bastion_url", "https://localhost:8443", "URL of the bastion service")
-	httpTimeout = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
-	feed        = flag.String("feed", ".*", "RegEx matching log origins to feed to bastion")
+	bastionURL = flag.String("bastion_url", "https://localhost:8443", "URL of the bastion service")
+	feed       = flag.String("feed", ".*", "RegEx matching log origins to feed to bastion")
 )
 
 type logFeeder struct {
@@ -121,6 +119,9 @@ func (b *bastionClient) Update(ctx context.Context, logID string, newCP []byte, 
 		return nil, err
 	}
 	rb, err := io.ReadAll(resp.Body)
+	if err != nil {
+		klog.Errorf("failed to read response body: %v", err)
+	}
 	defer resp.Body.Close()
 	klog.Infof("%v:\n%s", resp.Status, string(rb))
 	return nil, nil
