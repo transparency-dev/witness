@@ -12,7 +12,7 @@ updates:
       patterns:
         - "*"
   schedule:
-    interval: daily
+    interval: weekly
   commit-message:
     prefix: ":seedling:"
     include: "scope"
@@ -24,7 +24,7 @@ updates:
       patterns:
         - "*"
   schedule:
-    interval: daily
+    interval: weekly
   commit-message:
     prefix: ":seedling:"
     include: "scope"
@@ -36,7 +36,7 @@ updates:
       patterns:
         - "*"
   schedule:
-    interval: daily
+    interval: weekly
   commit-message:
     prefix: ":seedling:"
     include: "scope"
