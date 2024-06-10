@@ -94,18 +94,23 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	signedCP, updateErr := a.w.Update(context.Background(), logID, cp, proof)
-	checkpoint, _, n, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
+	signedCP, updateErr := a.w.Update(r.Context(), logID, cp, proof)
 
 	if updateErr != nil {
-		if sc := status.Code(err); sc == codes.FailedPrecondition {
+		if sc := status.Code(updateErr); sc == codes.FailedPrecondition {
 			// Invalid proof
 			klog.V(1).Infof("invalid proof: %v", err)
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
-		if sc := status.Code(err); sc == codes.AlreadyExists {
+		if sc := status.Code(updateErr); sc == codes.AlreadyExists {
 			// old checkpoint is smaller than the latest the witness knows about
+			checkpoint, _, _, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
+			if cpErr != nil {
+				klog.V(1).Infof("invalid checkpoint: %v", cpErr)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			w.Header().Add("Content-Type", "text/x.tlog.size")
 			w.WriteHeader(http.StatusConflict)
 			if _, err := w.Write([]byte(fmt.Sprintf("%d\n", checkpoint.Size))); err != nil {
@@ -115,6 +120,7 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	_, _, n, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
 	if cpErr != nil {
 		klog.V(1).Infof("invalid checkpoint: %v", cpErr)
 		w.WriteHeader(http.StatusBadRequest)
