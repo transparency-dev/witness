@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"time"
 
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -81,7 +82,8 @@ func main() {
 	}
 	for o, lf := range feeders {
 		if r.Match([]byte(o)) {
-			if err := lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, 0); err != nil {
+			oneShot := time.Duration(0)
+			if err := lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, oneShot); err != nil {
 				klog.Errorf("%v: %v", o, err)
 			}
 		}
