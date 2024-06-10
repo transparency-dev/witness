@@ -60,7 +60,6 @@ func FeedBastion(ctx context.Context, c Config, w feeder.Witness) error {
 		witVerifier: c.WitnessVerifier,
 	}
 	for _, l := range c.Logs {
-		l := l
 		h.logs[l.ID] = l
 	}
 
@@ -201,7 +200,6 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 		}).DialContext(ctx, "tcp", host)
 		if err != nil {
 			klog.Infof("Failed to connect to bastion: %v", err)
-			time.Sleep(5 * time.Second)
 			continue
 		}
 

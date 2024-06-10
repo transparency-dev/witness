@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// feedbastion is a tool for submitting to witnesses behind bastions.
+// feedbastion is a one-shot tool for submitting checkpoints from known logs
+// to witnesses behind bastions.
+//
+// The primary use case for this tool is testing a bastion + witness setup.
 package main
 
 import (
