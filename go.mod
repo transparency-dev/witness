@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/prometheus/client_golang v1.19.1
-	github.com/transparency-dev/formats v0.0.0-20231205184308-949529efd6b3
+	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	k8s.io/klog/v2 v2.120.1
 )
@@ -25,6 +25,7 @@ require (
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/kr/text v0.1.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
