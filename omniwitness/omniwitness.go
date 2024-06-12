@@ -19,6 +19,7 @@ package omniwitness
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"net"
 	"net/http"
@@ -41,6 +42,7 @@ import (
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"github.com/transparency-dev/witness/internal/feeder/bastion"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -71,6 +73,12 @@ const (
 type OperatorConfig struct {
 	WitnessKey string
 
+	// BastionAddr is the host:port of the bastion host to connect to, if any.
+	BastionAddr string
+	// BastionKey is the key used to authenticate the witness to the bastion host, if
+	// a BastionAddr is configured.
+	BastionKey ed25519.PrivateKey
+
 	// RestDistributorBaseURL is optional, and if provided gives the base URL
 	// to a distributor that takes witnessed checkpoints via a PUT request.
 	// TODO(mhutchinson): This should be baked into the code when there is a public distributor.
@@ -97,12 +105,14 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		return fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}
 
+	logs := []config.Log{}
 	for _, l := range logCfg.Logs {
 		lc, err := config.NewLog(l.Origin, l.PublicKey, l.URL)
 		if err != nil {
 			return fmt.Errorf("invalid log configuration: %v", err)
 		}
 		feeders[lc] = l.Feeder.FeedFunc()
+		logs = append(logs, lc)
 	}
 
 	signerLegacy, err := note.NewSigner(operatorConfig.WitnessKey)
@@ -144,6 +154,20 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			klog.Infof("Feeder %q goroutine started", c.Origin)
 			defer klog.Infof("Feeder %q goroutine done", c.Origin)
 			return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
+		})
+	}
+
+	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
+		bc := bastion.Config{
+			Addr:            operatorConfig.BastionAddr,
+			Logs:            logs,
+			BastionKey:      operatorConfig.BastionKey,
+			WitnessVerifier: signerCosigV1.Verifier(),
+		}
+		g.Go(func() error {
+			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
+			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)
+			return bastion.FeedBastion(ctx, bc, bw)
 		})
 	}
 

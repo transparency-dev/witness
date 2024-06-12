@@ -82,7 +82,11 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		Witness:         w,
 	}
 
-	return feeder.Run(ctx, interval, opts)
+	if interval > 0 {
+		return feeder.Run(ctx, interval, opts)
+	}
+	_, err := feeder.FeedOnce(ctx, opts)
+	return err
 }
 
 // convertToSumDBTiles takes a NodeID pointing to a node within the overall log,

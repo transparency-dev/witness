@@ -34,6 +34,36 @@ at https://play.golang.org/p/uWUKLNK6h9v. It is recommended to copy this code
 to your local machine and run from there in order to minimize the risk to the
 private key material.
 
+### Bastion Support
+
+This witness implementation supports synchronous witnessing via the [HTTPS bastion](https://github.com/C2SP/C2SP/blob/main/https-bastion.md) protocol.
+
+To enable this, two flags must be passed to `omniwitness`:
+
+1. `--bastion_addr` is the `host:port` of the bastion host to connect to.
+1. `--bastion_key_path` is the path to a file containing an ed25519 private key in PKCS8 PEM format.
+
+Although the witness key _could_ be reused, it's strongly recommended to use a separate key for this. Such a key can be generated with the following command:
+
+```bash
+openssl genpkey -algorith ed25519 -out ./my_bastion_private_key.pem
+```
+
+The bastion host operator will need to be given the hash of the corresponding public key bytes in order to provision the witness.
+
+The `omniwitness` prints this value out when it starts up:
+
+```text
+I0522 11:16:31.889534  758297 bastion_feeder.go:56] My bastion backend ID: 02b2442688cd1728f5c25c8425d69a915daddcfa4eb28a809a6b144b0ba889f3
+```
+
+Alternatively, the hash can be obtained with the following command:
+
+```bash
+$ openssl pkey -in ./my_bastion_private_key.pem -pubout -outform der | tail -c32 | sha256sum
+02b2442688cd1728f5c25c8425d69a915daddcfa4eb28a809a6b144b0ba889f3  -
+```
+
 ### GitHub Credentials
 
 This is optional, but recommended in order to push your checkpoints to as wide
