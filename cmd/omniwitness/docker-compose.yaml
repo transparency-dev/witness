@@ -12,9 +12,6 @@ services:
       - "--listen=:8100"
       - "--db_file=/data/witness.sqlite"
       - "--private_key=${WITNESS_PRIVATE_KEY}"
-      - "--gh_user=${GIT_USERNAME}"
-      - "--gh_email=${GIT_EMAIL}"
-      - "--gh_token=${GITHUB_AUTH_TOKEN}"
       - "--logtostderr"
       - "--v=2"
     restart: always

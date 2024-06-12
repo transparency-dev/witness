@@ -64,24 +64,6 @@ $ openssl pkey -in ./my_bastion_private_key.pem -pubout -outform der | tail -c32
 02b2442688cd1728f5c25c8425d69a915daddcfa4eb28a809a6b144b0ba889f3  -
 ```
 
-### GitHub Credentials
-
-This is optional, but recommended in order to push your checkpoints to as wide
-an audience as possible and strengthen the network.
-Checkpoints will be pushed to the distributors using GitHub pull requests.
-This means that GitHub credentials must be provided.
-It is strongly recommended to set up a dedicated account for this purpose.
-
-GitHub setup:
-  * Create a personal access token with `repo` and `workflow` permissions at https://github.com/settings/tokens
-  * Fork both of the repositories:
-    * https://github.com/mhutchinson/mhutchinson-distributor
-    * https://github.com/WolseyBankWitness/rediffusion
-
-Raise PRs against the distributor repositories in order to register your new
-witness in their configuration files. Documentation on how to do this is found
-on the README at the root of these repositories.
-
 ### .env File
 
 The `.env` file required for the Docker service is a key-value format with this template:
@@ -89,19 +71,10 @@ The `.env` file required for the Docker service is a key-value format with this 
 ```
 WITNESS_PRIVATE_KEY=PRIVATE+KEY+YourTokenHere+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-GITHUB_AUTH_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-GIT_USERNAME=johndoe
-GIT_EMAIL=johndoe@example.com
-
 WITNESS_VERSION=latest
 ```
 
 `WITNESS_PRIVATE_KEY` should be generated as documented in [Witness Key Generation](#witness-key-generation).
-
-If you wish to use the distributors to push to GitHub, follow the steps in [GitHub Credentials](#github-credentials) and then:
-  * The token should be set as `GITHUB_AUTH_TOKEN`
-  * `GIT_USERNAME` is the GitHub user account
-  * `GIT_EMAIL` is the email address associated with this account
 
 ## Running without Docker
 
@@ -117,23 +90,6 @@ You will need to have followed the steps in [Witness Key Generation](#witness-ke
 ```
 go run github.com/transparency-dev/witness/cmd/omniwitness@master --alsologtostderr --v=1 \
   --private_key PRIVATE+KEY+my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  --db_file ~/witness.db
-```
-
-### Full
-
-A more advanced configuration for users that are committed to running the witness is to
-set up witnessed checkpoints to be distributed via the GitHub distributors, which will
-strengthen the ecosystem. Note that this requires more configuration of GitHub secrets,
-and your witness key adding to the configuration files for the distributors.
-This is described in [GitHub Credentials](#github-credentials).
-
-```
-go run github.com/transparency-dev/witness/cmd/omniwitness@master --alsologtostderr --v=1 \
-  --private_key PRIVATE+KEY+my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  --gh_user my-github-user \
-  --gh_email foo@example.com \
-  --gh_token ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   --db_file ~/witness.db
 ```
 
