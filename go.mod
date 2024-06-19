@@ -19,8 +19,8 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
-	golang.org/x/net v0.23.0
-	k8s.io/klog/v2 v2.120.1
+	golang.org/x/net v0.26.0
+	k8s.io/klog/v2 v2.130.0
 )
 
 require (
@@ -32,7 +32,7 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
 )
