@@ -20,7 +20,7 @@ require (
 	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	golang.org/x/net v0.26.0
-	k8s.io/klog/v2 v2.130.0
+	k8s.io/klog/v2 v2.130.1
 )
 
 require (
