@@ -212,7 +212,6 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 		defer cancel()
 		conn, err := (&tls.Dialer{
 			Config: &tls.Config{
-				InsecureSkipVerify: true,
 				Certificates: []tls.Certificate{{
 					Certificate: [][]byte{cert},
 					PrivateKey:  key,
