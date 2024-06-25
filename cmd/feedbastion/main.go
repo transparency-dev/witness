@@ -28,17 +28,18 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"time"
 
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 )
 
 var (
-	bastionURL = flag.String("bastion_url", "https://localhost:8443", "URL of the bastion service")
-	feed       = flag.String("feed", ".*", "RegEx matching log origins to feed to bastion")
+	bastionURL   = flag.String("bastion_url", "https://localhost:8443", "URL of the bastion service")
+	feed         = flag.String("feed", ".*", "RegEx matching log origins to feed to bastion")
+	loopInterval = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this durating between feed attempts.")
 )
 
 type logFeeder struct {
@@ -64,6 +65,7 @@ func main() {
 	}
 
 	feeders := make(map[string]logFeeder)
+	originByID := make(map[string]string)
 	for _, l := range cfg.Logs {
 		lc, err := config.NewLog(l.Origin, l.PublicKey, l.URL)
 		if err != nil {
@@ -73,26 +75,33 @@ func main() {
 			cfg:  lc,
 			info: l,
 		}
+		originByID[lc.ID] = l.Origin
 	}
 
 	r := regexp.MustCompile(*feed)
 	bc := &bastionClient{
-		httpClient: insecureHttpClient,
-		url:        *bastionURL,
+		httpClient:    insecureHttpClient,
+		url:           *bastionURL,
+		originByLogID: originByID,
 	}
+	eg := errgroup.Group{}
 	for o, lf := range feeders {
+		lf := lf
 		if r.Match([]byte(o)) {
-			oneShot := time.Duration(0)
-			if err := lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, oneShot); err != nil {
-				klog.Errorf("%v: %v", o, err)
-			}
+			eg.Go(func() error {
+				return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, *loopInterval)
+			})
 		}
+	}
+	if err := eg.Wait(); err != nil {
+		klog.Errorf("%v", err)
 	}
 }
 
 type bastionClient struct {
-	httpClient *http.Client
-	url        string
+	httpClient    *http.Client
+	url           string
+	originByLogID map[string]string
 }
 
 // GetLatestCheckpoint returns the latest checkpoint the witness holds for the given logID.
@@ -128,6 +137,10 @@ func (b *bastionClient) Update(ctx context.Context, logID string, newCP []byte, 
 		klog.Errorf("failed to read response body: %v", err)
 	}
 	defer resp.Body.Close()
-	klog.Infof("%v:\n%s", resp.Status, string(rb))
+	name := logID
+	if o, ok := b.originByLogID[logID]; ok {
+		name = o
+	}
+	klog.Infof("%s: %v: %s", name, resp.Status, string(rb))
 	return nil, nil
 }
