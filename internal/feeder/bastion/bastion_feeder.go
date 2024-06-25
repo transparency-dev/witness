@@ -37,10 +37,17 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
+
+// RequestLimits describes how incoming requests should be limited.
+type RequestLimits struct {
+	// TotalPerSecond is the total number of incoming requests per second which should be served, zero mean no requests will be served.
+	TotalPerSecond rate.Limit
+}
 
 type Config struct {
 	Addr            string
@@ -48,6 +55,7 @@ type Config struct {
 	Logs            []config.Log
 	BastionKey      ed25519.PrivateKey
 	WitnessVerifier note.Verifier
+	Limits          RequestLimits
 }
 
 // FeedBastion talks to the bastion to receive checkpoints to be witnessed.
@@ -58,6 +66,7 @@ func FeedBastion(ctx context.Context, c Config, w feeder.Witness) error {
 		w:           w,
 		logs:        make(map[string]config.Log),
 		witVerifier: c.WitnessVerifier,
+		limiter:     rate.NewLimiter(c.Limits.TotalPerSecond, 1 /* max "burst", but we'll only ask for 1 at a time */),
 	}
 	for _, l := range c.Logs {
 		h.logs[l.ID] = l
@@ -70,10 +79,18 @@ type addHandler struct {
 	w           feeder.Witness
 	logs        map[string]config.Log
 	witVerifier note.Verifier
+	limiter     *rate.Limiter
 }
 
 func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+
+	if !a.limiter.Allow() {
+		klog.V(1).Infof("Too many bastion requests, pushing back.")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
 	_, proof, cp, err := parseBody(r.Body)
 	if err != nil {
 		klog.V(1).Infof("invalid body: %v", err)
@@ -195,6 +212,7 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 		defer cancel()
 		conn, err := (&tls.Dialer{
 			Config: &tls.Config{
+				InsecureSkipVerify: true,
 				Certificates: []tls.Certificate{{
 					Certificate: [][]byte{cert},
 					PrivateKey:  key,

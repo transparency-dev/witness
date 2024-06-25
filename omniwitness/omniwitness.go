@@ -34,6 +34,7 @@ import (
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
@@ -78,6 +79,8 @@ type OperatorConfig struct {
 	// BastionKey is the key used to authenticate the witness to the bastion host, if
 	// a BastionAddr is configured.
 	BastionKey ed25519.PrivateKey
+	// BastionRateLimit is the maximum number of bastion requests to serve per second.
+	BastionRateLimit float64
 
 	// RestDistributorBaseURL is optional, and if provided gives the base URL
 	// to a distributor that takes witnessed checkpoints via a PUT request.
@@ -163,7 +166,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			Logs:            logs,
 			BastionKey:      operatorConfig.BastionKey,
 			WitnessVerifier: signerCosigV1.Verifier(),
-		}
+			Limits: bastion.RequestLimits{
+				TotalPerSecond: rate.Limit(operatorConfig.BastionRateLimit),
+			}}
 		g.Go(func() error {
 			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
 			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)

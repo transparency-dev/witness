@@ -50,6 +50,7 @@ var (
 	restDistributorBaseURL = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
 	bastionAddr            = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
 	bastionKeyPath         = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
+	bastionRateLimit       = flag.Float64("bastion_rate_limit", 20, "Maximum number of bastion requests per second to serve")
 	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 )
 
@@ -105,6 +106,7 @@ func main() {
 		RestDistributorBaseURL: *restDistributorBaseURL,
 		BastionAddr:            *bastionAddr,
 		BastionKey:             bastionKey,
+		BastionRateLimit:       *bastionRateLimit,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {
