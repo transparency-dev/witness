@@ -88,7 +88,7 @@ witness HTTP endpoints.
 You will need to have followed the steps in [Witness Key Generation](#witness-key-generation).
 
 ```
-go run github.com/transparency-dev/witness/cmd/omniwitness@master --alsologtostderr --v=1 \
+go run github.com/transparency-dev/witness/cmd/omniwitness@main --alsologtostderr --v=1 \
   --private_key PRIVATE+KEY+my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   --db_file ~/witness.db
 ```
