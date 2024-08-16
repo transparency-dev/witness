@@ -21,6 +21,12 @@ Logs:
     PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
     Feeder: rekor
     UseCompact: false
+  - Origin: rekor.sigstore.dev - 1193050959916656506
+    URL: https://rekor.sigstore.dev?treeID=1193050959916656506
+    PublicKeyType: ecdsa
+    PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
+    Feeder: rekor
+    UseCompact: false
   - Origin: developers.google.com/android/binary_transparency/0
     URL: https://developers.google.com/android/binary_transparency/
     PublicKeyType: ecdsa
