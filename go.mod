@@ -11,12 +11,12 @@ require (
 	golang.org/x/mod v0.20.0
 	golang.org/x/sync v0.8.0
 	google.golang.org/grpc v1.65.0
-	google.golang.org/protobuf v1.34.1 // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/prometheus/client_golang v1.19.1
+	github.com/prometheus/client_golang v1.20.0
 	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	golang.org/x/net v0.28.0
@@ -29,10 +29,12 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/kr/text v0.1.0 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.48.0 // indirect
-	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.55.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
 	golang.org/x/sys v0.23.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
