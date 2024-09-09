@@ -2,7 +2,7 @@ module github.com/transparency-dev/witness
 
 go 1.21.0
 
-toolchain go1.22.5
+toolchain go1.22.6
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
