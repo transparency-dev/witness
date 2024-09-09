@@ -2,6 +2,8 @@ module github.com/transparency-dev/witness
 
 go 1.21.0
 
+toolchain go1.22.5
+
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/google/go-cmp v0.6.0
