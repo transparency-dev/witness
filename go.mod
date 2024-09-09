@@ -9,20 +9,16 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mattn/go-sqlite3 v1.14.22
-	github.com/transparency-dev/merkle v0.0.2
-	golang.org/x/mod v0.20.0
-	golang.org/x/sync v0.8.0
-	google.golang.org/grpc v1.66.0
-	google.golang.org/protobuf v1.34.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1
-)
-
-require (
 	github.com/prometheus/client_golang v1.20.2
 	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
+	github.com/transparency-dev/merkle v0.0.2
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
+	golang.org/x/mod v0.20.0
 	golang.org/x/net v0.28.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.6.0
+	google.golang.org/grpc v1.66.0
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/klog/v2 v2.130.1
 )
 
@@ -40,4 +36,5 @@ require (
 	golang.org/x/sys v0.23.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 )
