@@ -219,7 +219,9 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
 		}
-		setInitChkptData(write, logInfo, next, signed, cProof)
+		if err := setInitChkptData(write, logInfo, next, signed, cProof); err != nil {
+			return nil, status.Errorf(codes.Internal, "couldn't set first non-zero checkpoint: %v", err)
+		}
 		counterUpdateSuccess.Inc(logID)
 		return signed, nil
 	}
