@@ -298,13 +298,12 @@ func TestUpdate(t *testing.T) {
 			isGood: true,
 		},
 		{
-			desc:  "vanilla consistency starting from tree size 0 with proof",
-			initC: mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
-			newC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			pf:    consProof,
-			useCR: false,
-			// TODO(#265): the witness should successfully ratchet forward in this case
-			isGood: false,
+			desc:   "vanilla consistency starting from tree size 0 with proof",
+			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
+			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			pf:     consProof,
+			useCR:  false,
+			isGood: true,
 		},
 		{
 			desc:   "vanilla consistency starting from tree size 0 without proof",
