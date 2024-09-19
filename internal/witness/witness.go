@@ -212,6 +212,20 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		counterUpdateSuccess.Inc(logID)
 		return prevRaw, nil
 	}
+	if prev.Size == 0 {
+		// Checkpoints of size 0 are really placeholders and consistency proofs can't be performed.
+		// If we initialized on a tree size of 0, then we simply ratchet forward and effectively TOFU the new checkpoint.
+		signed, err := w.signChkpt(nextNote)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
+		}
+		if err := setInitChkptData(write, logInfo, next, signed, cProof); err != nil {
+			return nil, status.Errorf(codes.Internal, "couldn't set first non-zero checkpoint: %v", err)
+		}
+		counterUpdateSuccess.Inc(logID)
+		return signed, nil
+	}
+
 	// The only remaining option is next.Size > prev.Size. This might be
 	// valid so we use either plain consistency proofs or compact ranges to
 	// verify, depending on the log.
