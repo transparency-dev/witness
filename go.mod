@@ -1,8 +1,6 @@
 module github.com/transparency-dev/witness
 
-go 1.22.0
-
-toolchain go1.22.6
+go 1.22.7
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
@@ -11,7 +9,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.23
 	github.com/prometheus/client_golang v1.20.3
 	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
-	github.com/transparency-dev/merkle v0.0.2
+	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	golang.org/x/mod v0.21.0
 	golang.org/x/net v0.29.0
