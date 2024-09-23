@@ -7,7 +7,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mattn/go-sqlite3 v1.14.23
-	github.com/prometheus/client_golang v1.20.3
+	github.com/prometheus/client_golang v1.20.4
 	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
 	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
@@ -15,7 +15,7 @@ require (
 	golang.org/x/net v0.29.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.6.0
-	google.golang.org/grpc v1.66.2
+	google.golang.org/grpc v1.67.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/klog/v2 v2.130.1
 )
@@ -33,6 +33,6 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/text v0.18.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
