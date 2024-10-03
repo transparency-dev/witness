@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/mattn/go-sqlite3 v1.14.23
 	github.com/prometheus/client_golang v1.20.4
-	github.com/transparency-dev/formats v0.0.0-20240610130149-01e8727bec75
+	github.com/transparency-dev/formats v0.0.0-20241003145927-a04dcc2a37e4
 	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
 	golang.org/x/mod v0.21.0
@@ -23,7 +23,6 @@ require (
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/kr/text v0.1.0 // indirect
