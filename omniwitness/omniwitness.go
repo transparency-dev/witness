@@ -114,7 +114,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		if err != nil {
 			return fmt.Errorf("invalid log configuration: %v", err)
 		}
-		feeders[lc] = l.Feeder.FeedFunc()
+		if l.Feeder != None {
+			feeders[lc] = l.Feeder.FeedFunc()
+		}
 		logs = append(logs, lc)
 	}
 
@@ -240,6 +242,7 @@ const (
 	SumDB
 	Pixel
 	Rekor
+	None
 )
 
 var (
@@ -248,6 +251,7 @@ var (
 		"sumdb":      SumDB,
 		"pixel":      Pixel,
 		"rekor":      Rekor,
+		"none":       None,
 	}
 )
 
