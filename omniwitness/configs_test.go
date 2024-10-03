@@ -15,16 +15,29 @@
 package omniwitness_test
 
 import (
+	_ "embed"
 	"testing"
 
 	"github.com/transparency-dev/witness/omniwitness"
 	"gopkg.in/yaml.v3"
 )
 
-func Test(t *testing.T) {
+var (
+	// TestConfigLogs is the testing config logs file, useful for when checking
+	// features which are not yet used by the prod config.
+	// Its schema is LogConfig
+	//go:embed logs_test.yaml
+	testConfigLogs []byte
+)
+
+func testConfig(t *testing.T, cfg []byte) {
+	t.Helper()
 	logCfg := omniwitness.LogConfig{}
-	if err := yaml.Unmarshal(omniwitness.ConfigLogs, &logCfg); err != nil {
+	if err := yaml.Unmarshal(cfg, &logCfg); err != nil {
 		t.Fatal("failed to unmarshal config", err)
+	}
+	if len(logCfg.Logs) == 0 {
+		t.Fatal("no logs defined in config")
 	}
 	for _, l := range logCfg.Logs {
 		if l.Feeder == 0 {
@@ -34,4 +47,12 @@ func Test(t *testing.T) {
 			t.Errorf("log %q has no URL", l.URL)
 		}
 	}
+}
+
+func TestProdConfig(t *testing.T) {
+	testConfig(t, omniwitness.ConfigLogs)
+}
+
+func TestConfig(t *testing.T) {
+	testConfig(t, testConfigLogs)
 }
