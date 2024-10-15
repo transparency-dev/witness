@@ -63,9 +63,6 @@ type LogStateReadOps = persistence.LogStateReadOps
 type LogStateWriteOps = persistence.LogStateWriteOps
 
 const (
-	// Interval between attempts to feed checkpoints
-	// TODO(mhutchinson): Make this configurable
-	defaultFeedInterval       = 1 * time.Minute
 	defaultDistributeInterval = 1 * time.Minute
 )
 
@@ -142,9 +139,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		return fmt.Errorf("failed to create witness: %v", err)
 	}
 
-	if operatorConfig.FeedInterval == 0 {
-		operatorConfig.FeedInterval = defaultFeedInterval
-	}
 	if operatorConfig.DistributeInterval == 0 {
 		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
@@ -152,14 +146,17 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	bw := witnessAdapter{
 		w: witness,
 	}
-	for c, f := range feeders {
-		c, f := c, f
-		// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
-		g.Go(func() error {
-			klog.Infof("Feeder %q goroutine started", c.Origin)
-			defer klog.Infof("Feeder %q goroutine done", c.Origin)
-			return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
-		})
+
+	if operatorConfig.FeedInterval > 0 {
+		for c, f := range feeders {
+			c, f := c, f
+			// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
+			g.Go(func() error {
+				klog.Infof("Feeder %q goroutine started", c.Origin)
+				defer klog.Infof("Feeder %q goroutine done", c.Origin)
+				return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
+			})
+		}
 	}
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
