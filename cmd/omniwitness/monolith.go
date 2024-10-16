@@ -52,6 +52,8 @@ var (
 	bastionKeyPath         = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
 	bastionRateLimit       = flag.Float64("bastion_rate_limit", 20, "Maximum number of bastion requests per second to serve")
 	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
+
+	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
 
 func main() {
@@ -107,6 +109,7 @@ func main() {
 		BastionAddr:            *bastionAddr,
 		BastionKey:             bastionKey,
 		BastionRateLimit:       *bastionRateLimit,
+		FeedInterval:           *pollInterval,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {

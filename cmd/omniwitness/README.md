@@ -43,6 +43,9 @@ To enable this, two flags must be passed to `omniwitness`:
 1. `--bastion_addr` is the `host:port` of the bastion host to connect to.
 1. `--bastion_key_path` is the path to a file containing an ed25519 private key in PKCS8 PEM format.
 
+To run the witness in bastion-only mode, set the `--poll_interval` flag to 0.
+This will disable all attempts to poll logs, and witnessing will only occur via bastion connections.
+
 Although the witness key _could_ be reused, it's strongly recommended to use a separate key for this. Such a key can be generated with the following command:
 
 ```bash
