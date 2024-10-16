@@ -208,9 +208,8 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 			counterInconsistentCheckpoints.Inc(logID)
 			return prevRaw, status.Errorf(codes.FailedPrecondition, "checkpoint for same size log with differing hash (got %x, have %x)", next.Hash, prev.Hash)
 		}
-		// If it's identical to the previous one do nothing.
-		counterUpdateSuccess.Inc(logID)
-		return prevRaw, nil
+		// This used to short-circuit here to save work.
+		// However, having the most recently witnessed timestamp available is beneficial to demonstrate freshness.
 	}
 	if prev.Size == 0 {
 		// Checkpoints of size 0 are really placeholders and consistency proofs can't be performed.
