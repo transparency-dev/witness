@@ -124,7 +124,7 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, proof, cp, err := parseBody(r.Body)
+	oldSize, proof, cp, err := parseBody(r.Body)
 	if err != nil {
 		klog.V(1).Infof("invalid body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -150,7 +150,7 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if updateErr != nil {
 		if sc := status.Code(updateErr); sc == codes.FailedPrecondition {
 			// Invalid proof
-			klog.V(1).Infof("invalid proof: %v", err)
+			klog.Infof("Invalid proof: %v\noldSize: %d\nnewCP:\n%s\nProof:\n%s", updateErr, oldSize, cp, proof)
 			w.WriteHeader(http.StatusForbidden)
 			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusForbidden))
 			return
