@@ -224,6 +224,13 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		counterUpdateSuccess.Inc(logID)
 		return signed, nil
 	}
+	if next.Size != prev.Size && len(cProof) == 0 {
+		// We require a proof, but we were given an empty one - the submitter likely thinks we've not seen a checkpoint for this log
+		// before and is trying to get us to TOFU.
+		// This is a special case of "prev > next" above, so return the same code so higher layers can handle similarly (e.g. by telling
+		// the submitter our view of prev.size).
+		return prevRaw, status.Errorf(codes.AlreadyExists, "we already have a non-zero checkpoint")
+	}
 
 	// The only remaining option is next.Size > prev.Size. This might be
 	// valid so we use either plain consistency proofs or compact ranges to
