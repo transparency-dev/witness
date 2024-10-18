@@ -28,6 +28,8 @@ import (
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -281,13 +283,14 @@ func mustCreateCheckpoint(t *testing.T, sk string, size uint64, rootHash []byte)
 
 func TestUpdate(t *testing.T) {
 	for _, test := range []struct {
-		desc   string
-		initC  []byte
-		newC   []byte
-		pf     [][]byte
-		useCR  bool
-		initCR [][]byte
-		isGood bool
+		desc     string
+		initC    []byte
+		newC     []byte
+		pf       [][]byte
+		useCR    bool
+		initCR   [][]byte
+		isGood   bool
+		wantCode codes.Code
 	}{
 		{
 			desc:   "vanilla consistency happy path",
@@ -312,6 +315,23 @@ func TestUpdate(t *testing.T) {
 			pf:     [][]byte{},
 			useCR:  false,
 			isGood: true,
+		},
+		{
+			desc:   "vanilla resubmit known CP",
+			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			pf:     [][]byte{},
+			useCR:  false,
+			isGood: true,
+		},
+		{
+			desc:     "vanilla attempt to re-TOFU",
+			initC:    mustCreateCheckpoint(t, mSK, 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			pf:       [][]byte{},
+			useCR:    false,
+			isGood:   false,
+			wantCode: codes.AlreadyExists,
 		},
 		{
 			desc:   "vanilla path, but the first line changed",
@@ -383,6 +403,11 @@ func TestUpdate(t *testing.T) {
 			} else {
 				if err == nil {
 					t.Fatal("should have gotten an error but didn't")
+				}
+				if test.wantCode != 0 {
+					if gotCode := status.Code(err); gotCode != test.wantCode {
+						t.Fatalf("Got status code %v, want %v", gotCode, test.wantCode)
+					}
 				}
 			}
 		})
