@@ -29,12 +29,15 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
 	"golang.org/x/time/rate"
@@ -61,6 +64,7 @@ type Config struct {
 // FeedBastion talks to the bastion to receive checkpoints to be witnessed.
 // This function returns once the provided context is done.
 func FeedBastion(ctx context.Context, c Config, w feeder.Witness) error {
+	initMetrics()
 	klog.Infof("My bastion backend ID: %064x", sha256.Sum256(c.BastionKey.Public().(ed25519.PublicKey)))
 	h := &addHandler{
 		w:           w,
@@ -75,6 +79,32 @@ func FeedBastion(ctx context.Context, c Config, w feeder.Witness) error {
 	return connectAndServe(ctx, c.Addr, h, c.BastionKey)
 }
 
+var (
+	doOnce                         sync.Once
+	counterBastionRegisterAttempt  monitoring.Counter
+	counterBastionRegisterSuccess  monitoring.Counter
+	counterBastionIncomingRequest  monitoring.Counter
+	counterBastionIncomingResponse monitoring.Counter
+	counterBastionIncomingPushback monitoring.Counter
+)
+
+func initMetrics() {
+	doOnce.Do(func() {
+		mf := monitoring.GetMetricFactory()
+		const (
+			bastionID = "bastionid"
+			origin    = "origin"
+			status    = "status"
+		)
+
+		counterBastionRegisterAttempt = mf.NewCounter("bastion_register_attempt", "Number of attempts to register with bastion", bastionID)
+		counterBastionRegisterSuccess = mf.NewCounter("bastion_register_success", "Number of successful registrations with bastion", bastionID)
+		counterBastionIncomingRequest = mf.NewCounter("bastion_request", "Number of bastion requests received", bastionID)
+		counterBastionIncomingResponse = mf.NewCounter("bastion_response", "Bastion mediated responses", bastionID, origin, status)
+		counterBastionIncomingPushback = mf.NewCounter("bastion_pushback", "Number of pushed-back bastion mediated requests", bastionID)
+	})
+}
+
 type addHandler struct {
 	w           feeder.Witness
 	logs        map[string]config.Log
@@ -84,23 +114,28 @@ type addHandler struct {
 
 func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	bastionID := r.RemoteAddr
+	counterBastionIncomingRequest.Inc(bastionID)
 
 	if !a.limiter.Allow() {
+		counterBastionIncomingPushback.Inc(bastionID)
 		klog.V(1).Infof("Too many bastion requests, pushing back.")
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
 
-	_, proof, cp, err := parseBody(r.Body)
+	oldSize, proof, cp, err := parseBody(r.Body)
 	if err != nil {
 		klog.V(1).Infof("invalid body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
+		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusBadRequest))
 		return
 	}
 	s := strings.SplitN(string(cp), "\n", 2)
 	if len(s) != 2 {
 		klog.V(1).Infof("invalid cp: %v", cp)
 		w.WriteHeader(http.StatusBadRequest)
+		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusBadRequest))
 		return
 	}
 
@@ -109,6 +144,7 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		klog.V(1).Infof("unknown log: %v", logID)
 		w.WriteHeader(http.StatusNotFound)
+		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusNotFound))
 		return
 	}
 	signedCP, updateErr := a.w.Update(r.Context(), logID, cp, proof)
@@ -116,8 +152,9 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if updateErr != nil {
 		if sc := status.Code(updateErr); sc == codes.FailedPrecondition {
 			// Invalid proof
-			klog.V(1).Infof("invalid proof: %v", err)
+			klog.Infof("Invalid proof: %v\noldSize: %d\nnewCP:\n%s\nProof:\n%s", updateErr, oldSize, cp, proof)
 			w.WriteHeader(http.StatusForbidden)
+			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusForbidden))
 			return
 		}
 		if sc := status.Code(updateErr); sc == codes.AlreadyExists {
@@ -126,10 +163,12 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if cpErr != nil {
 				klog.V(1).Infof("invalid checkpoint: %v", cpErr)
 				w.WriteHeader(http.StatusBadRequest)
+				counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusBadRequest))
 				return
 			}
 			w.Header().Add("Content-Type", "text/x.tlog.size")
 			w.WriteHeader(http.StatusConflict)
+			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusConflict))
 			if _, err := w.Write([]byte(fmt.Sprintf("%d\n", checkpoint.Size))); err != nil {
 				klog.V(1).Infof("Failed to write size response: %v", err)
 			}
@@ -141,12 +180,16 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if cpErr != nil {
 		klog.V(1).Infof("invalid checkpoint: %v", cpErr)
 		w.WriteHeader(http.StatusBadRequest)
+		counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusBadRequest))
 		return
 	}
 
 	if _, err := w.Write([]byte(fmt.Sprintf("— %s %s\n", n.Sigs[0].Name, n.Sigs[0].Base64))); err != nil {
 		klog.V(1).Infof("Failed to write signature response: %v", err)
 	}
+
+	counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(200))
+
 }
 
 // parseBody reads the incoming request and parses into constituent parts.
@@ -197,6 +240,7 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	for {
+		counterBastionRegisterAttempt.Inc(host)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -227,6 +271,7 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 		}
 
 		klog.Infof("Connected to bastion. Serving connection...")
+		counterBastionRegisterSuccess.Inc(host)
 		(&http2.Server{}).ServeConn(conn, &http2.ServeConnOpts{
 			Context: ctx,
 			Handler: handler,
