@@ -128,12 +128,14 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		klog.V(1).Infof("invalid body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
+		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusBadRequest))
 		return
 	}
 	s := strings.SplitN(string(cp), "\n", 2)
 	if len(s) != 2 {
 		klog.V(1).Infof("invalid cp: %v", cp)
 		w.WriteHeader(http.StatusBadRequest)
+		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusBadRequest))
 		return
 	}
 
