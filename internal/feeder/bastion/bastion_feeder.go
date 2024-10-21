@@ -100,7 +100,7 @@ func initMetrics() {
 		counterBastionRegisterAttempt = mf.NewCounter("bastion_register_attempt", "Number of attempts to register with bastion", bastionID)
 		counterBastionRegisterSuccess = mf.NewCounter("bastion_register_success", "Number of successful registrations with bastion", bastionID)
 		counterBastionIncomingRequest = mf.NewCounter("bastion_request", "Number of bastion requests received", bastionID)
-		counterBastionIncomingResponse = mf.NewCounter("bastion_response", "Number of successful bastion mediated requests for a log", bastionID, origin, status)
+		counterBastionIncomingResponse = mf.NewCounter("bastion_response", "Bastion mediated responses", bastionID, origin, status)
 		counterBastionIncomingPushback = mf.NewCounter("bastion_pushback", "Number of pushed-back bastion mediated requests", bastionID)
 	})
 }
