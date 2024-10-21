@@ -7,7 +7,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mattn/go-sqlite3 v1.14.24
-	github.com/prometheus/client_golang v1.20.4
+	github.com/prometheus/client_golang v1.20.5
 	github.com/transparency-dev/formats v0.0.0-20241003145927-a04dcc2a37e4
 	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
