@@ -150,7 +150,11 @@ func submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint,
 			}
 			if latestCP.Size == cpSubmit.Size && bytes.Equal(latestCP.Hash, cpSubmit.Hash) {
 				klog.V(1).Infof("%q unchanged - @%d: %x", logName, latestCP.Size, latestCP.Hash)
-				returnCp = latestCPRaw
+				if returnCp, err = opts.Witness.Update(ctx, opts.LogID, cpRaw, [][]byte{}); err != nil {
+					e := fmt.Errorf("failed to submit fresh checkpoint to witness: %v", err)
+					klog.Warning(e.Error())
+					return e
+				}
 				return nil
 			}
 		}
