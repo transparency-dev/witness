@@ -102,8 +102,8 @@ func (w *writer) GetLatest() ([]byte, error) {
 	return getLatestCheckpoint(w.tx.QueryRow, w.logID)
 }
 
-func (w *writer) Set(c []byte, rng []byte) error {
-	_, err := w.tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt, range) VALUES (?, ?, ?)`, w.logID, c, rng)
+func (w *writer) Set(c []byte) error {
+	_, err := w.tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, w.logID, c)
 	if err != nil {
 		return fmt.Errorf("Exec(): %v", err)
 	}

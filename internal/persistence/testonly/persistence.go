@@ -97,7 +97,7 @@ func writeCheckpoint(lsp persistence.LogStatePersistence, id string) error {
 		return fmt.Errorf("WriteOps(%s): %v", id, err)
 	}
 	defer writeOps.Close()
-	if err := writeOps.Set([]byte(fmt.Sprintf("%s cp", id)), nil); err != nil {
+	if err := writeOps.Set([]byte(fmt.Sprintf("%s cp", id))); err != nil {
 		return fmt.Errorf("Set(%s): %v", id, err)
 	}
 	return nil
