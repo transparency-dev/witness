@@ -43,8 +43,6 @@ kn9DgqDhXzoZMM8828SQsbuovr/WRn7QfFd5Qe1rpwA=
 
 — sum.golang.org Az3grunuggF5mKymPJeK/l9Pq71lOg/rAVkQVCzGkWRJcnS3ZFunzveHr9PAH8LFsuhpcCWzGDNrn9FFDyXm/66tBg8=
 `
-
-	tileHashData = `d7b9018cbad2a2fa3950dcd60411cd67ef9d8c1074043c0e033953ec510fd68413f83190fb460efeb65670f9298b4249b8b5fd2492a6cd486f1fe14bfa3eb545590ac0de6fc0f9b016875ba518353cc57654df733f2fa1d1f0dad66f84b66d9ea2744fc0a64bb00d9f286c52838284b4b76bcbe895854d4709c55df1c266b681`
 )
 
 func TestLeavesAtOffset(t *testing.T) {

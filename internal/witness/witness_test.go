@@ -49,17 +49,6 @@ var (
 		dh("89d0f753f66a290c483b39cd5e9eafb12021293395fad3d4a2ad053cfbcfdc9e", 32),
 		dh("29e40bb79c966f4c6fe96aff6f30acfce5f3e8d84c02215175d6e018a5dee833", 32),
 	}
-	crInit      = []byte("Log Checkpoint v0\n10\ne/S4liN8tioogdwxlCaXdQBb/5bxM9AWKA0bcZa9TXw=\n\n— monkeys 202ffo2uuOa4Vo94IaAdawszJz+eyJRyK46Yp9K5tz7qREYFqb4D9WGsZHsM5tuc6jKVTnldCSCGJk/FwGUv/IACjwo=\n")
-	crInitRange = [][]byte{
-		dh("4e856ea495cf591cefb9eff66b311b2d5ec1d0901b8026909f88a3f126d9db11", 32),
-		dh("3a357a5ff22c69641ff59c08ca67ccabdefdf317476501db8cafc73ebb5ff547", 32),
-	}
-	crNext  = []byte("Log Checkpoint v0\n15\nsrKoB8sjvP1QAt1Ih3nqGHzjvmtRLs/geQdehrUHvqs=\n\n— monkeys 202ffsI0bYEfiyoXANzIXNoUCcro6D4TfvQlU+zbxmJLGLXPGu15VNIWBOJr0EUQO0P3dxSJI5SsFLLYQLyqvRercQ4=\n")
-	crProof = [][]byte{
-		dh("ef626e0b64023948e57f34674c2574b3078c5af59a2faa095f4948736e8ca52e", 32),
-		dh("8f75f7d88d3679ac6dd5a68a81215bfbeafe8c566b93013bbc82e64295628c8b", 32),
-		dh("e034fb7af8223063c1c299ed91c11a0bc4cec15afd75e2abe4bb54c14d921ef0", 32),
-	}
 
 	_ = mSK
 	_ = bSK
