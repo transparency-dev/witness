@@ -32,6 +32,7 @@ import (
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 )
@@ -40,6 +41,7 @@ var (
 	bastionURL   = flag.String("bastion_url", "https://localhost:8443", "URL of the bastion service")
 	feed         = flag.String("feed", ".*", "RegEx matching log origins to feed to bastion")
 	loopInterval = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
+	rateLimit    = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send via bastion")
 )
 
 type logFeeder struct {
@@ -53,6 +55,7 @@ func main() {
 	defer klog.Flush()
 
 	ctx := context.Background()
+	rl := rate.NewLimiter(rate.Limit(*rateLimit), 1)
 
 	httpClient := &http.Client{}
 	insecureHttpClient := &http.Client{Transport: &http.Transport{
@@ -89,6 +92,9 @@ func main() {
 		lf := lf
 		if r.Match([]byte(o)) {
 			eg.Go(func() error {
+				if err := rl.Wait(ctx); err != nil {
+					return err
+				}
 				return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, *loopInterval)
 			})
 		}
