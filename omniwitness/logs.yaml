@@ -3,58 +3,47 @@ Logs:
     URL: https://sum.golang.org
     PublicKey: sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
     Feeder: sumdb
-    UseCompact: false
   - Origin: Armory Drive Prod 2
     URL: https://raw.githubusercontent.com/f-secure-foundry/armory-drive-log/master/log/
     PublicKey: armory-drive-log+16541b8f+AYDPmG5pQp4Bgu0a1mr5uDZ196+t8lIVIfWQSPWmP+Jv
     Feeder: serverless
-    UseCompact: false
   - Origin: rekor.sigstore.dev - 3904496407287907110
     URL: https://rekor.sigstore.dev?treeID=3904496407287907110
     PublicKeyType: ecdsa
     PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
     Feeder: rekor
-    UseCompact: false
   - Origin: rekor.sigstore.dev - 2605736670972794746
     URL: https://rekor.sigstore.dev?treeID=2605736670972794746
     PublicKeyType: ecdsa
     PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
     Feeder: rekor
-    UseCompact: false
   - Origin: rekor.sigstore.dev - 1193050959916656506
     URL: https://rekor.sigstore.dev?treeID=1193050959916656506
     PublicKeyType: ecdsa
     PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
     Feeder: rekor
-    UseCompact: false
   - Origin: developers.google.com/android/binary_transparency/0
     URL: https://developers.google.com/android/binary_transparency/
     PublicKeyType: ecdsa
     PublicKey: pixel_transparency_log+72c878db+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABFPN7lzVIk2BOd3Nk33VpqqVttGwV8uChH+RX/HVfBiypVQFyh8o8Ny6fSdxNMgkSf9/VynrgADBeys0r4Q9uPA=
     Feeder: pixel
-    UseCompact: false
   - Origin: lvfs
     URL: https://fwupd.org/ftlog/lvfs/
     PublicKey: lvfs+7908d142+ASnlGgOh+634tcE/2Lp3wV7k/cLoU6ncawmb/BLC1oMU
     Feeder: serverless
-    UseCompact: false
   - Origin: transparency.dev/armored-witness/firmware_transparency/prod/1
     URL: https://api.transparency.dev/armored-witness-firmware/prod/log/1/
     PublicKey: transparency.dev-aw-ftlog-prod-1+3e6d87ee+Aa3qdhefd2cc/98jV3blslJT2L+iFR8WKHeGcgFmyjnt
     Feeder: serverless
-    UseCompact: false
   - Origin: transparency.dev/armored-witness/firmware_transparency/ci/2
     URL: https://api.transparency.dev/armored-witness-firmware/ci/log/2/
     PublicKey: transparency.dev-aw-ftlog-ci-2+f77c6276+AZXqiaARpwF4MoNOxx46kuiIRjrML0PDTm+c7BLaAMt6
     Feeder: serverless
-    UseCompact: false
   - Origin: transparency.dev/armored-witness/firmware_transparency/ci/3
     URL: https://api.transparency.dev/armored-witness-firmware/ci/log/3/
     PublicKey: transparency.dev-aw-ftlog-ci-3+3f689522+Aa1Eifq6rRC8qiK+bya07yV1fXyP156pEMsX7CFBC6gg
     Feeder: serverless
-    UseCompact: false
   - Origin: sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1
     URL: https://seasalp.glasklar.is
     PublicKey: sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1+682b49db+AQ7H4WhDEZsSA3enOROsasvC0D2CQy4sNrhBsJqVhB8l
     Feeder: none
-    UseCompact: false

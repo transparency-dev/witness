@@ -68,10 +68,9 @@ var (
 const logOrigin = "Log Checkpoint v0"
 
 type logOpts struct {
-	ID         string
-	origin     string
-	PK         string
-	useCompact bool
+	ID     string
+	origin string
+	PK     string
 }
 
 func newWitness(t *testing.T, logs []logOpts) *Witness {
@@ -88,10 +87,9 @@ func newWitness(t *testing.T, logs []logOpts) *Witness {
 			t.Fatalf("couldn't create a log verifier: %v", err)
 		}
 		logInfo := LogInfo{
-			Origin:     log.origin,
-			SigV:       logV,
-			Hasher:     h,
-			UseCompact: log.useCompact,
+			Origin: log.origin,
+			SigV:   logV,
+			Hasher: h,
 		}
 		logMap[log.ID] = logInfo
 	}
@@ -149,10 +147,9 @@ func TestGetLogs(t *testing.T) {
 			logs := make([]logOpts, len(test.logIDs))
 			for i, logID := range test.logIDs {
 				logs[i] = logOpts{
-					ID:         logID,
-					origin:     logOrigin,
-					PK:         test.logPKs[i],
-					useCompact: false,
+					ID:     logID,
+					origin: logOrigin,
+					PK:     test.logPKs[i],
 				}
 			}
 			w := newWitness(t, logs)
@@ -221,10 +218,10 @@ func TestGetChkpt(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:         test.setID,
-				origin:     logOrigin,
-				PK:         test.setPK,
-				useCompact: false}})
+				ID:     test.setID,
+				origin: logOrigin,
+				PK:     test.setPK,
+			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
 				if _, err := w.Update(ctx, test.setID, test.c, nil); err != nil {
@@ -356,10 +353,10 @@ func TestUpdate(t *testing.T) {
 			logID := "monkeys"
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:         logID,
-				origin:     logOrigin,
-				PK:         mPK,
-				useCompact: false}})
+				ID:     logID,
+				origin: logOrigin,
+				PK:     mPK,
+			}})
 			// Set an initial checkpoint for the log.
 			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
