@@ -16,7 +16,6 @@ package client
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"testing"
 
@@ -106,31 +105,6 @@ func TestLatestCheckpoint(t *testing.T) {
 	}
 	if got, want := checkpoint.N, int64(1514086); got != want {
 		t.Errorf("unexpected tree size. got, want = %d, %d", got, want)
-	}
-}
-
-func TestTileHashes(t *testing.T) {
-	hashData, err := hex.DecodeString(tileHashData)
-	if err != nil {
-		t.Fatalf("failed to decode hash data: %v", err)
-	}
-	v, err := note.NewVerifier("sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sumdb := &SumDBClient{
-		verifiers: note.VerifierList(v),
-		height:    2,
-		fetcher: &FakeFetcher{
-			values: map[string]string{"/tile/2/0/000": string(hashData)},
-		},
-	}
-	hashes, err := sumdb.TileHashes(0, 0, 0)
-	if err != nil {
-		t.Fatalf("failed to get hashes: %v", err)
-	}
-	if got, want := len(hashes), 4; got != want {
-		t.Errorf("got, want = %d, %d", got, want)
 	}
 }
 

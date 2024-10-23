@@ -133,32 +133,14 @@ func dataToLeaves(data []byte) [][]byte {
 	return result
 }
 
-// TileHashes gets the hashes at the given level and offset.
+// TileHashes gets the raw tile data at the given level and offset.
 // If partial > 0 then a partial tile will be fetched with the number of hashes.
-// TODO(mhutchinson): Add better tests for this.
-func (c *SumDBClient) TileHashes(level, offset, partial int) ([]tlog.Hash, error) {
+func (c *SumDBClient) TileData(level, offset, partial int) ([]byte, error) {
 	url := fmt.Sprintf("/tile/%d/%d/%s", c.height, level, c.tilePath(offset))
 	if partial > 0 {
 		url = fmt.Sprintf("%s.p/%d", url, partial)
 	}
-	data, err := c.fetcher.GetData(url)
-	if err != nil {
-		return nil, err
-	}
-	expectedHashes := 1 << c.height
-	if partial > 0 {
-		expectedHashes = partial
-	}
-	if got, want := len(data), HashLenBytes*expectedHashes; got != want {
-		return nil, fmt.Errorf("got %d bytes, expected %d", got, want)
-	}
-	hashes := make([]tlog.Hash, expectedHashes)
-	for i := 0; i < cap(hashes); i++ {
-		var h tlog.Hash
-		copy(h[:], data[HashLenBytes*i:HashLenBytes*(i+1)])
-		hashes[i] = h
-	}
-	return hashes, nil
+	return c.fetcher.GetData(url)
 }
 
 // HTTPFetcher gets the data over HTTP(S).

@@ -48,20 +48,25 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
 
 	fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
-		broker := newTileBroker(to.Size, sdb.TileHashes)
-
-		required := compact.RangeNodes(from.Size, to.Size, nil)
-		proof := make([][]byte, 0, len(required))
-		for _, n := range required {
-			i, r := convertToSumDBTiles(n)
-			t, err := broker.tile(i)
-			if err != nil {
-				return nil, fmt.Errorf("failed to lookup %s: %v", i, err)
-			}
-			h := t.hash(r)
-			proof = append(proof, h)
+		if from.Size == 0 {
+			return [][]byte{}, nil
 		}
-		return proof, nil
+		tr := tileReader{c: sdb}
+		tree := tlog.Tree{
+			N:    int64(to.Size),
+			Hash: tlog.Hash(to.Hash),
+		}
+		proof, err := tlog.ProveTree(int64(to.Size), int64(from.Size), tlog.TileHashReader(tree, tr))
+		if err != nil {
+			return nil, fmt.Errorf("ProveTree: %v", err)
+		}
+		r := make([][]byte, 0, len(proof))
+		for _, h := range proof {
+			h := h
+			r = append(r, h[:])
+		}
+		klog.V(1).Infof("Fetched proof from %d -> %d", from.Size, to.Size)
+		return r, nil
 	}
 
 	fetchCheckpoint := func(_ context.Context) ([]byte, error) {
@@ -89,120 +94,26 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 	return err
 }
 
-// convertToSumDBTiles takes a NodeID pointing to a node within the overall log,
-// and returns the tile coordinate that it will be found in, along with the nodeID
-// that references the node within that tile.
-func convertToSumDBTiles(n compact.NodeID) (tileIndex, compact.NodeID) {
-	sdbLevel := n.Level / tileHeight
-	rLevel := uint(n.Level % tileHeight)
-
-	// The last leaf that n commits to.
-	lastLeaf := (1<<n.Level)*(n.Index+1) - 1
-	// How many proper leaves are committed to by a tile at sdbLevel.
-	tileLeaves := uint64(1) << ((1 + sdbLevel) * tileHeight)
-
-	sdbOffset := lastLeaf / tileLeaves
-	rLeaves := lastLeaf % tileLeaves
-	rIndex := rLeaves / (1 << n.Level)
-
-	return tileIndex{
-		level:  int(sdbLevel),
-		offset: int(sdbOffset),
-	}, compact.NewNodeID(rLevel, rIndex)
+type tileReader struct {
+	c *client.SumDBClient
 }
 
-// tileIndex is the location of a tile.
-// We could have used compact.NodeID, but that would overload its meaning;
-// with this usage tileIndex points to a tile, and NodeID points to a node.
-type tileIndex struct {
-	level, offset int
-}
+func (tr tileReader) Height() int { return tileHeight }
 
-func (i tileIndex) String() string {
-	return fmt.Sprintf("T(%d,%d)", i.level, i.offset)
-}
+func (tr tileReader) SaveTiles([]tlog.Tile, [][]byte) {}
 
-type tile struct {
-	leaves [][]byte
-}
-
-func newTile(hs []tlog.Hash) tile {
-	leaves := make([][]byte, len(hs))
-	for i, h := range hs {
-		h := h
-		leaves[i] = h[:]
-	}
-	return tile{
-		leaves: leaves,
-	}
-}
-
-// hash returns the hash of the subtree within this tile identified by n.
-// Note that the coordinate system starts with the bottom left of the tile
-// being (0,0), no matter where this tile appears within the overall log.
-func (t tile) hash(n compact.NodeID) []byte {
-	r := rf.NewEmptyRange(0)
-
-	left := n.Index << uint64(n.Level)
-	right := (n.Index + 1) << uint64(n.Level)
-
-	if len(t.leaves) < int(right) {
-		panic(fmt.Sprintf("index %d out of range of %d leaves", right, len(t.leaves)))
-	}
-	for _, l := range t.leaves[left:right] {
-		if err := r.Append(l[:], nil); err != nil {
-			panic(fmt.Sprintf("couldn't append leaf: %v", err))
+func (tr tileReader) ReadTiles(tiles []tlog.Tile) ([][]byte, error) {
+	r := make([][]byte, 0, len(tiles))
+	for _, t := range tiles {
+		width := t.W
+		if width == leavesPerTile {
+			width = -1
 		}
-	}
-	root, err := r.GetRootHash(nil)
-	if err != nil {
-		panic(err)
-	}
-	return root
-}
-
-// tileBroker takes requests for tiles and returns the appropriate tile for the tree size.
-// This will cache results for the lifetime of the broker, and it will ensure that requests
-// for incomplete tiles are requested as partial tiles.
-type tileBroker struct {
-	pts    map[tileIndex]int
-	ts     map[tileIndex]tile
-	lookup func(level, offset, partial int) ([]tlog.Hash, error)
-}
-
-func newTileBroker(size uint64, lookup func(level, offset, partial int) ([]tlog.Hash, error)) tileBroker {
-	pts := make(map[tileIndex]int)
-	l := 0
-	t := size / leavesPerTile
-	o := size % leavesPerTile
-	for {
-		i := tileIndex{l, int(t)}
-		pts[i] = int(o)
-		if t == 0 {
-			break
+		tile, err := tr.c.TileData(t.L, int(t.N), width)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch tile data: %v", err)
 		}
-		o = t % leavesPerTile
-		t = t / leavesPerTile
-		l++
+		r = append(r, tile)
 	}
-	return tileBroker{
-		pts:    pts,
-		ts:     make(map[tileIndex]tile),
-		lookup: lookup,
-	}
-}
-
-func (tb *tileBroker) tile(i tileIndex) (tile, error) {
-	if t, ok := tb.ts[i]; ok {
-		return t, nil
-	}
-	partial := tb.pts[i]
-	klog.V(2).Infof("Looking up %s (partial=%d) from remote", i, partial)
-	hs, err := tb.lookup(i.level, i.offset, partial)
-	if err != nil {
-		return tile{}, fmt.Errorf("lookup failed: %v", err)
-	}
-	t := newTile(hs)
-	tb.ts[i] = t
-	return t, nil
+	return r, nil
 }
