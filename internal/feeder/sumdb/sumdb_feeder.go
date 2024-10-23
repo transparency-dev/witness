@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/merkle/compact"
-	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/witness/internal/client"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
@@ -34,12 +32,6 @@ import (
 const (
 	tileHeight    = 8
 	leavesPerTile = 1 << tileHeight
-)
-
-var (
-	rf = &compact.RangeFactory{
-		Hash: rfc6962.DefaultHasher.HashChildren,
-	}
 )
 
 // FeedLog continually feeds checkpoints from the given log into the witness.

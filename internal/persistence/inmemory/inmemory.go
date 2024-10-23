@@ -121,7 +121,7 @@ func (rw *readWriter) GetLatest() ([]byte, error) {
 	return rw.read.rawChkpt, nil
 }
 
-func (rw *readWriter) Set(c []byte, rng []byte) error {
+func (rw *readWriter) Set(c []byte) error {
 	rw.toStore = &checkpointState{
 		rawChkpt: c,
 	}

@@ -59,7 +59,7 @@ func TestWriteOpsConcurrent(t *testing.T) {
 				}
 			}
 			// Ignore any error on Set because we expect some.
-			_ = w.Set([]byte(fmt.Sprintf("success %d", i)), nil)
+			_ = w.Set([]byte(fmt.Sprintf("success %d", i)))
 			return nil
 		})
 	}

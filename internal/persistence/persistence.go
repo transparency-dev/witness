@@ -55,10 +55,9 @@ type LogStateReadOps interface {
 type LogStateWriteOps interface {
 	LogStateReadOps
 
-	// Set sets a new checkpoint and (optional) compact range
-	// for the log. This commits the state to persistence.
+	// Set sets a new checkpoint for the log, committing the state to persistence.
 	// After this call, only Close() should be called on this object.
-	Set(checkpointRaw []byte, compactRange []byte) error
+	Set(checkpointRaw []byte) error
 
 	// Terminates the write operation, freeing all resources.
 	// This method MUST be called.

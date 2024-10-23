@@ -175,7 +175,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 				return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
 			}
 
-			if err := write.Set(signed, nil); err != nil {
+			if err := write.Set(signed); err != nil {
 				return nil, status.Errorf(codes.Internal, "couldn't set TOFU checkpoint: %v", err)
 			}
 			counterUpdateSuccess.Inc(logID)
@@ -210,7 +210,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
 		}
-		if err := write.Set(signed, nil); err != nil {
+		if err := write.Set(signed); err != nil {
 			return nil, status.Errorf(codes.Internal, "couldn't set first non-zero checkpoint: %v", err)
 		}
 		counterUpdateSuccess.Inc(logID)
@@ -236,7 +236,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
 	}
-	if err := write.Set(signed, nil); err != nil {
+	if err := write.Set(signed); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to store new checkpoint: %v", err)
 	}
 	counterUpdateSuccess.Inc(logID)
