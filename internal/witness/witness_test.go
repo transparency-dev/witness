@@ -287,8 +287,6 @@ func TestUpdate(t *testing.T) {
 		initC    []byte
 		newC     []byte
 		pf       [][]byte
-		useCR    bool
-		initCR   [][]byte
 		isGood   bool
 		wantCode codes.Code
 	}{
@@ -297,7 +295,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			newC:   mNext,
 			pf:     consProof,
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -305,7 +302,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
 			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:     consProof,
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -313,7 +309,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
 			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:     [][]byte{},
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -321,7 +316,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:     [][]byte{},
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -329,7 +323,6 @@ func TestUpdate(t *testing.T) {
 			initC:    mustCreateCheckpoint(t, mSK, 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			newC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:       [][]byte{},
-			useCR:    false,
 			isGood:   false,
 			wantCode: codes.AlreadyExists,
 		},
@@ -338,14 +331,12 @@ func TestUpdate(t *testing.T) {
 			initC:  mInit,
 			newC:   []byte("Frog Checkpoint v0\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys 202ffgCVdfZmrroccRdQoEfn2TfmXHez4R++GvVrFvFiaI85O12aTV5GpNOvWsuQW77eNxQ2b7ggYeglzF/QSy/EBws=\n"),
 			pf:     consProof,
-			useCR:  false,
 			isGood: false,
 		}, {
 			desc:   "vanilla consistency smaller checkpoint",
 			initC:  mNext,
 			newC:   mInit,
 			pf:     consProof,
-			useCR:  false,
 			isGood: false,
 		}, {
 			desc:  "vanilla consistency garbage proof",
@@ -358,27 +349,6 @@ func TestUpdate(t *testing.T) {
 				dh("dddd", 2),
 			},
 			isGood: false,
-		}, {
-			desc:   "compact range happy path",
-			initC:  crInit,
-			newC:   crNext,
-			pf:     crProof,
-			useCR:  true,
-			initCR: crInitRange,
-			isGood: true,
-		}, {
-			desc:  "compact range garbage proof",
-			initC: crInit,
-			newC:  crNext,
-			pf: [][]byte{
-				dh("aaaa", 2),
-				dh("bbbb", 2),
-				dh("cccc", 2),
-				dh("dddd", 2),
-			},
-			useCR:  true,
-			initCR: crInitRange,
-			isGood: false,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -389,9 +359,9 @@ func TestUpdate(t *testing.T) {
 				ID:         logID,
 				origin:     logOrigin,
 				PK:         mPK,
-				useCompact: test.useCR}})
+				useCompact: false}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, test.initCR); err != nil {
+			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now update from this checkpoint to a newer one.

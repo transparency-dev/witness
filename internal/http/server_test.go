@@ -282,8 +282,6 @@ func TestUpdate(t *testing.T) {
 		desc       string
 		initC      []byte
 		initSize   uint64
-		useCR      bool
-		initCR     [][]byte
 		body       api.UpdateRequest
 		wantStatus int
 		wantCP     []byte
@@ -318,27 +316,6 @@ func TestUpdate(t *testing.T) {
 			initSize:   5,
 			body:       api.UpdateRequest{Checkpoint: []byte("aaa"), Proof: consProof},
 			wantStatus: http.StatusBadRequest,
-		}, {
-			desc:       "compact range happy path",
-			initC:      crInit,
-			initSize:   10,
-			useCR:      true,
-			initCR:     crInitRange,
-			body:       api.UpdateRequest{Checkpoint: crNext, Proof: crProof},
-			wantStatus: http.StatusOK,
-		}, {
-			desc:     "compact range garbage proof",
-			initC:    crInit,
-			initSize: 10,
-			body: api.UpdateRequest{Checkpoint: crNext, Proof: [][]byte{
-				dh("aaaa", 2),
-				dh("bbbb", 2),
-				dh("cccc", 2),
-				dh("dddd", 2),
-			}},
-			useCR:      true,
-			initCR:     crInitRange,
-			wantStatus: http.StatusBadRequest,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -349,9 +326,9 @@ func TestUpdate(t *testing.T) {
 				ID:         logID,
 				origin:     logOrigin,
 				PK:         mPK,
-				useCompact: test.useCR}})
+				useCompact: false}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, test.initCR); err != nil {
+			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now set up the http server.
