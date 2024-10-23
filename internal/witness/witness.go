@@ -25,7 +25,6 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle"
-	"github.com/transparency-dev/merkle/compact"
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/monitoring"
@@ -123,7 +122,7 @@ func (w *Witness) GetCheckpoint(logID string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ReadOps(): %v", err)
 	}
-	chkpt, _, err := read.GetLatest()
+	chkpt, err := read.GetLatest()
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +163,8 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	// The WriteOps contract is that Close must always be called.
 	defer write.Close()
 
-	// Get the latest checkpoint (if one exists) and compact range.
-	prevRaw, rangeRaw, err := write.GetLatest()
+	// Get the latest checkpoint.
+	prevRaw, err := write.GetLatest()
 	if err != nil {
 		// If there was nothing stored already then treat this new
 		// checkpoint as trust-on-first-use (TOFU).
@@ -176,7 +175,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 				return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
 			}
 
-			if err := setInitChkptData(write, logInfo, next, signed, cProof); err != nil {
+			if err := write.Set(signed, nil); err != nil {
 				return nil, status.Errorf(codes.Internal, "couldn't set TOFU checkpoint: %v", err)
 			}
 			counterUpdateSuccess.Inc(logID)
@@ -188,13 +187,6 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	prev, _, err := w.parse(prevRaw, logID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "couldn't parse stored checkpoint: %v", err)
-	}
-	// Parse the compact range if we're using one.
-	var prevRange Proof
-	if logInfo.UseCompact {
-		if err := prevRange.Unmarshal(rangeRaw); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "couldn't unmarshal proof: %v", err)
-		}
 	}
 	if next.Size < prev.Size {
 		// Complain if prev is bigger than next.
@@ -218,7 +210,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
 		}
-		if err := setInitChkptData(write, logInfo, next, signed, cProof); err != nil {
+		if err := write.Set(signed, nil); err != nil {
 			return nil, status.Errorf(codes.Internal, "couldn't set first non-zero checkpoint: %v", err)
 		}
 		counterUpdateSuccess.Inc(logID)
@@ -258,64 +250,4 @@ func (w *Witness) signChkpt(n *note.Note) ([]byte, error) {
 		return nil, fmt.Errorf("couldn't sign checkpoint: %v", err)
 	}
 	return cosigned, nil
-}
-
-// verifyRange verifies the new checkpoint against the stored and given compact
-// range and outputs the updated compact range if verification succeeds.
-func verifyRange(next *log.Checkpoint, prev *log.Checkpoint, h merkle.LogHasher, rngRaw [][]byte, deltaRaw [][]byte) ([][]byte, error) {
-	rf := compact.RangeFactory{Hash: h.HashChildren}
-	rng, err := rf.NewRange(0, prev.Size, rngRaw)
-	if err != nil {
-		return nil, fmt.Errorf("can't form current compact range: %v", err)
-	}
-	// As a sanity check, make sure the stored checkpoint and range are consistent.
-	if err := verifyRangeHash(prev.Hash, rng); err != nil {
-		return nil, fmt.Errorf("old root hash doesn't verify: %v", err)
-	}
-	delta, err := rf.NewRange(prev.Size, next.Size, deltaRaw)
-	if err != nil {
-		return nil, fmt.Errorf("can't form delta compact range: %v", err)
-	}
-	// Merge the delta range into the existing one and compare root hashes.
-	if err := rng.AppendRange(delta, nil); err != nil {
-		return nil, fmt.Errorf("failed to append range: %v", err)
-	}
-	if err := verifyRangeHash(next.Hash, rng); err != nil {
-		return nil, fmt.Errorf("new root hash doesn't verify: %v", err)
-	}
-	return rng.Hashes(), nil
-}
-
-// verifyRangeHash computes the root hash of the compact range and compares it
-// against the one given as input, returning an error if they aren't equal.
-func verifyRangeHash(rootHash []byte, rng *compact.Range) error {
-	h, err := rng.GetRootHash(nil)
-	if err != nil {
-		return fmt.Errorf("can't get root hash for range: %v", err)
-	}
-	if !bytes.Equal(rootHash, h) {
-		return fmt.Errorf("hashes aren't equal (got %x, given %x)", h, rootHash)
-	}
-	return nil
-}
-
-// setInitChkptData stores the data for an initial checkpoint and, if using one,
-// its associated compact range.
-func setInitChkptData(write persistence.LogStateWriteOps, logInfo LogInfo, c *log.Checkpoint, cRaw []byte, rngRaw [][]byte) error {
-	// If we're using compact ranges then store the initial range, assuming
-	// it matches the initial checkpoint.
-	if logInfo.UseCompact {
-		rf := compact.RangeFactory{Hash: logInfo.Hasher.HashChildren}
-		rng, err := rf.NewRange(0, c.Size, rngRaw)
-		if err != nil {
-			return fmt.Errorf("can't form compact range: %v", err)
-		}
-		if err := verifyRangeHash(c.Hash, rng); err != nil {
-			return fmt.Errorf("input root hash doesn't verify: %v", err)
-		}
-		r := []byte(Proof(rngRaw).Marshal())
-		return write.Set(cRaw, r)
-	}
-	// If we're not using compact ranges no need to store one.
-	return write.Set(cRaw, nil)
 }
