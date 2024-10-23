@@ -233,27 +233,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	}
 
 	// The only remaining option is next.Size > prev.Size. This might be
-	// valid so we use either plain consistency proofs or compact ranges to
-	// verify, depending on the log.
-	if logInfo.UseCompact {
-		nextRange, err := verifyRange(next, prev, logInfo.Hasher, prevRange, cProof)
-		if err != nil {
-			counterInvalidConsistency.Inc(logID)
-			return prevRaw, status.Errorf(codes.FailedPrecondition, "failed to verify compact range: %v", err)
-		}
-		// If the proof is good store nextRaw and the new range.
-		r := []byte(Proof(nextRange).Marshal())
-		signed, err := w.signChkpt(nextNote)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "couldn't sign input checkpoint: %v", err)
-		}
-		if err := write.Set(signed, r); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to store new checkpoint: %v", err)
-		}
-		counterUpdateSuccess.Inc(logID)
-		return signed, nil
-	}
-	// If we're not using compact ranges then use consistency proofs.
+	// valid so we verify the consistency proofs.
 	if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
 		// Complain if the checkpoints aren't consistent.
 		counterInvalidConsistency.Inc(logID)
