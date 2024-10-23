@@ -115,6 +115,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			feeders[lc] = l.Feeder.FeedFunc()
 		}
 		logs = append(logs, lc)
+		klog.Infof("Added log %q: %s", lc.Origin, lc.ID)
 	}
 
 	signerLegacy, err := note.NewSigner(operatorConfig.WitnessKey)
@@ -177,10 +178,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		logs := make([]config.Log, 0, len(feeders))
-		for l := range feeders {
-			logs = append(logs, l)
-		}
 		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, signerCosigV1.Verifier())
 	}
 
