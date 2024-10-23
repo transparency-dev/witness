@@ -92,7 +92,9 @@ func main() {
 		lf := lf
 		if r.Match([]byte(o)) {
 			eg.Go(func() error {
-				rl.Wait(ctx)
+				if err := rl.Wait(ctx); err != nil {
+					return err
+				}
 				return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, *loopInterval)
 			})
 		}
