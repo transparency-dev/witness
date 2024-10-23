@@ -68,9 +68,6 @@ type LogInfo struct {
 	Origin string
 	// The hash strategy that should be used in verifying consistency.
 	Hasher merkle.LogHasher
-	// An indicator of whether the log should be verified using consistency
-	// proofs or compact ranges.
-	UseCompact bool
 }
 
 // Witness consists of a database for storing checkpoints, a signer, and a list
