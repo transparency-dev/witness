@@ -74,9 +74,11 @@ func main() {
 		if err != nil {
 			klog.Exitf("invalid log configuration: %v", err)
 		}
-		feeders[l.Origin] = logFeeder{
-			cfg:  lc,
-			info: l,
+		if l.Feeder != omniwitness.None {
+			feeders[l.Origin] = logFeeder{
+				cfg:  lc,
+				info: l,
+			}
 		}
 		originByID[lc.ID] = l.Origin
 	}
