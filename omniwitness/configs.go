@@ -46,10 +46,9 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
 		}
 		logInfo := witness.LogInfo{
-			SigV:       logV,
-			Origin:     log.Origin,
-			Hasher:     h,
-			UseCompact: log.UseCompact,
+			SigV:   logV,
+			Origin: log.Origin,
+			Hasher: h,
 		}
 		logID := logfmt.ID(log.Origin)
 		if oldLog, found := logMap[logID]; found {
@@ -62,9 +61,8 @@ func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
 
 // LogInfo contains the details about a log.
 type LogInfo struct {
-	Origin     string `yaml:"Origin"`
-	PublicKey  string `yaml:"PublicKey"`
-	URL        string `yaml:"URL"`
-	Feeder     Feeder `yaml:"Feeder"`
-	UseCompact bool   `yaml:"UseCompact"`
+	Origin    string `yaml:"Origin"`
+	PublicKey string `yaml:"PublicKey"`
+	URL       string `yaml:"URL"`
+	Feeder    Feeder `yaml:"Feeder"`
 }

@@ -53,13 +53,13 @@ func TestWriteOpsConcurrent(t *testing.T) {
 				return fmt.Errorf("WriteOps %d: %v", i, err)
 			}
 			defer w.Close()
-			if _, _, err := w.GetLatest(); err != nil {
+			if _, err := w.GetLatest(); err != nil {
 				if status.Code(err) != codes.NotFound {
 					return fmt.Errorf("GetLatest %d: %v", i, err)
 				}
 			}
 			// Ignore any error on Set because we expect some.
-			_ = w.Set([]byte(fmt.Sprintf("success %d", i)), nil)
+			_ = w.Set([]byte(fmt.Sprintf("success %d", i)))
 			return nil
 		})
 	}
@@ -72,7 +72,7 @@ func TestWriteOpsConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cp, _, err := r.GetLatest()
+	cp, err := r.GetLatest()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,17 +49,6 @@ var (
 		dh("89d0f753f66a290c483b39cd5e9eafb12021293395fad3d4a2ad053cfbcfdc9e", 32),
 		dh("29e40bb79c966f4c6fe96aff6f30acfce5f3e8d84c02215175d6e018a5dee833", 32),
 	}
-	crInit      = []byte("Log Checkpoint v0\n10\ne/S4liN8tioogdwxlCaXdQBb/5bxM9AWKA0bcZa9TXw=\n\n— monkeys 202ffo2uuOa4Vo94IaAdawszJz+eyJRyK46Yp9K5tz7qREYFqb4D9WGsZHsM5tuc6jKVTnldCSCGJk/FwGUv/IACjwo=\n")
-	crInitRange = [][]byte{
-		dh("4e856ea495cf591cefb9eff66b311b2d5ec1d0901b8026909f88a3f126d9db11", 32),
-		dh("3a357a5ff22c69641ff59c08ca67ccabdefdf317476501db8cafc73ebb5ff547", 32),
-	}
-	crNext  = []byte("Log Checkpoint v0\n15\nsrKoB8sjvP1QAt1Ih3nqGHzjvmtRLs/geQdehrUHvqs=\n\n— monkeys 202ffsI0bYEfiyoXANzIXNoUCcro6D4TfvQlU+zbxmJLGLXPGu15VNIWBOJr0EUQO0P3dxSJI5SsFLLYQLyqvRercQ4=\n")
-	crProof = [][]byte{
-		dh("ef626e0b64023948e57f34674c2574b3078c5af59a2faa095f4948736e8ca52e", 32),
-		dh("8f75f7d88d3679ac6dd5a68a81215bfbeafe8c566b93013bbc82e64295628c8b", 32),
-		dh("e034fb7af8223063c1c299ed91c11a0bc4cec15afd75e2abe4bb54c14d921ef0", 32),
-	}
 
 	_ = mSK
 	_ = bSK
@@ -68,10 +57,9 @@ var (
 const logOrigin = "Log Checkpoint v0"
 
 type logOpts struct {
-	ID         string
-	origin     string
-	PK         string
-	useCompact bool
+	ID     string
+	origin string
+	PK     string
 }
 
 func newWitness(t *testing.T, logs []logOpts) *Witness {
@@ -88,10 +76,9 @@ func newWitness(t *testing.T, logs []logOpts) *Witness {
 			t.Fatalf("couldn't create a log verifier: %v", err)
 		}
 		logInfo := LogInfo{
-			Origin:     log.origin,
-			SigV:       logV,
-			Hasher:     h,
-			UseCompact: log.useCompact,
+			Origin: log.origin,
+			SigV:   logV,
+			Hasher: h,
 		}
 		logMap[log.ID] = logInfo
 	}
@@ -149,10 +136,9 @@ func TestGetLogs(t *testing.T) {
 			logs := make([]logOpts, len(test.logIDs))
 			for i, logID := range test.logIDs {
 				logs[i] = logOpts{
-					ID:         logID,
-					origin:     logOrigin,
-					PK:         test.logPKs[i],
-					useCompact: false,
+					ID:     logID,
+					origin: logOrigin,
+					PK:     test.logPKs[i],
 				}
 			}
 			w := newWitness(t, logs)
@@ -221,10 +207,10 @@ func TestGetChkpt(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:         test.setID,
-				origin:     logOrigin,
-				PK:         test.setPK,
-				useCompact: false}})
+				ID:     test.setID,
+				origin: logOrigin,
+				PK:     test.setPK,
+			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
 				if _, err := w.Update(ctx, test.setID, test.c, nil); err != nil {
@@ -287,8 +273,6 @@ func TestUpdate(t *testing.T) {
 		initC    []byte
 		newC     []byte
 		pf       [][]byte
-		useCR    bool
-		initCR   [][]byte
 		isGood   bool
 		wantCode codes.Code
 	}{
@@ -297,7 +281,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			newC:   mNext,
 			pf:     consProof,
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -305,7 +288,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
 			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:     consProof,
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -313,7 +295,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
 			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:     [][]byte{},
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -321,7 +302,6 @@ func TestUpdate(t *testing.T) {
 			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:     [][]byte{},
-			useCR:  false,
 			isGood: true,
 		},
 		{
@@ -329,7 +309,6 @@ func TestUpdate(t *testing.T) {
 			initC:    mustCreateCheckpoint(t, mSK, 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			newC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:       [][]byte{},
-			useCR:    false,
 			isGood:   false,
 			wantCode: codes.AlreadyExists,
 		},
@@ -338,14 +317,12 @@ func TestUpdate(t *testing.T) {
 			initC:  mInit,
 			newC:   []byte("Frog Checkpoint v0\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys 202ffgCVdfZmrroccRdQoEfn2TfmXHez4R++GvVrFvFiaI85O12aTV5GpNOvWsuQW77eNxQ2b7ggYeglzF/QSy/EBws=\n"),
 			pf:     consProof,
-			useCR:  false,
 			isGood: false,
 		}, {
 			desc:   "vanilla consistency smaller checkpoint",
 			initC:  mNext,
 			newC:   mInit,
 			pf:     consProof,
-			useCR:  false,
 			isGood: false,
 		}, {
 			desc:  "vanilla consistency garbage proof",
@@ -358,27 +335,6 @@ func TestUpdate(t *testing.T) {
 				dh("dddd", 2),
 			},
 			isGood: false,
-		}, {
-			desc:   "compact range happy path",
-			initC:  crInit,
-			newC:   crNext,
-			pf:     crProof,
-			useCR:  true,
-			initCR: crInitRange,
-			isGood: true,
-		}, {
-			desc:  "compact range garbage proof",
-			initC: crInit,
-			newC:  crNext,
-			pf: [][]byte{
-				dh("aaaa", 2),
-				dh("bbbb", 2),
-				dh("cccc", 2),
-				dh("dddd", 2),
-			},
-			useCR:  true,
-			initCR: crInitRange,
-			isGood: false,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -386,12 +342,12 @@ func TestUpdate(t *testing.T) {
 			logID := "monkeys"
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:         logID,
-				origin:     logOrigin,
-				PK:         mPK,
-				useCompact: test.useCR}})
+				ID:     logID,
+				origin: logOrigin,
+				PK:     mPK,
+			}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, test.initCR); err != nil {
+			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now update from this checkpoint to a newer one.
