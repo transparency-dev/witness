@@ -70,7 +70,7 @@ func FeedBastion(ctx context.Context, c Config, w feeder.Witness) error {
 		w:           w,
 		logs:        make(map[string]config.Log),
 		witVerifier: c.WitnessVerifier,
-		limiter:     rate.NewLimiter(c.Limits.TotalPerSecond, 1 /* max "burst", but we'll only ask for 1 at a time */),
+		limiter:     rate.NewLimiter(c.Limits.TotalPerSecond, int(c.Limits.TotalPerSecond)),
 	}
 	for _, l := range c.Logs {
 		h.logs[l.ID] = l
