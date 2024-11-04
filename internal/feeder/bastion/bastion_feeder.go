@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -251,31 +252,46 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 		if err != nil {
 			return err
 		}
-		klog.Infof("Connecting to bastion...")
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		conn, err := (&tls.Dialer{
-			Config: &tls.Config{
-				Certificates: []tls.Certificate{{
-					Certificate: [][]byte{cert},
-					PrivateKey:  key,
-				}},
-				MinVersion: tls.VersionTLS13,
-				MaxVersion: tls.VersionTLS13,
-				NextProtos: []string{"bastion/0"},
-			},
-		}).DialContext(ctx, "tcp", host)
-		if err != nil {
-			klog.Infof("Failed to connect to bastion: %v", err)
-			continue
-		}
 
-		klog.Infof("Connected to bastion. Serving connection...")
-		counterBastionRegisterSuccess.Inc(host)
-		(&http2.Server{}).ServeConn(conn, &http2.ServeConnOpts{
-			Context: ctx,
-			Handler: handler,
-		})
+		// Connect to the bastion and serve.
+		// We do this in an inline func to make it easier to cancel contexts via defers.
+		func() {
+			klog.Infof("Connecting to bastion...")
+			dctx, dCancel := context.WithTimeout(ctx, 10*time.Second)
+			defer dCancel()
+
+			conn, err := (&tls.Dialer{
+				Config: &tls.Config{
+					Certificates: []tls.Certificate{{
+						Certificate: [][]byte{cert},
+						PrivateKey:  key,
+					}},
+					MinVersion: tls.VersionTLS13,
+					MaxVersion: tls.VersionTLS13,
+					NextProtos: []string{"bastion/0"},
+				},
+			}).DialContext(dctx, "tcp", host)
+			if err != nil {
+				klog.Infof("Failed to connect to bastion: %v", err)
+				return
+			}
+
+			klog.Infof("Connected to bastion. Serving connection...")
+			counterBastionRegisterSuccess.Inc(host)
+			(&http2.Server{
+				IdleTimeout:     300 * time.Second,
+				ReadIdleTimeout: 10 * time.Second,
+				PingTimeout:     15 * time.Second,
+			}).ServeConn(conn, &http2.ServeConnOpts{
+				Context: ctx,
+				Handler: http.MaxBytesHandler(handler, 16*1024),
+				BaseConfig: &http.Server{
+					BaseContext:  func(net.Listener) context.Context { return ctx },
+					ReadTimeout:  5 * time.Second,
+					WriteTimeout: 5 * time.Second,
+				},
+			})
+		}()
 	}
 }
 
