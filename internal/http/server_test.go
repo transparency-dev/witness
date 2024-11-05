@@ -52,26 +52,14 @@ var (
 		dh("89d0f753f66a290c483b39cd5e9eafb12021293395fad3d4a2ad053cfbcfdc9e", 32),
 		dh("29e40bb79c966f4c6fe96aff6f30acfce5f3e8d84c02215175d6e018a5dee833", 32),
 	}
-	crInit      = []byte("Log Checkpoint v0\n10\ne/S4liN8tioogdwxlCaXdQBb/5bxM9AWKA0bcZa9TXw=\n\n— monkeys h74qVc07jPk7qD0incL5dTlPr9DYoD64X2mJpvIKutiyeBHSm8TGIey7EpRcxA1ZIqEbw2YA6i1a1V4pDjMX51znZQA=\n")
-	crInitRange = [][]byte{
-		dh("4e856ea495cf591cefb9eff66b311b2d5ec1d0901b8026909f88a3f126d9db11", 32),
-		dh("3a357a5ff22c69641ff59c08ca67ccabdefdf317476501db8cafc73ebb5ff547", 32),
-	}
-	crNext  = []byte("Log Checkpoint v0\n15\nsrKoB8sjvP1QAt1Ih3nqGHzjvmtRLs/geQdehrUHvqs=\n\n— monkeys h74qVU+3T1AVNo+tAsISWzMwEDag8xOwQLSzxJELzHH9N/4cz6M+VbJ89Ku//gybRPPUFP/8Fcvxpqb6++ZyLk83oAE=\n")
-	crProof = [][]byte{
-		dh("ef626e0b64023948e57f34674c2574b3078c5af59a2faa095f4948736e8ca52e", 32),
-		dh("8f75f7d88d3679ac6dd5a68a81215bfbeafe8c566b93013bbc82e64295628c8b", 32),
-		dh("e034fb7af8223063c1c299ed91c11a0bc4cec15afd75e2abe4bb54c14d921ef0", 32),
-	}
 )
 
 const logOrigin = "Log Checkpoint v0"
 
 type logOpts struct {
-	ID         string
-	origin     string
-	PK         string
-	useCompact bool
+	ID     string
+	origin string
+	PK     string
 }
 
 func newWitness(t *testing.T, logs []logOpts) *witness.Witness {
@@ -88,10 +76,9 @@ func newWitness(t *testing.T, logs []logOpts) *witness.Witness {
 			t.Fatalf("couldn't create a log verifier: %v", err)
 		}
 		logInfo := witness.LogInfo{
-			Origin:     log.origin,
-			SigV:       logV,
-			Hasher:     h,
-			UseCompact: log.useCompact,
+			Origin: log.origin,
+			SigV:   logV,
+			Hasher: h,
 		}
 		logMap[log.ID] = logInfo
 	}
@@ -165,10 +152,9 @@ func TestGetLogs(t *testing.T) {
 			logs := make([]logOpts, len(test.logIDs))
 			for i, logID := range test.logIDs {
 				logs[i] = logOpts{
-					ID:         logID,
-					origin:     logOrigin,
-					PK:         test.logPKs[i],
-					useCompact: false,
+					ID:     logID,
+					origin: logOrigin,
+					PK:     test.logPKs[i],
 				}
 			}
 			w := newWitness(t, logs)
@@ -250,10 +236,10 @@ func TestGetChkpt(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:         test.setID,
-				origin:     logOrigin,
-				PK:         test.setPK,
-				useCompact: false}})
+				ID:     test.setID,
+				origin: logOrigin,
+				PK:     test.setPK,
+			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
 				if _, err := w.Update(ctx, test.setID, test.c, nil); err != nil {
@@ -282,8 +268,6 @@ func TestUpdate(t *testing.T) {
 		desc       string
 		initC      []byte
 		initSize   uint64
-		useCR      bool
-		initCR     [][]byte
 		body       api.UpdateRequest
 		wantStatus int
 		wantCP     []byte
@@ -318,27 +302,6 @@ func TestUpdate(t *testing.T) {
 			initSize:   5,
 			body:       api.UpdateRequest{Checkpoint: []byte("aaa"), Proof: consProof},
 			wantStatus: http.StatusBadRequest,
-		}, {
-			desc:       "compact range happy path",
-			initC:      crInit,
-			initSize:   10,
-			useCR:      true,
-			initCR:     crInitRange,
-			body:       api.UpdateRequest{Checkpoint: crNext, Proof: crProof},
-			wantStatus: http.StatusOK,
-		}, {
-			desc:     "compact range garbage proof",
-			initC:    crInit,
-			initSize: 10,
-			body: api.UpdateRequest{Checkpoint: crNext, Proof: [][]byte{
-				dh("aaaa", 2),
-				dh("bbbb", 2),
-				dh("cccc", 2),
-				dh("dddd", 2),
-			}},
-			useCR:      true,
-			initCR:     crInitRange,
-			wantStatus: http.StatusBadRequest,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -346,12 +309,12 @@ func TestUpdate(t *testing.T) {
 			logID := "monkeys"
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:         logID,
-				origin:     logOrigin,
-				PK:         mPK,
-				useCompact: test.useCR}})
+				ID:     logID,
+				origin: logOrigin,
+				PK:     mPK,
+			}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, test.initCR); err != nil {
+			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now set up the http server.

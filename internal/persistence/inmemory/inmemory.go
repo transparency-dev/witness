@@ -33,8 +33,7 @@ func NewPersistence() persistence.LogStatePersistence {
 }
 
 type checkpointState struct {
-	rawChkpt     []byte
-	compactRange []byte
+	rawChkpt []byte
 }
 
 type inMemoryPersistence struct {
@@ -115,17 +114,16 @@ type readWriter struct {
 	read, toStore *checkpointState
 }
 
-func (rw *readWriter) GetLatest() ([]byte, []byte, error) {
+func (rw *readWriter) GetLatest() ([]byte, error) {
 	if rw.read == nil {
-		return nil, nil, status.Error(codes.NotFound, "no checkpoint found")
+		return nil, status.Error(codes.NotFound, "no checkpoint found")
 	}
-	return rw.read.rawChkpt, rw.read.compactRange, nil
+	return rw.read.rawChkpt, nil
 }
 
-func (rw *readWriter) Set(c []byte, rng []byte) error {
+func (rw *readWriter) Set(c []byte) error {
 	rw.toStore = &checkpointState{
-		rawChkpt:     c,
-		compactRange: rng,
+		rawChkpt: c,
 	}
 
 	return rw.write(rw.read, *rw.toStore)

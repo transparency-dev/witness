@@ -89,7 +89,7 @@ type reader struct {
 	db    *sql.DB
 }
 
-func (r *reader) GetLatest() ([]byte, []byte, error) {
+func (r *reader) GetLatest() ([]byte, error) {
 	return getLatestCheckpoint(r.db.QueryRow, r.logID)
 }
 
@@ -98,12 +98,12 @@ type writer struct {
 	tx    *sql.Tx
 }
 
-func (w *writer) GetLatest() ([]byte, []byte, error) {
+func (w *writer) GetLatest() ([]byte, error) {
 	return getLatestCheckpoint(w.tx.QueryRow, w.logID)
 }
 
-func (w *writer) Set(c []byte, rng []byte) error {
-	_, err := w.tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt, range) VALUES (?, ?, ?)`, w.logID, c, rng)
+func (w *writer) Set(c []byte) error {
+	_, err := w.tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, w.logID, c)
 	if err != nil {
 		return fmt.Errorf("Exec(): %v", err)
 	}
@@ -114,18 +114,17 @@ func (w *writer) Close() error {
 	return w.tx.Rollback()
 }
 
-func getLatestCheckpoint(queryRow func(query string, args ...interface{}) *sql.Row, logID string) ([]byte, []byte, error) {
-	row := queryRow("SELECT chkpt, range FROM chkpts WHERE logID = ?", logID)
+func getLatestCheckpoint(queryRow func(query string, args ...interface{}) *sql.Row, logID string) ([]byte, error) {
+	row := queryRow("SELECT chkpt FROM chkpts WHERE logID = ?", logID)
 	if err := row.Err(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var chkpt []byte
-	var pf []byte
-	if err := row.Scan(&chkpt, &pf); err != nil {
+	if err := row.Scan(&chkpt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil, status.Errorf(codes.NotFound, "no checkpoint for log %q", logID)
+			return nil, status.Errorf(codes.NotFound, "no checkpoint for log %q", logID)
 		}
-		return nil, nil, err
+		return nil, err
 	}
-	return chkpt, pf, nil
+	return chkpt, nil
 }
