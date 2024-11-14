@@ -179,11 +179,16 @@ func newInMemoryLog(seed int) *inMemoryLog {
 	genLeaf := func(i uint64) []byte {
 		return []byte(fmt.Sprintf("log %d, leaf %d", seed, i))
 	}
+	rf := compact.RangeFactory{
+		Hash: rfc6962.DefaultHasher.HashChildren,
+	}
 	return &inMemoryLog{
 		o:       origin,
 		s:       s,
 		vkey:    vkey,
 		genLeaf: genLeaf,
+		state:   rf.NewEmptyRange(0),
+		store:   make(map[string][]byte),
 	}
 }
 
@@ -199,25 +204,16 @@ type inMemoryLog struct {
 	vkey    string
 	genLeaf func(uint64) []byte
 
-	mu     sync.Mutex
-	size   uint64
-	hashes [][][]byte // Node hashes, indexed by node (level, index).
+	mu    sync.Mutex
+	size  uint64
+	state *compact.Range
+	store map[string][]byte // Node hashes, indexed by node (level, index).
 }
 
 func (l *inMemoryLog) appendLocked(hash []byte) {
-	level := 0
-	for ; (l.size>>level)&1 == 1; level++ {
-		row := append(l.hashes[level], hash)
-		hash = rfc6962.DefaultHasher.HashChildren(row[len(row)-2], hash)
-		l.hashes[level] = row
-	}
-	if level > len(l.hashes) {
-		panic("gap in tree appends")
-	} else if level == len(l.hashes) {
-		l.hashes = append(l.hashes, nil)
-	}
-
-	l.hashes[level] = append(l.hashes[level], hash)
+	l.state.Append(hash, func(id compact.NodeID, h []byte) {
+		l.store[fmt.Sprintf("%x/%x", id.Level, id.Index)] = h
+	})
 	l.size++
 }
 
@@ -237,28 +233,17 @@ func (l *inMemoryLog) init(witSize uint64) {
 
 // Hash returns the current root hash of the tree.
 func (l *inMemoryLog) Hash() []byte {
-	return l.HashAt(l.size)
-}
-
-// HashAt returns the root hash at the given size.
-// Requires 0 <= size <= Size(), otherwise panics.
-func (l *inMemoryLog) HashAt(size uint64) []byte {
-	if size == 0 {
-		return rfc6962.DefaultHasher.EmptyRoot()
+	r, err := l.state.GetRootHash(nil)
+	if err != nil {
+		klog.Fatal(err)
 	}
-	hashes := l.getNodes(compact.RangeNodes(0, size, nil))
-
-	hash := hashes[len(hashes)-1]
-	for i := len(hashes) - 2; i >= 0; i-- {
-		hash = rfc6962.DefaultHasher.HashChildren(hashes[i], hash)
-	}
-	return hash
+	return r
 }
 
 func (l *inMemoryLog) getNodes(ids []compact.NodeID) [][]byte {
 	hashes := make([][]byte, len(ids))
 	for i, id := range ids {
-		hashes[i] = l.hashes[id.Level][id.Index]
+		hashes[i] = l.store[fmt.Sprintf("%x/%x", id.Level, id.Index)]
 	}
 	return hashes
 }
