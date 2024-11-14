@@ -211,9 +211,12 @@ type inMemoryLog struct {
 }
 
 func (l *inMemoryLog) appendLocked(hash []byte) {
-	l.state.Append(hash, func(id compact.NodeID, h []byte) {
+	err := l.state.Append(hash, func(id compact.NodeID, h []byte) {
 		l.store[fmt.Sprintf("%x/%x", id.Level, id.Index)] = h
 	})
+	if err != nil {
+		klog.Exit(err)
+	}
 	l.size++
 }
 
