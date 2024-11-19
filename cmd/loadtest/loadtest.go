@@ -37,11 +37,12 @@ import (
 )
 
 var (
-	logCount   = flag.Int("log_count", 50, "The number of logs to use")
-	target     = flag.String("target", "", "Base URL of the witness to load test")
-	timeout    = flag.Duration("timeout", time.Second, "How much witness latency terminates the load test")
-	startQPS   = flag.Uint("start_qps", 5, "Starting QPS")
-	successQPS = flag.Uint("success_qps", 32000, "If the witness can take this much QPS then the load test ends")
+	logCount     = flag.Int("log_count", 50, "The number of logs to use")
+	numExtraSigs = flag.Uint("num_extra_sigs", 0, "The number of additional signatures to put on each checkpoint sent to the witness")
+	target       = flag.String("target", "", "Base URL of the witness to load test")
+	timeout      = flag.Duration("timeout", time.Second, "How much witness latency terminates the load test")
+	startQPS     = flag.Uint("start_qps", 5, "Starting QPS")
+	successQPS   = flag.Uint("success_qps", 32000, "If the witness can take this much QPS then the load test ends")
 )
 
 func main() {
@@ -168,6 +169,7 @@ func newInMemoryLog(seed int) *inMemoryLog {
 	cha8seed[0] = byte(seed)
 	cha8 := rand.NewChaCha8(cha8seed)
 
+	signers := make([]note.Signer, 0, *numExtraSigs+1)
 	skey, vkey, err := note.GenerateKey(cha8, origin)
 	if err != nil {
 		klog.Exitf("Failed to generate keys: %v", err)
@@ -175,6 +177,18 @@ func newInMemoryLog(seed int) *inMemoryLog {
 	s, err := note.NewSigner(skey)
 	if err != nil {
 		klog.Exitf("Failed to generate signer: %v", err)
+	}
+	signers = append(signers, s)
+	for range *numExtraSigs {
+		skey, _, err := note.GenerateKey(cha8, origin)
+		if err != nil {
+			klog.Exitf("Failed to generate keys: %v", err)
+		}
+		s, err := note.NewSigner(skey)
+		if err != nil {
+			klog.Exitf("Failed to generate signer: %v", err)
+		}
+		signers = append(signers, s)
 	}
 	genLeaf := func(i uint64) []byte {
 		return []byte(fmt.Sprintf("log %d, leaf %d", seed, i))
@@ -184,7 +198,7 @@ func newInMemoryLog(seed int) *inMemoryLog {
 	}
 	return &inMemoryLog{
 		o:       origin,
-		s:       s,
+		s:       signers,
 		vkey:    vkey,
 		genLeaf: genLeaf,
 		state:   rf.NewEmptyRange(0),
@@ -200,7 +214,7 @@ func newInMemoryLog(seed int) *inMemoryLog {
 // https://github.com/transparency-dev/merkle/blob/main/testonly/tree.go
 type inMemoryLog struct {
 	o       string
-	s       note.Signer
+	s       []note.Signer
 	vkey    string
 	genLeaf func(uint64) []byte
 
@@ -267,7 +281,7 @@ func (l *inMemoryLog) next() (cpSigned []byte, consProof [][]byte) {
 		Hash:   l.Hash(),
 	}
 	cpRaw := cp.Marshal()
-	cpSigned, err := note.Sign(&note.Note{Text: string(cpRaw)}, l.s)
+	cpSigned, err := note.Sign(&note.Note{Text: string(cpRaw)}, l.s...)
 	if err != nil {
 		klog.Exitf("Failed to sign checkpoint: %v", err)
 	}
