@@ -48,6 +48,7 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
+	"github.com/transparency-dev/witness/internal/feeder/tiles"
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
@@ -236,6 +237,7 @@ const (
 	SumDB
 	Pixel
 	Rekor
+	Tiles
 	None
 )
 
@@ -245,6 +247,7 @@ var (
 		"sumdb":      SumDB,
 		"pixel":      Pixel,
 		"rekor":      Rekor,
+		"tiles":      Tiles,
 		"none":       None,
 	}
 )
@@ -271,6 +274,8 @@ func (f Feeder) FeedFunc() logFeeder {
 		return pixelbt.FeedLog
 	case Rekor:
 		return rekor.FeedLog
+	case Tiles:
+		return tiles.FeedLog
 	}
 	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }
