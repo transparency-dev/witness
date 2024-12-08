@@ -73,7 +73,7 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if _, err := w.Write(chkpt); err != nil {
 		klog.Warningf("Error writing response: %v", err)
 	}
@@ -89,7 +89,7 @@ func (s *Server) getCheckpoint(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to get checkpoint: %v", err), httpForCode(status.Code(err)))
 		return
 	}
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if _, err := w.Write(chkpt); err != nil {
 		klog.Warningf("Error writing response: %v", err)
 	}
