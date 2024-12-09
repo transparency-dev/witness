@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/trillian-tessera/api/layout"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/tlog"
@@ -37,8 +38,8 @@ const (
 	tileHeight = 8
 )
 
-// FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
-// This method blocks until the context is done.
+// FeedLog periodically feeds checkpoints from the log to the witness.
+// This function returns once the provided context is done.
 func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client, interval time.Duration) error {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
@@ -105,10 +106,7 @@ func (tr tileReader) SaveTiles([]tlog.Tile, [][]byte) {}
 func (tr tileReader) ReadTiles(tiles []tlog.Tile) ([][]byte, error) {
 	r := make([][]byte, 0, len(tiles))
 	for _, t := range tiles {
-		path := fmt.Sprintf("tile/%d/%03d", t.L, t.N)
-		if t.W < 1<<t.H {
-			path += fmt.Sprintf(".p/%d", t.W)
-		}
+		path := layout.TilePath(uint64(t.L), uint64(t.N), uint64(t.W))
 		tile, err := tr.fetch(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch %q: %v", path, err)
