@@ -40,7 +40,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
-	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/feeder/bastion"
@@ -70,7 +69,11 @@ const (
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
 type OperatorConfig struct {
-	WitnessKey string
+	WitnessKeys []note.Signer
+	// This must verify one of the sigs from the previous checkpoint. If the same
+	// signing keys are always used for this witness, then this will be a verifier
+	// for one of the signers above.
+	WitnessVerifier note.Verifier
 
 	// BastionAddr is the host:port of the bastion host to connect to, if any.
 	BastionAddr string
@@ -119,22 +122,13 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		klog.Infof("Added log %q: %s", lc.Origin, lc.ID)
 	}
 
-	signerLegacy, err := note.NewSigner(operatorConfig.WitnessKey)
-	if err != nil {
-		return fmt.Errorf("failed to init signer v0: %v", err)
-	}
-	signerCosigV1, err := f_note.NewSignerForCosignatureV1(operatorConfig.WitnessKey)
-	if err != nil {
-		return fmt.Errorf("failed to init signer v1: %v", err)
-	}
-
 	knownLogs, err := logCfg.AsLogMap()
 	if err != nil {
 		return fmt.Errorf("failed to convert witness config to map: %v", err)
 	}
 	witness, err := witness.New(witness.Opts{
 		Persistence: p,
-		Signers:     []note.Signer{signerLegacy, signerCosigV1},
+		Signers:     operatorConfig.WitnessKeys,
 		KnownLogs:   knownLogs,
 	})
 	if err != nil {
@@ -166,7 +160,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			Addr:            operatorConfig.BastionAddr,
 			Logs:            logs,
 			BastionKey:      operatorConfig.BastionKey,
-			WitnessVerifier: signerCosigV1.Verifier(),
+			WitnessVerifier: operatorConfig.WitnessVerifier,
 			Limits: bastion.RequestLimits{
 				TotalPerSecond: rate.Limit(operatorConfig.BastionRateLimit),
 			}}
@@ -179,7 +173,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, signerCosigV1.Verifier())
+		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, operatorConfig.WitnessVerifier)
 	}
 
 	r := mux.NewRouter()

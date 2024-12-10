@@ -30,12 +30,14 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	psql "github.com/transparency-dev/witness/internal/persistence/sql"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
+	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
@@ -103,8 +105,18 @@ func main() {
 		}
 	}
 
+	signerLegacy, err := note.NewSigner(*signingKey)
+	if err != nil {
+		klog.Exitf("Failed to init signer v0: %v", err)
+	}
+	signerCosigV1, err := f_note.NewSignerForCosignatureV1(*signingKey)
+	if err != nil {
+		klog.Exitf("Failed to init signer v1: %v", err)
+	}
+
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKey:             *signingKey,
+		WitnessKeys:            []note.Signer{signerLegacy, signerCosigV1},
+		WitnessVerifier:        signerCosigV1.Verifier(),
 		RestDistributorBaseURL: *restDistributorBaseURL,
 		BastionAddr:            *bastionAddr,
 		BastionKey:             bastionKey,
