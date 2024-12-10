@@ -69,8 +69,11 @@ const (
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
 type OperatorConfig struct {
-	WitnessKeys     []note.Signer
-	WitnessVerifier note.Verifier // This should verify one of the sigs from the above signers
+	WitnessKeys []note.Signer
+	// This must verify one of the sigs from the previous checkpoint. If the same
+	// signing keys are always used for this witness, then this will be a verifier
+	// for one of the signers above.
+	WitnessVerifier note.Verifier
 
 	// BastionAddr is the host:port of the bastion host to connect to, if any.
 	BastionAddr string
