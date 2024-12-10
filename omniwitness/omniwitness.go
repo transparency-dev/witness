@@ -70,7 +70,7 @@ const (
 // This should only contain configuration details that are custom per-operator.
 type OperatorConfig struct {
 	WitnessKeys     []note.Signer
-	WitnessVerifier note.Verifier // This should verify at least one of the sigs from the above signers
+	WitnessVerifier note.Verifier // This should verify one of the sigs from the above signers
 
 	// BastionAddr is the host:port of the bastion host to connect to, if any.
 	BastionAddr string
