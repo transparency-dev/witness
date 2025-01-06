@@ -52,3 +52,7 @@ Logs:
     URL: https://seasalp.glasklar.is
     PublicKey: sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1+682b49db+AQ7H4WhDEZsSA3enOROsasvC0D2CQy4sNrhBsJqVhB8l
     Feeder: none
+  - Origin: tlog.andxor.it
+    URL: https://tlog.andxor.it/
+    PublicKey: tlog.andxor.it+d5e6b3d0+AU6uJ3h8tb+RRMdGjHV4KCrrHoKfIYGbhL2A46thEhKQ
+    Feeder: tiles
