@@ -226,7 +226,7 @@ func (w *Witness) Update(ctx context.Context, logID string, nextRaw []byte, cPro
 	if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
 		// Complain if the checkpoints aren't consistent.
 		counterInvalidConsistency.Inc(logID)
-		return prevRaw, status.Errorf(codes.FailedPrecondition, "failed to verify consistency proof: %v", err)
+		return prevRaw, status.Errorf(codes.Unauthenticated, "failed to verify consistency proof: %v", err)
 	}
 	// If the consistency proof is good we store the witness cosigned nextRaw.
 	signed, err := w.signChkpt(nextNote)

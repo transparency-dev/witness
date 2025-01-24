@@ -127,7 +127,7 @@ func httpForCode(c codes.Code) int {
 		return http.StatusConflict
 	case codes.NotFound:
 		return http.StatusNotFound
-	case codes.FailedPrecondition, codes.InvalidArgument:
+	case codes.FailedPrecondition, codes.InvalidArgument, codes.Unauthenticated:
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
