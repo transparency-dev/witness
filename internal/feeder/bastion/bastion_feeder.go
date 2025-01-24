@@ -148,49 +148,73 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusNotFound))
 		return
 	}
-	signedCP, updateErr := a.w.Update(r.Context(), logID, cp, proof)
 
-	if updateErr != nil {
-		if sc := status.Code(updateErr); sc == codes.FailedPrecondition {
-			// Invalid proof
-			klog.Infof("Invalid proof: %v\noldSize: %d\nnewCP:\n%s\nProof:\n%s", updateErr, oldSize, cp, proof)
-			w.WriteHeader(http.StatusForbidden)
-			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusForbidden))
-			return
-		}
-		if sc := status.Code(updateErr); sc == codes.AlreadyExists {
-			// old checkpoint is smaller than the latest the witness knows about
-			checkpoint, _, _, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
-			if cpErr != nil {
-				klog.V(1).Infof("invalid checkpoint: %v", cpErr)
-				w.WriteHeader(http.StatusBadRequest)
-				counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusBadRequest))
-				return
-			}
-			w.Header().Add("Content-Type", "text/x.tlog.size")
-			w.WriteHeader(http.StatusConflict)
-			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusConflict))
-			if _, err := w.Write([]byte(fmt.Sprintf("%d\n", checkpoint.Size))); err != nil {
-				klog.V(1).Infof("Failed to write size response: %v", err)
-			}
-			return
-		}
-	}
-
-	_, _, n, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
-	if cpErr != nil {
-		klog.V(1).Infof("invalid checkpoint: %v", cpErr)
-		w.WriteHeader(http.StatusBadRequest)
-		counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusBadRequest))
+	sc, body, contentType, err := a.handleUpdate(r.Context(), logID, logCfg.Origin, oldSize, cp, proof)
+	if err != nil {
+		klog.Errorf("handleUpdate: %v", err)
+		w.WriteHeader(sc)
+		counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(sc))
 		return
 	}
 
-	if _, err := w.Write([]byte(fmt.Sprintf("— %s %s\n", n.Sigs[0].Name, n.Sigs[0].Base64))); err != nil {
-		klog.V(1).Infof("Failed to write signature response: %v", err)
+	if contentType != "" {
+		w.Header().Add("Content-Type", contentType)
+	}
+	w.WriteHeader(sc)
+	if len(body) > 0 {
+		if _, err := w.Write(body); err != nil {
+			klog.Errorf("Failed to write response body: %v", err)
+		}
+	}
+	counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(sc))
+}
+
+func (a *addHandler) handleUpdate(ctx context.Context, logID string, origin string, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
+	trusted, updateErr := a.w.Update(ctx, logID, newCP, proof)
+	// Whatever happened, we usually get the latest trusted CP from the witness (whether it's the old one or the one we've just updated to).
+	// If we get nothing at all, then something's gone quite wrong.
+	if trusted == nil {
+		return http.StatusInternalServerError, nil, "", fmt.Errorf("something went quite wrong during update: %v", updateErr)
+	}
+	// We'll need to use the old CP when sending responses, so parse it once here:
+	trustedCP, _, n, cpErr := log.ParseCheckpoint(trusted, origin, a.witVerifier)
+	if cpErr != nil {
+		return http.StatusInternalServerError, nil, "", fmt.Errorf("invalid stored checkpoint!: %v", cpErr)
 	}
 
-	counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(200))
+	// Finally, handle any "soft" error from the update:
+	if updateErr != nil {
+		switch sc := status.Code(updateErr); sc {
+		case codes.Unauthenticated:
+			// The proof is invalid somehow, this could be because the proof bytes are wrong, but it could also be that the log's idea of what the
+			// witness' current trusted checkpoint is wrong. So figure out which, and respond accordingly.
 
+			if trustedCP.Size != oldSize {
+				// The witness MUST check that the old size matches the size of the latest checkpoint it cosigned for the checkpoint's origin (or zero if it never
+				// cosigned a checkpoint for that origin). If it doesn't match, the witness MUST respond with a "409 Conflict" HTTP status code.
+				// The response body MUST consist of the tree size of the latest cosigned checkpoint in decimal, followed by a newline (U+000A).
+				// The response MUST have a Content-Type of text/x.tlog.size.
+				body := []byte(fmt.Sprintf("%d\n", trustedCP.Size))
+				return http.StatusConflict, body, "text/x.tlog.size", nil
+			}
+
+			// Invalid proof
+			// The consistency proof lines MUST encode a Merkle Consistency Proof from the old size to the checkpoint size according to RFC 6962, Section 2.1.2.
+			// The proof MUST be empty if the old size is zero.
+			// If the Merkle Consistency Proof doesn't verify, the witness MUST respond with a "422 Unprocessable Entity" HTTP status code.
+			return http.StatusUnprocessableEntity, nil, "", nil
+		case codes.FailedPrecondition:
+			// If the old size matches the checkpoint size, the witness MUST check that the root hashes are also identical.
+			// If they don't match, the witness MUST respond with a "409 Conflict" HTTP status code.
+			return http.StatusConflict, nil, "", nil
+		case codes.AlreadyExists:
+			body := []byte(fmt.Sprintf("%d\n", trustedCP.Size))
+			return http.StatusConflict, body, "text/x.tlog.size", nil
+		}
+	}
+
+	body := []byte(fmt.Sprintf("— %s %s\n", n.Sigs[0].Name, n.Sigs[0].Base64))
+	return http.StatusOK, body, "", nil
 }
 
 // parseBody reads the incoming request and parses into constituent parts.
