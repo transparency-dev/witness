@@ -159,7 +159,7 @@ func TestGetLogs(t *testing.T) {
 			}
 			w := newWitness(t, logs)
 			for i, logID := range test.logIDs {
-				if _, err := w.Update(ctx, logID, test.chkpts[i], nil); err != nil {
+				if _, err := w.Update(ctx, logID, 0, test.chkpts[i], nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -242,7 +242,7 @@ func TestGetChkpt(t *testing.T) {
 			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
-				if _, err := w.Update(ctx, test.setID, test.c, nil); err != nil {
+				if _, err := w.Update(ctx, test.setID, 0, test.c, nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -267,7 +267,6 @@ func TestUpdate(t *testing.T) {
 	for _, test := range []struct {
 		desc       string
 		initC      []byte
-		initSize   uint64
 		body       api.UpdateRequest
 		wantStatus int
 		wantCP     []byte
@@ -275,33 +274,34 @@ func TestUpdate(t *testing.T) {
 		{
 			desc:       "vanilla consistency happy path",
 			initC:      mInit,
-			initSize:   5,
-			body:       api.UpdateRequest{Checkpoint: mNext, Proof: consProof},
+			body:       api.UpdateRequest{OldSize: 5, Checkpoint: mNext, Proof: consProof},
 			wantStatus: http.StatusOK,
 		}, {
-			desc:       "vanilla consistency smaller checkpoint",
+			desc:       "oldSize > submitted checkpoint size",
 			initC:      mInit,
-			initSize:   5,
-			body:       api.UpdateRequest{Checkpoint: []byte("Log Checkpoint v0\n4\nhashhashhash\n\n— monkeys h74qVTDSRnIt40mjmX32f6bSeEFbU67ZpyBltDJuN4KzBlQRe5/jPDCwXRmyWVj72aebO8u42oZVVKy8hjkDg6R0fAs=\n"), Proof: consProof},
+			body:       api.UpdateRequest{OldSize: 10, Checkpoint: mNext, Proof: consProof},
+			wantStatus: http.StatusBadRequest,
+		}, {
+			desc:       "client smaller oldSize than witness",
+			initC:      mInit,
+			body:       api.UpdateRequest{OldSize: 4, Checkpoint: mNext, Proof: consProof},
 			wantStatus: http.StatusConflict,
 			wantCP:     mInit,
 		}, {
-			desc:     "vanilla consistency garbage proof",
-			initC:    mInit,
-			initSize: 5,
-			body: api.UpdateRequest{Checkpoint: mNext, Proof: [][]byte{
+			desc:  "vanilla consistency garbage proof",
+			initC: mInit,
+			body: api.UpdateRequest{OldSize: 5, Checkpoint: mNext, Proof: [][]byte{
 				dh("aaaa", 2),
 				dh("bbbb", 2),
 				dh("cccc", 2),
 				dh("dddd", 2),
 			}},
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusUnprocessableEntity,
 		}, {
 			desc:       "vanilla consistency garbage checkpoint",
 			initC:      mInit,
-			initSize:   5,
-			body:       api.UpdateRequest{Checkpoint: []byte("aaa"), Proof: consProof},
-			wantStatus: http.StatusBadRequest,
+			body:       api.UpdateRequest{OldSize: 5, Checkpoint: []byte("aaa"), Proof: consProof},
+			wantStatus: http.StatusForbidden,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -314,7 +314,7 @@ func TestUpdate(t *testing.T) {
 				PK:     mPK,
 			}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
+			if _, err := w.Update(ctx, logID, 0, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now set up the http server.

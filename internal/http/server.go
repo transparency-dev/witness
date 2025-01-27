@@ -58,21 +58,33 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Get the output from the witness.
-	chkpt, err := s.w.Update(r.Context(), logID, req.Checkpoint, req.Proof)
+	chkpt, err := s.w.Update(r.Context(), logID, req.OldSize, req.Checkpoint, req.Proof)
 	if err != nil {
-		c := status.Code(err)
-		// If there was an AlreadyExists it's possible the caller was
-		// just out of date.  Give the returned checkpoint to help them
-		// form a new request.
-		if c == codes.AlreadyExists {
+		switch err {
+		case witness.ErrCheckpointStale:
 			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.WriteHeader(httpForCode(c))
-			// The checkpoint body will be written below...
-		} else {
-			http.Error(w, fmt.Sprintf("failed to update to new checkpoint: %v", err), httpForCode(c))
-			return
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusConflict)
+			if _, err := w.Write(chkpt); err != nil {
+				klog.Warningf("Error writing response: %v", err)
+			}
+		case witness.ErrUnknownLog:
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case witness.ErrNoValidSignature:
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case witness.ErrOldSizeInvalid:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case witness.ErrInvalidProof:
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		case witness.ErrRootMismatch:
+			http.Error(w, err.Error(), http.StatusConflict)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+		return
 	}
+
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if _, err := w.Write(chkpt); err != nil {
 		klog.Warningf("Error writing response: %v", err)
