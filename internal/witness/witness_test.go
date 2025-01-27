@@ -17,6 +17,7 @@ package witness
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -28,8 +29,6 @@ import (
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -144,7 +143,7 @@ func TestGetLogs(t *testing.T) {
 			w := newWitness(t, logs)
 			// Update to a checkpoint for all logs.
 			for i, logID := range test.logIDs {
-				if _, err := w.Update(ctx, logID, test.chkpts[i], nil); err != nil {
+				if _, err := w.Update(ctx, logID, 0, test.chkpts[i], nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -213,7 +212,7 @@ func TestGetChkpt(t *testing.T) {
 			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
-				if _, err := w.Update(ctx, test.setID, test.c, nil); err != nil {
+				if _, err := w.Update(ctx, test.setID, 0, test.c, nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -269,72 +268,81 @@ func mustCreateCheckpoint(t *testing.T, sk string, size uint64, rootHash []byte)
 
 func TestUpdate(t *testing.T) {
 	for _, test := range []struct {
-		desc     string
-		initC    []byte
-		newC     []byte
-		pf       [][]byte
-		isGood   bool
-		wantCode codes.Code
+		desc      string
+		logID     string
+		initC     []byte
+		oldSize   uint64
+		newC      []byte
+		pf        [][]byte
+		isGood    bool
+		wantError error
 	}{
 		{
-			desc:   "vanilla consistency happy path",
-			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			newC:   mNext,
-			pf:     consProof,
-			isGood: true,
-		},
-		{
-			desc:   "vanilla consistency starting from tree size 0 with proof",
-			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
-			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			pf:     consProof,
-			isGood: true,
-		},
-		{
-			desc:   "vanilla consistency starting from tree size 0 without proof",
-			initC:  mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
-			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			pf:     [][]byte{},
-			isGood: true,
-		},
-		{
-			desc:   "vanilla resubmit known CP",
-			initC:  mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			newC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			pf:     [][]byte{},
-			isGood: true,
-		},
-		{
-			desc:     "vanilla attempt to re-TOFU",
-			initC:    mustCreateCheckpoint(t, mSK, 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			newC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			pf:       [][]byte{},
-			isGood:   false,
-			wantCode: codes.AlreadyExists,
-		},
-		{
-			desc:   "vanilla path, but the first line changed",
-			initC:  mInit,
-			newC:   []byte("Frog Checkpoint v0\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys 202ffgCVdfZmrroccRdQoEfn2TfmXHez4R++GvVrFvFiaI85O12aTV5GpNOvWsuQW77eNxQ2b7ggYeglzF/QSy/EBws=\n"),
-			pf:     consProof,
+			desc:    "vanilla consistency happy path",
+			initC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			oldSize: 5,
+			newC:    mNext,
+			pf:      consProof,
+			isGood:  true,
+		}, {
+			desc:      "oldSize doesn't match current state",
+			initC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			oldSize:   2,
+			newC:      mNext,
+			isGood:    false,
+			wantError: ErrCheckpointStale,
+		}, {
+			desc:    "vanilla consistency starting from tree size 0 with proof",
+			initC:   mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
+			oldSize: 0,
+			newC:    mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			pf:      consProof,
+			// Proof should be empty.
 			isGood: false,
 		}, {
-			desc:   "vanilla consistency smaller checkpoint",
-			initC:  mNext,
-			newC:   mInit,
-			pf:     consProof,
-			isGood: false,
+			desc:      "vanilla consistency starting from tree size 0 without proof",
+			initC:     mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
+			oldSize:   0,
+			newC:      mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			wantError: ErrInvalidProof,
 		}, {
-			desc:  "vanilla consistency garbage proof",
-			initC: mInit,
-			newC:  mNext,
+			desc:    "vanilla resubmit known CP",
+			initC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			oldSize: 5,
+			newC:    mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			isGood:  true,
+		}, {
+			desc:      "resubmit known CP with changed root",
+			initC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			oldSize:   5,
+			newC:      mustCreateCheckpoint(t, mSK, 5, dh("fffffffffffffffef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			wantError: ErrRootMismatch,
+		}, {
+			desc:      "missing proof",
+			initC:     mustCreateCheckpoint(t, mSK, 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			oldSize:   4,
+			newC:      mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			pf:        [][]byte{},
+			wantError: ErrInvalidProof,
+		}, {
+			desc:      "submit smaller checkpoint",
+			initC:     mNext,
+			oldSize:   8,
+			newC:      mInit,
+			pf:        consProof,
+			wantError: ErrOldSizeInvalid,
+		}, {
+			desc:    "vanilla consistency garbage proof",
+			initC:   mInit,
+			oldSize: 5,
+			newC:    mNext,
 			pf: [][]byte{
 				dh("aaaa", 2),
 				dh("bbbb", 2),
 				dh("cccc", 2),
 				dh("dddd", 2),
 			},
-			isGood: false,
+			wantError: ErrInvalidProof,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -347,11 +355,11 @@ func TestUpdate(t *testing.T) {
 				PK:     mPK,
 			}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
+			if _, err := w.Update(ctx, logID, 0, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now update from this checkpoint to a newer one.
-			_, err := w.Update(ctx, logID, test.newC, test.pf)
+			_, err := w.Update(ctx, logID, test.oldSize, test.newC, test.pf)
 			if test.isGood {
 				if err != nil {
 					t.Fatalf("can't update to new checkpoint: %v", err)
@@ -360,9 +368,10 @@ func TestUpdate(t *testing.T) {
 				if err == nil {
 					t.Fatal("should have gotten an error but didn't")
 				}
-				if test.wantCode != 0 {
-					if gotCode := status.Code(err); gotCode != test.wantCode {
-						t.Fatalf("Got status code %v, want %v", gotCode, test.wantCode)
+				if test.wantError != nil {
+
+					if !errors.Is(err, test.wantError) {
+						t.Fatalf("Got error %v, want %v", err, test.wantError)
 					}
 				}
 			}
