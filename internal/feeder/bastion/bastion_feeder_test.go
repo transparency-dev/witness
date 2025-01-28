@@ -25,8 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/transparency-dev/witness/internal/witness"
 )
 
 const (
@@ -35,7 +34,6 @@ const (
 	testCPRoot   = "7azctENRYLlBCBQ5OX2qxxIKCTOeCda1KfTwjdt0wdA="
 	testCPSig    = "— transparency.dev-aw-ftlog-ci-2 93xidocoWXVph2jEuzW2oovU+IjU71+FeVGKtKXQknSla2HCvr6RYHRSdJfxpo4kj5geqxkjrDXcbpiSo7lK96X4Dgc=\n"
 
-	//testCP         = "transparency.dev/armored-witness/firmware_transparency/ci/2\n56\n7azctENRYLlBCBQ5OX2qxxIKCTOeCda1KfTwjdt0wdA=\n\n— transparency.dev-aw-ftlog-ci-2 93xidocoWXVph2jEuzW2oovU+IjU71+FeVGKtKXQknSla2HCvr6RYHRSdJfxpo4kj5geqxkjrDXcbpiSo7lK96X4Dgc=\n"
 	testCPVerifier = "transparency.dev-aw-ftlog-ci-2+f77c6276+AZXqiaARpwF4MoNOxx46kuiIRjrML0PDTm+c7BLaAMt6"
 )
 
@@ -100,10 +98,7 @@ func TestHandler(t *testing.T) {
 		logID: config.Log{Origin: testCPOrigin},
 	}
 	for _, test := range []struct {
-		// params
-		name    string
-		logID   string
-		oldSize uint64
+		name string
 		// fake witness control
 		witnessResp []byte
 		witnessErr  error
@@ -113,41 +108,41 @@ func TestHandler(t *testing.T) {
 		wantContentType string
 	}{
 		{
-			name:        "works - accepted by witness",
-			logID:       "logID",
+			name:        "Accepted by witness",
 			witnessResp: []byte(testCP),
 			wantStatus:  200,
 			wantBody:    testCPSig,
 		}, {
-			name:            "new CP smaller than existing",
-			logID:           "logID",
+			name:            "ErrCheckpointStale",
 			witnessResp:     []byte(testCP),
-			witnessErr:      status.Errorf(codes.AlreadyExists, "test error"),
+			witnessErr:      witness.ErrCheckpointStale,
 			wantStatus:      http.StatusConflict,
 			wantContentType: "text/x.tlog.size",
 			wantBody:        fmt.Sprintf("%d\n", testCPSize),
 		}, {
-			name:        "invalid proof",
-			logID:       "logID",
-			oldSize:     testCPSize,
+			name:        "ErrNoValidSignature",
 			witnessResp: []byte(testCP),
-			witnessErr:  status.Errorf(codes.Unauthenticated, "test error"),
+			witnessErr:  witness.ErrNoValidSignature,
+			wantStatus:  http.StatusForbidden,
+		}, {
+			name:        "ErrUnknownLog",
+			witnessResp: []byte(testCP),
+			witnessErr:  witness.ErrUnknownLog,
+			wantStatus:  http.StatusNotFound,
+		}, {
+			name:        "ErrInvalidProof",
+			witnessResp: []byte(testCP),
+			witnessErr:  witness.ErrInvalidProof,
 			wantStatus:  http.StatusUnprocessableEntity,
 		}, {
-			name:            "incorrect oldCP size",
-			logID:           "logID",
-			oldSize:         testCPSize - 10,
-			witnessResp:     []byte(testCP),
-			witnessErr:      status.Errorf(codes.Unauthenticated, "test error"),
-			wantStatus:      http.StatusConflict,
-			wantContentType: "text/x.tlog.size",
-			wantBody:        fmt.Sprintf("%d\n", testCPSize),
-		}, {
-			name:        "same size, different roots",
-			logID:       "logID",
-			oldSize:     testCPSize,
+			name:        "ErrOldSizeInvalid",
 			witnessResp: []byte(testCP),
-			witnessErr:  status.Errorf(codes.FailedPrecondition, "test error"),
+			witnessErr:  witness.ErrOldSizeInvalid,
+			wantStatus:  http.StatusBadRequest,
+		}, {
+			name:        "ErrRootMismatch",
+			witnessResp: []byte(testCP),
+			witnessErr:  witness.ErrRootMismatch,
 			wantStatus:  http.StatusConflict,
 		},
 	} {
@@ -160,7 +155,7 @@ func TestHandler(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewRequest: %v", err)
 			}
-			sc, body, ct, err := a.handleUpdate(context.Background(), test.logID, testCPOrigin, test.oldSize, []byte(testCP), [][]byte{})
+			sc, body, ct, err := a.handleUpdate(context.Background(), "logID", testCPOrigin, 0, []byte(testCP), [][]byte{})
 			if err != nil {
 				t.Fatalf("handleUpdate: %v", err)
 			}
@@ -188,7 +183,7 @@ func (tw *testWitness) GetLatestCheckpoint(ctx context.Context, logID string) ([
 	return tw.latestCP, tw.latestCPErr
 }
 
-func (tw *testWitness) Update(ctx context.Context, logID string, newCP []byte, proof [][]byte) ([]byte, error) {
+func (tw *testWitness) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
 	return tw.updateResponse, tw.updateErr
 }
 

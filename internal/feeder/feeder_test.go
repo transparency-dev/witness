@@ -134,7 +134,7 @@ func (fw *fakeWitness) GetLatestCheckpoint(_ context.Context, logID string) ([]b
 	return fw.latestCP, nil
 }
 
-func (fw *fakeWitness) Update(_ context.Context, logID string, newCP []byte, proof [][]byte) ([]byte, error) {
+func (fw *fakeWitness) Update(_ context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
 	if fw.rejectUpdate {
 		return nil, errors.New("computer says 'no'")
 	}

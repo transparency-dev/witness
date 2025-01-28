@@ -301,6 +301,6 @@ func (w witnessAdapter) GetLatestCheckpoint(ctx context.Context, logID string) (
 	return cp, err
 }
 
-func (w witnessAdapter) Update(ctx context.Context, logID string, newCP []byte, proof [][]byte) ([]byte, error) {
-	return w.w.Update(ctx, logID, newCP, proof)
+func (w witnessAdapter) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
+	return w.w.Update(ctx, logID, oldSize, newCP, proof)
 }
