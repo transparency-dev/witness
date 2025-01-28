@@ -161,7 +161,9 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(sc)
 	if len(body) > 0 {
-		w.Write(body)
+		if _, err := w.Write(body); err != nil {
+			klog.Infof("Failed to write response body: %v", err)
+		}
 	}
 	counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(sc))
 }
