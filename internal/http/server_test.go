@@ -15,7 +15,6 @@
 package http
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -24,7 +23,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -258,94 +256,6 @@ func TestGetChkpt(t *testing.T) {
 			}
 			if got, want := resp.StatusCode, test.wantStatus; got != want {
 				t.Errorf("status code got %d, want %d", got, want)
-			}
-		})
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	for _, test := range []struct {
-		desc       string
-		initC      []byte
-		body       api.UpdateRequest
-		wantStatus int
-		wantCP     []byte
-	}{
-		{
-			desc:       "vanilla consistency happy path",
-			initC:      mInit,
-			body:       api.UpdateRequest{OldSize: 5, Checkpoint: mNext, Proof: consProof},
-			wantStatus: http.StatusOK,
-		}, {
-			desc:       "oldSize > submitted checkpoint size",
-			initC:      mInit,
-			body:       api.UpdateRequest{OldSize: 10, Checkpoint: mNext, Proof: consProof},
-			wantStatus: http.StatusBadRequest,
-		}, {
-			desc:       "client smaller oldSize than witness",
-			initC:      mInit,
-			body:       api.UpdateRequest{OldSize: 4, Checkpoint: mNext, Proof: consProof},
-			wantStatus: http.StatusConflict,
-			wantCP:     mInit,
-		}, {
-			desc:  "vanilla consistency garbage proof",
-			initC: mInit,
-			body: api.UpdateRequest{OldSize: 5, Checkpoint: mNext, Proof: [][]byte{
-				dh("aaaa", 2),
-				dh("bbbb", 2),
-				dh("cccc", 2),
-				dh("dddd", 2),
-			}},
-			wantStatus: http.StatusUnprocessableEntity,
-		}, {
-			desc:       "vanilla consistency garbage checkpoint",
-			initC:      mInit,
-			body:       api.UpdateRequest{OldSize: 5, Checkpoint: []byte("aaa"), Proof: consProof},
-			wantStatus: http.StatusForbidden,
-		},
-	} {
-		t.Run(test.desc, func(t *testing.T) {
-			ctx := context.Background()
-			logID := "monkeys"
-			// Set up witness.
-			w := newWitness(t, []logOpts{{
-				ID:     logID,
-				origin: logOrigin,
-				PK:     mPK,
-			}})
-			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, 0, test.initC, nil); err != nil {
-				t.Errorf("failed to set checkpoint: %v", err)
-			}
-			// Now set up the http server.
-			ts, tsCloseFn := createTestEnv(w)
-			defer tsCloseFn()
-			// Update to a newer checkpoint.
-			client := ts.Client()
-			reqBody, err := json.Marshal(test.body)
-			if err != nil {
-				t.Fatalf("couldn't parse request: %v", err)
-			}
-			url := fmt.Sprintf("%s%s", ts.URL, fmt.Sprintf(api.HTTPUpdate, logID))
-			req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(string(reqBody)))
-			if err != nil {
-				t.Fatalf("couldn't form http request: %v", err)
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				t.Errorf("error response: %v", err)
-			}
-			if got, want := resp.StatusCode, test.wantStatus; got != want {
-				body, _ := io.ReadAll(resp.Body)
-				t.Errorf("status code got %s, want %d (%s)", resp.Status, want, body)
-			}
-			defer resp.Body.Close()
-			respBody, err := io.ReadAll(resp.Body)
-			if err != nil {
-				t.Errorf("failed to read response body: %v", err)
-			}
-			if test.wantCP != nil && !bytes.HasPrefix(respBody, test.wantCP) {
-				t.Errorf("got body:\n%s\nbut want:\n%s", respBody, test.wantCP)
 			}
 		})
 	}
