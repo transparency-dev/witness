@@ -38,12 +38,11 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
 	"golang.org/x/time/rate"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
 
@@ -148,49 +147,65 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		counterBastionIncomingResponse.Inc(bastionID, "unknown", strconv.Itoa(http.StatusNotFound))
 		return
 	}
-	signedCP, updateErr := a.w.Update(r.Context(), logID, cp, proof)
 
-	if updateErr != nil {
-		if sc := status.Code(updateErr); sc == codes.FailedPrecondition {
-			// Invalid proof
-			klog.Infof("Invalid proof: %v\noldSize: %d\nnewCP:\n%s\nProof:\n%s", updateErr, oldSize, cp, proof)
-			w.WriteHeader(http.StatusForbidden)
-			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusForbidden))
-			return
-		}
-		if sc := status.Code(updateErr); sc == codes.AlreadyExists {
-			// old checkpoint is smaller than the latest the witness knows about
-			checkpoint, _, _, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
-			if cpErr != nil {
-				klog.V(1).Infof("invalid checkpoint: %v", cpErr)
-				w.WriteHeader(http.StatusBadRequest)
-				counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusBadRequest))
-				return
-			}
-			w.Header().Add("Content-Type", "text/x.tlog.size")
-			w.WriteHeader(http.StatusConflict)
-			counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusConflict))
-			if _, err := w.Write([]byte(fmt.Sprintf("%d\n", checkpoint.Size))); err != nil {
-				klog.V(1).Infof("Failed to write size response: %v", err)
-			}
-			return
-		}
-	}
-
-	_, _, n, cpErr := log.ParseCheckpoint(signedCP, logCfg.Origin, a.witVerifier)
-	if cpErr != nil {
-		klog.V(1).Infof("invalid checkpoint: %v", cpErr)
-		w.WriteHeader(http.StatusBadRequest)
-		counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusBadRequest))
+	sc, body, contentType, err := a.handleUpdate(r.Context(), logID, logCfg.Origin, oldSize, cp, proof)
+	if err != nil {
+		klog.Errorf("handleUpdate: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(http.StatusInternalServerError))
 		return
 	}
 
-	if _, err := w.Write([]byte(fmt.Sprintf("— %s %s\n", n.Sigs[0].Name, n.Sigs[0].Base64))); err != nil {
-		klog.V(1).Infof("Failed to write signature response: %v", err)
+	if contentType != "" {
+		w.Header().Add("Content-Type", contentType)
+	}
+	w.WriteHeader(sc)
+	if len(body) > 0 {
+		if _, err := w.Write(body); err != nil {
+			klog.Infof("Failed to write response body: %v", err)
+		}
+	}
+	counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(sc))
+}
+
+// handleUpdate submits the provided checkpoint to the witness and interprets any errors which may result.
+//
+// Returns an appropriate HTTP status code, response body, and Content Type representing the outcome.
+func (a *addHandler) handleUpdate(ctx context.Context, logID string, origin string, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
+	trusted, updateErr := a.w.Update(ctx, logID, oldSize, newCP, proof)
+	// Whatever happened, we usually get the latest trusted CP from the witness (whether it's the old one or the one we've just updated to).
+	// If we get nothing at all, then something's gone quite wrong.
+	if trusted == nil {
+		return http.StatusInternalServerError, nil, "", fmt.Errorf("something went quite wrong during update: %v", updateErr)
+	}
+	// We'll need to use the old CP when sending responses, so parse it once here:
+	trustedCP, _, n, cpErr := log.ParseCheckpoint(trusted, origin, a.witVerifier)
+	if cpErr != nil {
+		return http.StatusInternalServerError, nil, "", fmt.Errorf("invalid stored checkpoint!: %v", cpErr)
 	}
 
-	counterBastionIncomingResponse.Inc(bastionID, logCfg.Origin, strconv.Itoa(200))
+	// Finally, handle any "soft" error from the update:
+	if updateErr != nil {
+		switch updateErr {
+		case witness.ErrCheckpointStale:
+			return http.StatusConflict, []byte(fmt.Sprintf("%d\n", trustedCP.Size)), "text/x.tlog.size", nil
+		case witness.ErrUnknownLog:
+			return http.StatusNotFound, nil, "", nil
+		case witness.ErrNoValidSignature:
+			return http.StatusForbidden, nil, "", nil
+		case witness.ErrOldSizeInvalid:
+			return http.StatusBadRequest, nil, "", nil
+		case witness.ErrInvalidProof:
+			return http.StatusUnprocessableEntity, nil, "", nil
+		case witness.ErrRootMismatch:
+			return http.StatusConflict, nil, "", nil
+		default:
+			return http.StatusInternalServerError, nil, "", updateErr
+		}
+	}
 
+	body := []byte(fmt.Sprintf("— %s %s\n", n.Sigs[0].Name, n.Sigs[0].Base64))
+	return http.StatusOK, body, "", nil
 }
 
 // parseBody reads the incoming request and parses into constituent parts.

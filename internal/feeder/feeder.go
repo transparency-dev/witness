@@ -40,7 +40,7 @@ type Witness interface {
 	// Update attempts to clock the witness forward for the given logID.
 	// The latest signed checkpoint will be returned if this succeeds, or if the error is
 	// http.ErrCheckpointTooOld. In all other cases no checkpoint should be expected.
-	Update(ctx context.Context, logID string, newCP []byte, proof [][]byte) ([]byte, error)
+	Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error)
 }
 
 // FeedOpts holds parameters when calling the Feed function.
@@ -150,7 +150,7 @@ func submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint,
 			}
 			if latestCP.Size == cpSubmit.Size && bytes.Equal(latestCP.Hash, cpSubmit.Hash) {
 				klog.V(1).Infof("%q unchanged - @%d: %x", logName, latestCP.Size, latestCP.Hash)
-				if returnCp, err = opts.Witness.Update(ctx, opts.LogID, cpRaw, [][]byte{}); err != nil {
+				if returnCp, err = opts.Witness.Update(ctx, opts.LogID, latestCP.Size, cpRaw, [][]byte{}); err != nil {
 					e := fmt.Errorf("failed to submit fresh checkpoint to witness: %v", err)
 					klog.Warning(e.Error())
 					return e
@@ -171,7 +171,7 @@ func submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint,
 		}
 		klog.V(2).Infof("%q %d -> %d proof: %x", logName, latestCP.Size, cpSubmit.Size, conP)
 
-		if returnCp, err = opts.Witness.Update(ctx, opts.LogID, cpRaw, conP); err != nil {
+		if returnCp, err = opts.Witness.Update(ctx, opts.LogID, latestCP.Size, cpRaw, conP); err != nil {
 			e := fmt.Errorf("failed to submit checkpoint to witness: %v", err)
 			klog.Warning(e.Error())
 			return e

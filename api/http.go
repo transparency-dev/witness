@@ -31,6 +31,7 @@ const (
 // checkpoint byte slice and a consistency proof (slice of slices).  The logID
 // is part of the request URL.
 type UpdateRequest struct {
+	OldSize    uint64
 	Checkpoint []byte
 	Proof      [][]byte
 }

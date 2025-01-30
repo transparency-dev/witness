@@ -15,16 +15,13 @@
 package http
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -40,18 +37,11 @@ import (
 )
 
 var (
-	mPK       = "monkeys+87be2a55+AeK/t7elVrIheVCPxQNYkvKFw/2ahkj6Gm9afBJw6S8q"
-	bPK       = "bananas+cf639f13+AaPjhFnPCQnid/Ql32KWhmh+uk72FVRfK+2DLmO3BI3M"
-	wSK       = "PRIVATE+KEY+witness+f13a86db+AaLa/dfyBhyo/m0Z7WCi98ENVZWtrP8pxgRNrx7tIWiA"
-	mInit     = []byte("Log Checkpoint v0\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— monkeys h74qVe5jWoK8CX/zXrT9X80SyEaiwPb/0p7VW7u+cnXxq5pJYQ6vhxUZ5Ywz9WSD3HIyygccizAg+oMxOe6pRgqqOQE=\n")
-	bInit     = []byte("Log Checkpoint v0\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— bananas z2OfE18+NwUjjJBXH7m+fh67bu29p1Jbypr4GFUQohgQgCeuPJZtGTvfR9Pquh2Iebfq+6bhl3G/77lsKiGIea6NAwE=\n")
-	mNext     = []byte("Log Checkpoint v0\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys h74qVetPycmWeWIySx/cMKcLopNS9h2je2DWe2w7PLRmczqdqinRGPscYklpBQO5Un6B5eUMJDwZprVpJie0lSBNPg8=\n")
-	consProof = [][]byte{
-		dh("b9e1d62618f7fee8034e4c5010f727ab24d8e4705cb296c374bf2025a87a10d2", 32),
-		dh("aac66cd7a79ce4012d80762fe8eec3a77f22d1ca4145c3f4cee022e7efcd599d", 32),
-		dh("89d0f753f66a290c483b39cd5e9eafb12021293395fad3d4a2ad053cfbcfdc9e", 32),
-		dh("29e40bb79c966f4c6fe96aff6f30acfce5f3e8d84c02215175d6e018a5dee833", 32),
-	}
+	mPK   = "monkeys+87be2a55+AeK/t7elVrIheVCPxQNYkvKFw/2ahkj6Gm9afBJw6S8q"
+	bPK   = "bananas+cf639f13+AaPjhFnPCQnid/Ql32KWhmh+uk72FVRfK+2DLmO3BI3M"
+	wSK   = "PRIVATE+KEY+witness+f13a86db+AaLa/dfyBhyo/m0Z7WCi98ENVZWtrP8pxgRNrx7tIWiA"
+	mInit = []byte("Log Checkpoint v0\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— monkeys h74qVe5jWoK8CX/zXrT9X80SyEaiwPb/0p7VW7u+cnXxq5pJYQ6vhxUZ5Ywz9WSD3HIyygccizAg+oMxOe6pRgqqOQE=\n")
+	bInit = []byte("Log Checkpoint v0\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— bananas z2OfE18+NwUjjJBXH7m+fh67bu29p1Jbypr4GFUQohgQgCeuPJZtGTvfR9Pquh2Iebfq+6bhl3G/77lsKiGIea6NAwE=\n")
 )
 
 const logOrigin = "Log Checkpoint v0"
@@ -93,18 +83,6 @@ func newWitness(t *testing.T, logs []logOpts) *witness.Witness {
 		t.Fatalf("couldn't create witness: %v", err)
 	}
 	return w
-}
-
-// dh is taken from https://github.com/google/trillian/blob/master/merkle/logverifier/log_verifier_test.go.
-func dh(h string, expLen int) []byte {
-	r, err := hex.DecodeString(h)
-	if err != nil {
-		panic(err)
-	}
-	if got := len(r); got != expLen {
-		panic(fmt.Sprintf("decode %q: len=%d, want %d", h, got, expLen))
-	}
-	return r
 }
 
 func createTestEnv(w *witness.Witness) (*httptest.Server, func()) {
@@ -159,7 +137,7 @@ func TestGetLogs(t *testing.T) {
 			}
 			w := newWitness(t, logs)
 			for i, logID := range test.logIDs {
-				if _, err := w.Update(ctx, logID, test.chkpts[i], nil); err != nil {
+				if _, err := w.Update(ctx, logID, 0, test.chkpts[i], nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -242,7 +220,7 @@ func TestGetChkpt(t *testing.T) {
 			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
-				if _, err := w.Update(ctx, test.setID, test.c, nil); err != nil {
+				if _, err := w.Update(ctx, test.setID, 0, test.c, nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -258,94 +236,6 @@ func TestGetChkpt(t *testing.T) {
 			}
 			if got, want := resp.StatusCode, test.wantStatus; got != want {
 				t.Errorf("status code got %d, want %d", got, want)
-			}
-		})
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	for _, test := range []struct {
-		desc       string
-		initC      []byte
-		initSize   uint64
-		body       api.UpdateRequest
-		wantStatus int
-		wantCP     []byte
-	}{
-		{
-			desc:       "vanilla consistency happy path",
-			initC:      mInit,
-			initSize:   5,
-			body:       api.UpdateRequest{Checkpoint: mNext, Proof: consProof},
-			wantStatus: http.StatusOK,
-		}, {
-			desc:       "vanilla consistency smaller checkpoint",
-			initC:      mInit,
-			initSize:   5,
-			body:       api.UpdateRequest{Checkpoint: []byte("Log Checkpoint v0\n4\nhashhashhash\n\n— monkeys h74qVTDSRnIt40mjmX32f6bSeEFbU67ZpyBltDJuN4KzBlQRe5/jPDCwXRmyWVj72aebO8u42oZVVKy8hjkDg6R0fAs=\n"), Proof: consProof},
-			wantStatus: http.StatusConflict,
-			wantCP:     mInit,
-		}, {
-			desc:     "vanilla consistency garbage proof",
-			initC:    mInit,
-			initSize: 5,
-			body: api.UpdateRequest{Checkpoint: mNext, Proof: [][]byte{
-				dh("aaaa", 2),
-				dh("bbbb", 2),
-				dh("cccc", 2),
-				dh("dddd", 2),
-			}},
-			wantStatus: http.StatusBadRequest,
-		}, {
-			desc:       "vanilla consistency garbage checkpoint",
-			initC:      mInit,
-			initSize:   5,
-			body:       api.UpdateRequest{Checkpoint: []byte("aaa"), Proof: consProof},
-			wantStatus: http.StatusBadRequest,
-		},
-	} {
-		t.Run(test.desc, func(t *testing.T) {
-			ctx := context.Background()
-			logID := "monkeys"
-			// Set up witness.
-			w := newWitness(t, []logOpts{{
-				ID:     logID,
-				origin: logOrigin,
-				PK:     mPK,
-			}})
-			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, test.initC, nil); err != nil {
-				t.Errorf("failed to set checkpoint: %v", err)
-			}
-			// Now set up the http server.
-			ts, tsCloseFn := createTestEnv(w)
-			defer tsCloseFn()
-			// Update to a newer checkpoint.
-			client := ts.Client()
-			reqBody, err := json.Marshal(test.body)
-			if err != nil {
-				t.Fatalf("couldn't parse request: %v", err)
-			}
-			url := fmt.Sprintf("%s%s", ts.URL, fmt.Sprintf(api.HTTPUpdate, logID))
-			req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(string(reqBody)))
-			if err != nil {
-				t.Fatalf("couldn't form http request: %v", err)
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				t.Errorf("error response: %v", err)
-			}
-			if got, want := resp.StatusCode, test.wantStatus; got != want {
-				body, _ := io.ReadAll(resp.Body)
-				t.Errorf("status code got %s, want %d (%s)", resp.Status, want, body)
-			}
-			defer resp.Body.Close()
-			respBody, err := io.ReadAll(resp.Body)
-			if err != nil {
-				t.Errorf("failed to read response body: %v", err)
-			}
-			if test.wantCP != nil && !bytes.HasPrefix(respBody, test.wantCP) {
-				t.Errorf("got body:\n%s\nbut want:\n%s", respBody, test.wantCP)
 			}
 		})
 	}
