@@ -157,7 +157,7 @@ func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if contentType != "" {
-		w.Header().Add("Content-Type", "text/x.tlog.size")
+		w.Header().Add("Content-Type", contentType)
 	}
 	w.WriteHeader(sc)
 	if len(body) > 0 {

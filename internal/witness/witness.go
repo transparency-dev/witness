@@ -52,7 +52,7 @@ var (
 	// ErrOldSizeInvalid is returned by calls to Update if the provided oldSize parameter is larger than the size of the
 	// submitted checkpoint.
 	ErrOldSizeInvalid = errors.New("old size > current")
-	// ErrCheckpointStale is retrned by calls to Update if the oldSize parameter does not match the size of the currently
+	// ErrCheckpointStale is returned by calls to Update if the oldSize parameter does not match the size of the currently
 	// stored checkpoint for the same log.
 	ErrCheckpointStale = errors.New("old size != current")
 	// ErrInvalidProof is returned by calls to Update if the provided consistency proof is invalid.
