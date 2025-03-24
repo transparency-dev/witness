@@ -11,7 +11,7 @@ require (
 	github.com/transparency-dev/formats v0.0.0-20241003145927-a04dcc2a37e4
 	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20240408141044-5d483a81bdb7
-	github.com/transparency-dev/trillian-tessera v0.1.0
+	github.com/transparency-dev/trillian-tessera v0.1.1
 	golang.org/x/mod v0.24.0
 	golang.org/x/net v0.37.0
 	golang.org/x/sync v0.12.0
@@ -33,6 +33,6 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
-	google.golang.org/protobuf v1.36.4 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250227231956-55c901821b1e // indirect
+	google.golang.org/protobuf v1.36.5 // indirect
 )
