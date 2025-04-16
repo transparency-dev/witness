@@ -24,7 +24,7 @@ Append Only         | New entries added to a log can only be added to the end of
 Checkpoint          | A Checkpoint is a _signed_ commitment to the state of a Log at a given size
 Split View          | A split view is a situation where a Log presents two views of its data where one is not a prefix of the other
 Consistency Proof   | A crytographic proof between two checkpoints that proves one of them is an Append Only evolution of the other
-Witness             | Tracks one or more logs, verifying Consistency Proofs to ensure it cannot cross any Split Views
+Witness             | Tracks one or more logs, verifying Consistency Proofs to ensure it cannot cross any Split Views, and signs witnessed Checkpoints
 
 Witnesses are a critical part of a secure transparency ecosystem by providing an anchor that guards against split view attacks by log operators.
 
@@ -43,7 +43,7 @@ Thereafter:
  3. The new Checkpoint is countersigned by the Witness, and made available to the public
 
 A feature of [Checkpoints](https://c2sp.org/tlog-checkpoint) is that they allow multiple signatures to be added.
-This means that a common way to see Checkpoints in a witnessed ecosystem is with a log signature first, and then multiple witness signatures.
+This means that a common way to see Checkpoints in a witnessed ecosystem is with a log signature and multiple witness signatures.
 An example witnessed checkpoint is:
 
 ```
