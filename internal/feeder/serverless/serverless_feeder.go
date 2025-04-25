@@ -34,7 +34,7 @@ import (
 
 // FeedLog periodically feeds checkpoints from the log to the witness.
 // This function returns once the provided context is done.
-func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
 		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
@@ -45,18 +45,15 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 	fetchCP := func(ctx context.Context) ([]byte, error) {
 		return f(ctx, "checkpoint")
 	}
-	fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
-		if from.Size == 0 {
+	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+		if from == 0 {
 			return [][]byte{}, nil
 		}
-		pb, err := client.NewProofBuilder(ctx, to, h.HashChildren, f)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create proof builder for %q: %v", l.Origin, err)
-		}
+		pb := client.NewProofBuilderForSize(ctx, to.Size, h.HashChildren, f)
 
-		conP, err := pb.ConsistencyProof(ctx, from.Size, to.Size)
+		conP, err := pb.ConsistencyProof(ctx, from, to.Size)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", l.Origin, from.Size, to.Size, err)
+			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", l.Origin, from, to.Size, err)
 		}
 		return conP, nil
 	}
@@ -67,7 +64,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Witness:         w,
+		Update:          update,
 	}
 	if interval > 0 {
 		return feeder.Run(ctx, interval, opts)
