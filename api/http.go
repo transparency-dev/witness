@@ -16,22 +16,7 @@
 package api
 
 const (
-	// HTTPGetCheckpoint is the path of the URL to get a checkpoint.  The
-	// placeholder is for the logID (an alphanumeric string).
-	HTTPGetCheckpoint = "/witness/v0/logs/%s/checkpoint"
 	// HTTPUpdate is the path of the URL to update to a new checkpoint.
-	// Again the placeholder is for the logID.
-	HTTPUpdate = "/witness/v0/logs/%s/update"
-	// HTTPGetLogs is the path of the URL to get a list of all logs the
-	// witness is aware of.
-	HTTPGetLogs = "/witness/v0/logs"
+	// This endpoint expects a https://c2sp.org/tlog-witness compliant request.
+	HTTPUpdate = "/"
 )
-
-// UpdateRequest encodes the inputs to the witness Update function: a (raw)
-// checkpoint byte slice and a consistency proof (slice of slices).  The logID
-// is part of the request URL.
-type UpdateRequest struct {
-	OldSize    uint64
-	Checkpoint []byte
-	Proof      [][]byte
-}

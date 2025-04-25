@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -32,6 +33,7 @@ import (
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
 	wit_client "github.com/transparency-dev/witness/client/http"
+	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
@@ -65,28 +67,6 @@ func main() {
 	}
 	c := wit_client.NewWitness(u, http.DefaultClient)
 
-	// Ensure all log sizes match the size that witnesses expect
-	for _, l := range logs.logs {
-		logID := log.ID(l.o)
-		var witSize uint64
-		if rawCP, err := c.GetLatestCheckpoint(ctx, logID); err != nil {
-			if err != os.ErrNotExist {
-				klog.Exitf("Failed to get latest checkpoint: %v", err)
-			}
-		} else {
-			v, err := note.NewVerifier(l.vkey)
-			if err != nil {
-				klog.Exitf("Failed to create verifier: %v", err)
-			}
-			cp, _, _, err := log.ParseCheckpoint(rawCP, l.o, v)
-			if err != nil {
-				klog.Exitf("Failed to parse checkpoint: %v", err)
-			}
-			witSize = cp.Size
-		}
-		l.init(witSize)
-	}
-
 	updateLatencyChan := make(chan time.Duration, *logCount)
 	thr := newThrottle(*startQPS)
 	go thr.run(ctx)
@@ -100,8 +80,11 @@ func main() {
 				case <-thr.tokenChan:
 					nextCP, proof := l.next()
 					startTime := time.Now()
-					if _, err := c.Update(ctx, log.ID(l.o), nextCP, proof); err != nil {
-						klog.Exitf("Failed to update to checkpoint: %v\n%s", err, nextCP)
+					if _, size, err := c.Update(ctx, l.size, nextCP, proof); err != nil {
+						if !errors.Is(err, witness.ErrCheckpointStale) {
+							klog.Exitf("Failed to update to checkpoint: %v\n%s", err, nextCP)
+						}
+						l.growTo(size)
 					}
 					elapsed := time.Since(startTime)
 					updateLatencyChan <- elapsed
@@ -234,15 +217,15 @@ func (l *inMemoryLog) appendLocked(hash []byte) {
 	l.size++
 }
 
-// init sets the initial state of this log to the size from the witness.
-func (l *inMemoryLog) init(witSize uint64) {
+// growTo advances the state of this log to the given size.
+func (l *inMemoryLog) growTo(witSize uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	klog.Infof("%s initializing to size %d", l.o, witSize)
+	klog.Infof("%s growing to size %d", l.o, witSize)
 
-	for i := uint64(0); i < witSize; i++ {
-		leaf := l.genLeaf(i)
+	for l.size < witSize {
+		leaf := l.genLeaf(l.size)
 		leafHash := rfc6962.DefaultHasher.HashLeaf(leaf)
 		l.appendLocked(leafHash)
 	}

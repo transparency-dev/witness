@@ -56,6 +56,7 @@ func initMetrics() {
 	})
 }
 
+// httpHandler knows how to handle tlog-witness HTTP requests.
 type httpHandler struct {
 	w           feeder.Witness
 	logs        map[string]config.Log
@@ -63,6 +64,7 @@ type httpHandler struct {
 	limiter     *rate.Limiter
 }
 
+// ServeHTTP is a http.Handler which speaks the tlog-witness protocol.
 func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	counterHTTPIncomingRequest.Inc()
