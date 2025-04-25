@@ -39,7 +39,7 @@ const (
 
 // FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
 // This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
 		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
@@ -52,8 +52,8 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		}
 		return cpTxt, err
 	}
-	fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
-		if from.Size == 0 {
+	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+		if from == 0 {
 			return [][]byte{}, nil
 		}
 		var h [32]byte
@@ -66,7 +66,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 			return fetch(ctx, c, lURL, p)
 		}}
 
-		proof, err := tlog.ProveTree(int64(to.Size), int64(from.Size), tlog.TileHashReader(tree, tr))
+		proof, err := tlog.ProveTree(int64(to.Size), int64(from), tlog.TileHashReader(tree, tr))
 		if err != nil {
 			return nil, fmt.Errorf("ProveTree: %v", err)
 		}
@@ -75,7 +75,6 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 			h := h
 			r = append(r, h[:])
 		}
-		klog.V(1).Infof("Fetched proof from %d -> %d: %x", from.Size, to.Size, r)
 		return r, nil
 	}
 
@@ -85,7 +84,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Witness:         w,
+		Update:          update,
 	}
 	if interval > 0 {
 		return feeder.Run(ctx, interval, opts)
