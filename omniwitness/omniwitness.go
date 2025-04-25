@@ -20,6 +20,7 @@ package omniwitness
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"net/http"
@@ -27,9 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
-	ihttp "github.com/transparency-dev/witness/internal/http"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
@@ -156,6 +155,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
+		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
 		bc := bastion.Config{
 			Addr:            operatorConfig.BastionAddr,
 			Logs:            logs,
@@ -176,11 +176,19 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, operatorConfig.WitnessVerifier)
 	}
 
-	r := mux.NewRouter()
-	s := ihttp.NewServer(witness)
-	s.RegisterHandlers(r)
+	logsByID := make(map[string]config.Log)
+	for _, l := range logs {
+		logsByID[l.ID] = l
+	}
+	h := &httpHandler{
+		w:           bw,
+		logs:        logsByID,
+		witVerifier: operatorConfig.WitnessVerifier,
+		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.BastionRateLimit), int(operatorConfig.BastionRateLimit)),
+	}
+
 	srv := http.Server{
-		Handler:      r,
+		Handler:      h,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  5 * time.Minute,
