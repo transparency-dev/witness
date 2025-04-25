@@ -39,9 +39,9 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
+	"github.com/transparency-dev/witness/internal/bastion"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder"
-	"github.com/transparency-dev/witness/internal/feeder/bastion"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -79,8 +79,9 @@ type OperatorConfig struct {
 	// BastionKey is the key used to authenticate the witness to the bastion host, if
 	// a BastionAddr is configured.
 	BastionKey ed25519.PrivateKey
-	// BastionRateLimit is the maximum number of bastion requests to serve per second.
-	BastionRateLimit float64
+
+	// RateLimit is the maximum number of update requests to serve per second.
+	RateLimit float64
 
 	// RestDistributorBaseURL is optional, and if provided gives the base URL
 	// to a distributor that takes witnessed checkpoints via a PUT request.
@@ -134,12 +135,23 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		return fmt.Errorf("failed to create witness: %v", err)
 	}
 
-	if operatorConfig.DistributeInterval == 0 {
-		operatorConfig.DistributeInterval = defaultDistributeInterval
+	logsByID := make(map[string]config.Log)
+	for _, l := range logs {
+		logsByID[l.ID] = l
 	}
 
 	bw := witnessAdapter{
 		w: witness,
+	}
+	handler := &httpHandler{
+		w:           bw,
+		logs:        logsByID,
+		witVerifier: operatorConfig.WitnessVerifier,
+		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit)),
+	}
+
+	if operatorConfig.DistributeInterval == 0 {
+		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
 
 	if operatorConfig.FeedInterval > 0 {
@@ -161,13 +173,11 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			Logs:            logs,
 			BastionKey:      operatorConfig.BastionKey,
 			WitnessVerifier: operatorConfig.WitnessVerifier,
-			Limits: bastion.RequestLimits{
-				TotalPerSecond: rate.Limit(operatorConfig.BastionRateLimit),
-			}}
+		}
 		g.Go(func() error {
 			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
 			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)
-			return bastion.FeedBastion(ctx, bc, bw)
+			return bastion.Register(ctx, bc, handler)
 		})
 	}
 
@@ -176,19 +186,8 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, operatorConfig.WitnessVerifier)
 	}
 
-	logsByID := make(map[string]config.Log)
-	for _, l := range logs {
-		logsByID[l.ID] = l
-	}
-	h := &httpHandler{
-		w:           bw,
-		logs:        logsByID,
-		witVerifier: operatorConfig.WitnessVerifier,
-		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.BastionRateLimit), int(operatorConfig.BastionRateLimit)),
-	}
-
 	srv := http.Server{
-		Handler:      h,
+		Handler:      handler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  5 * time.Minute,
