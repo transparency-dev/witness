@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	client "github.com/transparency-dev/witness/client/http"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
@@ -41,7 +42,6 @@ import (
 
 	"github.com/transparency-dev/witness/internal/bastion"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -93,7 +93,7 @@ type OperatorConfig struct {
 }
 
 // logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, feeder.Witness, *http.Client, time.Duration) error
+type logFeeder func(context.Context, config.Log, client.Witness, *http.Client, time.Duration) error
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.

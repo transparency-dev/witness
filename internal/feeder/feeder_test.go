@@ -18,12 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/serverless-log/client"
+	sclient "github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/serverless-log/testdata"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -33,42 +32,34 @@ func TestFeedOnce(t *testing.T) {
 	for _, test := range []struct {
 		desc     string
 		submitCP []byte
-		witness  Witness
+		update   UpdateFn
 		wantErr  bool
 	}{
 		{
 			desc:     "works",
 			submitCP: testdata.Checkpoint(t, 2),
-			witness: &fakeWitness{
+			update: (&fakeWitness{
 				latestCP: testdata.Checkpoint(t, 1),
-			},
+			}).Update,
 		}, {
 			desc:     "works after a few failures",
 			submitCP: testdata.Checkpoint(t, 2),
-			witness: &slowWitness{
+			update: (&slowWitness{
 				fakeWitness: &fakeWitness{
 					latestCP: testdata.Checkpoint(t, 1),
 				},
 				times: 3,
-			},
+			}).Update,
 		}, {
 			desc:     "works - TOFU feed",
 			submitCP: testdata.Checkpoint(t, 2),
-			witness:  &fakeWitness{},
+			update:   (&fakeWitness{}).Update,
 		}, {
 			desc:     "works - submitCP == latest",
 			submitCP: testdata.Checkpoint(t, 1),
-			witness: &fakeWitness{
+			update: (&fakeWitness{
 				latestCP: testdata.Checkpoint(t, 1),
-			},
-		}, {
-			desc:    "submitting stale CP",
-			wantErr: true,
-			// This checkpoint is older than the witness' latestCP below:
-			submitCP: testdata.Checkpoint(t, 1),
-			witness: &fakeWitness{
-				latestCP: testdata.Checkpoint(t, 2),
-			},
+			}).Update,
 		},
 	} {
 		sCP := mustOpenCheckpoint(t, test.submitCP, testdata.TestLogOrigin, testdata.LogSigVerifier(t))
@@ -76,18 +67,15 @@ func TestFeedOnce(t *testing.T) {
 		fetchCheckpoint := func(_ context.Context) ([]byte, error) {
 			return test.submitCP, nil
 		}
-		fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
-			if from.Size == 0 {
+		fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+			if from == 0 {
 				return [][]byte{}, nil
 			}
-			pb, err := client.NewProofBuilder(ctx, to, rfc6962.DefaultHasher.HashChildren, f.Fetcher())
-			if err != nil {
-				return nil, fmt.Errorf("failed to create proof builder: %v", err)
-			}
+			pb := sclient.NewProofBuilderForSize(ctx, to.Size, rfc6962.DefaultHasher.HashChildren, f.Fetcher())
 
-			conP, err := pb.ConsistencyProof(ctx, from.Size, to.Size)
+			conP, err := pb.ConsistencyProof(ctx, from, to.Size)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create proof for (%d -> %d): %v", from.Size, to.Size, err)
+				return nil, fmt.Errorf("failed to create proof for (%d -> %d): %v", from, to.Size, err)
 			}
 			return conP, nil
 		}
@@ -97,7 +85,7 @@ func TestFeedOnce(t *testing.T) {
 			FetchProof:      fetchProof,
 			LogOrigin:       testdata.TestLogOrigin,
 			LogSigVerifier:  testdata.LogSigVerifier(t),
-			Witness:         test.witness,
+			Update:          test.update,
 		}
 		t.Run(test.desc, func(t *testing.T) {
 			_, err := FeedOnce(ctx, opts)
@@ -114,12 +102,14 @@ type slowWitness struct {
 	times int
 }
 
-func (sw *slowWitness) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
+func (sw *slowWitness) Update(_ context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
 	if sw.times > 0 {
 		sw.times = sw.times - 1
-		return nil, fmt.Errorf("will fail for %d more calls", sw.times)
+		return nil, 0, fmt.Errorf("will fail for %d more calls", sw.times)
 	}
-	return sw.fakeWitness.GetLatestCheckpoint(ctx, logID)
+	sw.latestCP = newCP
+
+	return []byte("sig"), 0, nil
 }
 
 type fakeWitness struct {
@@ -127,21 +117,14 @@ type fakeWitness struct {
 	rejectUpdate bool
 }
 
-func (fw *fakeWitness) GetLatestCheckpoint(_ context.Context, logID string) ([]byte, error) {
-	if fw.latestCP == nil {
-		return nil, os.ErrNotExist
-	}
-	return fw.latestCP, nil
-}
-
-func (fw *fakeWitness) Update(_ context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
+func (fw *fakeWitness) Update(_ context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
 	if fw.rejectUpdate {
-		return nil, errors.New("computer says 'no'")
+		return nil, 0, errors.New("computer says 'no'")
 	}
 
 	fw.latestCP = newCP
 
-	return fw.latestCP, nil
+	return fw.latestCP, 0, nil
 }
 
 func mustOpenCheckpoint(t *testing.T, cp []byte, origin string, v note.Verifier) log.Checkpoint {
