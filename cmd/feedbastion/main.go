@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -97,7 +98,7 @@ func main() {
 				if err := rl.Wait(ctx); err != nil {
 					return err
 				}
-				return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc, httpClient, *loopInterval)
+				return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc.Update, httpClient, *loopInterval)
 			})
 		}
 	}
@@ -122,7 +123,7 @@ func (b *bastionClient) GetLatestCheckpoint(ctx context.Context, logID string) (
 // Update attempts to clock the witness forward for the given logID.
 // The latest signed checkpoint will be returned if this succeeds, or if the error is
 // http.ErrCheckpointTooOld. In all other cases no checkpoint should be expected.
-func (b *bastionClient) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
+func (b *bastionClient) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
 	// The request body MUST be a sequence of
 	// - a previous size line,
 	// - zero or more consistency proof lines,
@@ -138,21 +139,21 @@ func (b *bastionClient) Update(ctx context.Context, logID string, oldSize uint64
 	klog.V(1).Infof("sending:\n%s", body)
 	resp, err := b.httpClient.Post(b.url, "", bytes.NewReader([]byte(body)))
 	if err != nil {
-		return nil, err
-	}
-	rb, err := io.ReadAll(resp.Body)
-	if err != nil {
-		klog.Errorf("failed to read response body: %v", err)
+		return nil, 0, err
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			klog.Errorf("Failed to close response body: %v", err)
 		}
 	}()
-	name := logID
-	if o, ok := b.originByLogID[logID]; ok {
-		name = o
+
+	rb, err := io.ReadAll(resp.Body)
+	if err != nil {
+		klog.Errorf("failed to read response body: %v", err)
 	}
+
+	name, _, _ := strings.Cut(string(newCP), " ")
 	klog.Infof("%s: %v: %s", name, resp.Status, string(rb))
-	return nil, nil
+
+	return nil, 0, nil
 }
