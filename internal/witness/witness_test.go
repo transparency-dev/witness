@@ -140,7 +140,7 @@ func TestGetLogs(t *testing.T) {
 			}
 			w := newWitness(t, logs)
 			// Update to a checkpoint for all logs.
-			for i, _ := range test.logOrigins {
+			for i := range test.logOrigins {
 				if _, _, err := w.Update(ctx, 0, test.chkpts[i], nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}

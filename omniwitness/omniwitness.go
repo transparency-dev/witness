@@ -95,6 +95,7 @@ type logFeeder func(context.Context, config.Log, feeder.UpdateFn, *http.Client, 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
+	initMetrics()
 	// This error group will be used to run all top level processes.
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)

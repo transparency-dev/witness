@@ -91,7 +91,7 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 	case http.StatusOK, 0:
 		return body, 0, nil
 	case http.StatusConflict:
-		if resp.Header.Get(http.CanonicalHeaderKey("Content-Type")) == "text/x.tlog.size" {
+		if resp.Header.Get("Content-Type") == "text/x.tlog.size" {
 			size, err := strconv.ParseUint(strings.TrimSpace(string(body)), 10, 64)
 			if err != nil {
 				return nil, 0, fmt.Errorf("invalid tlog size in response body: %v", err)

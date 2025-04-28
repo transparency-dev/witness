@@ -57,12 +57,9 @@ func Register(ctx context.Context, c Config, witnessHandler http.Handler) error 
 }
 
 var (
-	doOnce                         sync.Once
-	counterBastionRegisterAttempt  monitoring.Counter
-	counterBastionRegisterSuccess  monitoring.Counter
-	counterBastionIncomingRequest  monitoring.Counter
-	counterBastionIncomingResponse monitoring.Counter
-	counterBastionIncomingPushback monitoring.Counter
+	doOnce                        sync.Once
+	counterBastionRegisterAttempt monitoring.Counter
+	counterBastionRegisterSuccess monitoring.Counter
 )
 
 func initMetrics() {
@@ -76,9 +73,6 @@ func initMetrics() {
 
 		counterBastionRegisterAttempt = mf.NewCounter("bastion_register_attempt", "Number of attempts to register with bastion", bastionID)
 		counterBastionRegisterSuccess = mf.NewCounter("bastion_register_success", "Number of successful registrations with bastion", bastionID)
-		counterBastionIncomingRequest = mf.NewCounter("bastion_request", "Number of bastion requests received", bastionID)
-		counterBastionIncomingResponse = mf.NewCounter("bastion_response", "Bastion mediated responses", bastionID, origin, status)
-		counterBastionIncomingPushback = mf.NewCounter("bastion_pushback", "Number of pushed-back bastion mediated requests", bastionID)
 	})
 }
 
