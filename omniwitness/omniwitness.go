@@ -24,19 +24,16 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	client "github.com/transparency-dev/witness/client/http"
 	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
@@ -93,7 +90,7 @@ type OperatorConfig struct {
 }
 
 // logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, client.Witness, *http.Client, time.Duration) error
+type logFeeder func(context.Context, config.Log, feeder.UpdateFn, *http.Client, time.Duration) error
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
@@ -140,11 +137,8 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		logsByID[l.ID] = l
 	}
 
-	bw := witnessAdapter{
-		w: witness,
-	}
 	handler := &httpHandler{
-		w:           bw,
+		update:      witness.Update,
 		logs:        logsByID,
 		witVerifier: operatorConfig.WitnessVerifier,
 		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit)),
@@ -161,7 +155,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			g.Go(func() error {
 				klog.Infof("Feeder %q goroutine started", c.Origin)
 				defer klog.Infof("Feeder %q goroutine done", c.Origin)
-				return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
+				return f(ctx, c, witness.Update, httpClient, operatorConfig.FeedInterval)
 			})
 		}
 	}
@@ -289,25 +283,4 @@ func ParseFeeder(f string) (Feeder, error) {
 		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
 	}
 	return value, nil
-}
-
-// witnessAdapter binds the internal witness implementation to the feeder interface.
-// TODO(mhutchinson): Can we fix the difference between the API on the client and impl
-// so they both have the same contract?
-type witnessAdapter struct {
-	w *witness.Witness
-}
-
-func (w witnessAdapter) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	cp, err := w.w.GetCheckpoint(logID)
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, os.ErrNotExist
-		}
-	}
-	return cp, err
-}
-
-func (w witnessAdapter) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
-	return w.w.Update(ctx, logID, oldSize, newCP, proof)
 }

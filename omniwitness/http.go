@@ -27,7 +27,6 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -58,7 +57,7 @@ func initMetrics() {
 
 // httpHandler knows how to handle tlog-witness HTTP requests.
 type httpHandler struct {
-	w           feeder.Witness
+	update      func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
 	logs        map[string]config.Log
 	witVerifier note.Verifier
 	limiter     *rate.Limiter
@@ -100,7 +99,7 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sc, body, contentType, err := a.handleUpdate(r.Context(), logID, logCfg.Origin, oldSize, cp, proof)
+	sc, body, contentType, err := a.handleUpdate(r.Context(), logCfg.Origin, oldSize, cp, proof)
 	if err != nil {
 		klog.Errorf("handleUpdate: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -123,24 +122,13 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // handleUpdate submits the provided checkpoint to the witness and interprets any errors which may result.
 //
 // Returns an appropriate HTTP status code, response body, and Content Type representing the outcome.
-func (a *httpHandler) handleUpdate(ctx context.Context, logID string, origin string, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
-	trusted, updateErr := a.w.Update(ctx, logID, oldSize, newCP, proof)
-	// Whatever happened, we usually get the latest trusted CP from the witness (whether it's the old one or the one we've just updated to).
-	// If we get nothing at all, then something's gone quite wrong.
-	if trusted == nil {
-		return http.StatusInternalServerError, nil, "", fmt.Errorf("something went quite wrong during update: %v", updateErr)
-	}
-	// We'll need to use the old CP when sending responses, so parse it once here:
-	trustedCP, _, n, cpErr := log.ParseCheckpoint(trusted, origin, a.witVerifier)
-	if cpErr != nil {
-		return http.StatusInternalServerError, nil, "", fmt.Errorf("invalid stored checkpoint!: %v", cpErr)
-	}
-
+func (a *httpHandler) handleUpdate(ctx context.Context, origin string, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
+	sigs, trustedSize, updateErr := a.update(ctx, oldSize, newCP, proof)
 	// Finally, handle any "soft" error from the update:
 	if updateErr != nil {
 		switch updateErr {
 		case witness.ErrCheckpointStale:
-			return http.StatusConflict, []byte(fmt.Sprintf("%d\n", trustedCP.Size)), "text/x.tlog.size", nil
+			return http.StatusConflict, []byte(fmt.Sprintf("%d\n", trustedSize)), "text/x.tlog.size", nil
 		case witness.ErrUnknownLog:
 			return http.StatusNotFound, nil, "", nil
 		case witness.ErrNoValidSignature:
@@ -156,8 +144,7 @@ func (a *httpHandler) handleUpdate(ctx context.Context, logID string, origin str
 		}
 	}
 
-	body := []byte(fmt.Sprintf("— %s %s\n", n.Sigs[0].Name, n.Sigs[0].Base64))
-	return http.StatusOK, body, "", nil
+	return http.StatusOK, sigs, "", nil
 }
 
 // parseBody reads the incoming request and parses into constituent parts.
