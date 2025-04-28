@@ -22,6 +22,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"strings"
@@ -154,8 +155,12 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			c, f := c, f
 			// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
 			g.Go(func() error {
-				klog.Infof("Feeder %q goroutine started", c.Origin)
+				spreadDelay := time.Duration(rand.Int64N(int64(operatorConfig.FeedInterval)))
+				klog.Infof("Feeder %q goroutine will start after spread delay of %s", c.Origin, spreadDelay)
 				defer klog.Infof("Feeder %q goroutine done", c.Origin)
+
+				time.Sleep(spreadDelay)
+				klog.Infof("Feeder %q running", c.Origin)
 				return f(ctx, c, witness.Update, httpClient, operatorConfig.FeedInterval)
 			})
 		}
