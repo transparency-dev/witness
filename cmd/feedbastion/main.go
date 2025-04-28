@@ -24,10 +24,11 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/transparency-dev/witness/internal/config"
@@ -113,30 +114,25 @@ type bastionClient struct {
 	originByLogID map[string]string
 }
 
-// GetLatestCheckpoint returns the latest checkpoint the witness holds for the given logID.
-// Must return os.ErrNotExists if the logID is known, but it has no checkpoint for that log.
-func (b *bastionClient) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	// Unfortunately we don't have a way of getting this, so we'll just lie and pretend the witness has no checkpoints for this log.
-	return nil, os.ErrNotExist
-}
-
 // Update attempts to clock the witness forward for the given logID.
 // The latest signed checkpoint will be returned if this succeeds, or if the error is
 // http.ErrCheckpointTooOld. In all other cases no checkpoint should be expected.
 func (b *bastionClient) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
+	name, _, _ := strings.Cut(string(newCP), "\n")
+
 	// The request body MUST be a sequence of
 	// - a previous size line,
 	// - zero or more consistency proof lines,
 	// - and an empty line,
 	// - followed by a [checkpoint][].
-	body := "old 0\n"
+	body := fmt.Sprintf("old %d\n", oldSize)
 	for _, p := range proof {
 		body += base64.StdEncoding.EncodeToString(p) + "\n"
 	}
 	body += "\n"
 	body += string(newCP)
 
-	klog.V(1).Infof("sending:\n%s", body)
+	klog.V(1).Infof("%q: sending:\n%s", name, body)
 	resp, err := b.httpClient.Post(b.url, "", bytes.NewReader([]byte(body)))
 	if err != nil {
 		return nil, 0, err
@@ -149,11 +145,26 @@ func (b *bastionClient) Update(ctx context.Context, oldSize uint64, newCP []byte
 
 	rb, err := io.ReadAll(resp.Body)
 	if err != nil {
-		klog.Errorf("failed to read response body: %v", err)
+		klog.Errorf("❌ %q: failed to read response body: %v", name, err)
 	}
 
-	name, _, _ := strings.Cut(string(newCP), " ")
-	klog.Infof("%s: %v: %s", name, resp.Status, string(rb))
+	switch resp.StatusCode {
+	case http.StatusOK:
+		klog.Infof("✅ %s: updated with signature(s):\n%s", name, string(rb))
+	case http.StatusConflict:
+		msg := ""
+		if resp.Header.Get("Content-Type") == "text/x.tlog.size" {
+			size, err := strconv.Atoi(strings.TrimSpace(string(rb)))
+			if err != nil {
+				msg = fmt.Sprintf("Invalid size in body %q", string(rb))
+			} else {
+				msg = fmt.Sprintf("View stale, witness has checkpoint size %d (we have %d)", size, oldSize)
+			}
+		}
+		klog.Infof("🫣 %q: conflict: %s", name, msg)
+	default:
+		klog.Infof("❌ %q: status %d: %s", name, resp.StatusCode, string(rb))
+	}
 
 	return nil, 0, nil
 }
