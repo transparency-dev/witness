@@ -134,7 +134,11 @@ func fetch(ctx context.Context, c *http.Client, base *url.URL, path string) ([]b
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request to %q: %v", u.String(), err)
 	}
-	defer rsp.Body.Close()
+	defer func() {
+		if err := rsp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 
 	if rsp.StatusCode == 404 {
 		return nil, os.ErrNotExist

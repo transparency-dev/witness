@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
+	"k8s.io/klog/v2"
 )
 
 // HashLenBytes is the number of bytes in the SumDB hashes.
@@ -156,7 +157,11 @@ func (f *HTTPFetcher) GetData(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("GET %v: %v", target, resp.Status)
 	}

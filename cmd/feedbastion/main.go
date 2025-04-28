@@ -144,7 +144,11 @@ func (b *bastionClient) Update(ctx context.Context, logID string, oldSize uint64
 	if err != nil {
 		klog.Errorf("failed to read response body: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 	name := logID
 	if o, ok := b.originByLogID[logID]; ok {
 		name = o

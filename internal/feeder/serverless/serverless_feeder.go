@@ -29,6 +29,7 @@ import (
 	"github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"k8s.io/klog/v2"
 )
 
 // FeedLog periodically feeds checkpoints from the log to the witness.
@@ -96,7 +97,11 @@ func newFetcher(c *http.Client, root *url.URL) client.Fetcher {
 			if err != nil {
 				return nil, err
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					klog.Errorf("Failed to close response body: %v", err)
+				}
+			}()
 			return io.ReadAll(resp.Body)
 		}
 	case "file":

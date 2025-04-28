@@ -27,6 +27,7 @@ import (
 	"os"
 
 	wit_api "github.com/transparency-dev/witness/api"
+	"k8s.io/klog/v2"
 )
 
 // ErrCheckpointTooOld is returned if the checkpoint passed to Update needs to be updated.
@@ -61,7 +62,11 @@ func (w Witness) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("failed to do http request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 	if resp.StatusCode == 404 {
 		return nil, os.ErrNotExist
 	} else if resp.StatusCode != 200 {
@@ -96,7 +101,11 @@ func (w Witness) Update(ctx context.Context, logID string, cp []byte, proof [][]
 	if resp.Request.Method != http.MethodPut {
 		return nil, fmt.Errorf("PUT request to %q was converted to %s request to %q", u.String(), resp.Request.Method, resp.Request.URL)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %v", err)

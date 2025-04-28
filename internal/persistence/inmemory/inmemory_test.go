@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog/v2"
 )
 
 var nopClose = func() error { return nil }
@@ -52,7 +53,11 @@ func TestWriteOpsConcurrent(t *testing.T) {
 			if err != nil {
 				return fmt.Errorf("WriteOps %d: %v", i, err)
 			}
-			defer w.Close()
+			defer func() {
+				if err := w.Close(); err != nil {
+					klog.Errorf("Failed to close log state write ops: %v", err)
+				}
+			}()
 			if _, err := w.GetLatest(); err != nil {
 				if status.Code(err) != codes.NotFound {
 					return fmt.Errorf("GetLatest %d: %v", i, err)

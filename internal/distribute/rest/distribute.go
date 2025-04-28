@@ -131,7 +131,11 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if resp.Request.Method != http.MethodPut {
 		return fmt.Errorf("PUT request to %q was converted to %s request to %q", u.String(), resp.Request.Method, resp.Request.URL)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read body: %v", err)

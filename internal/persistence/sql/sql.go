@@ -22,6 +22,7 @@ import (
 	"github.com/transparency-dev/witness/internal/persistence"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog/v2"
 )
 
 // NewPersistence returns a persistence object that is backed by the SQL database.
@@ -49,7 +50,11 @@ func (p *sqlLogPersistence) Logs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			klog.Errorf("Failed to close rows: %v", err)
+		}
+	}()
 
 	var logs []string
 	for rows.Next() {
