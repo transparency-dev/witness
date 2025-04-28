@@ -280,6 +280,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 }
 
 // signChkpt adds the witness' signature to a checkpoint.
+//
 // Returns:
 // - A serialised signed note including new witness signatures.
 // - A serialised representation of just the witness signature line(s).
@@ -288,6 +289,16 @@ func (w *Witness) signChkpt(n *note.Note) ([]byte, []byte, error) {
 	// https://cs.opensource.google/go/x/mod/+/refs/tags/v0.24.0:sumdb/note/note.go;l=625-649
 
 	// Prepare signatures.
+	//
+	// We need to return both a full serialised signed note, as well as the just the
+	// signature lines we're adding - this is because we want to _store_ the full note, but
+	// the tlog-witness API requires that we only return the signature lines.
+	//
+	// Rather than using note.Sign, then running note.Open in order to get access to our
+	// signatures, we'll instead use our note.Signer(s) directly to sign the note message
+	// and then use the returned signature bytes to create both the serialised signed note
+	// as well as the serialised signature lines.
+
 	var sigs = bytes.Buffer{}
 	for _, s := range w.Signers {
 		name := s.Name()
@@ -296,11 +307,12 @@ func (w *Witness) signChkpt(n *note.Note) ([]byte, []byte, error) {
 			return nil, nil, errors.New("invalid signer")
 		}
 
-		sig, err := s.Sign([]byte(n.Text)) // buf holds n.Text
+		sig, err := s.Sign([]byte(n.Text))
 		if err != nil {
 			return nil, nil, err
 		}
 
+		// Create serialised signature line and append it to our sigs buffer:
 		var hbuf [4]byte
 		binary.BigEndian.PutUint32(hbuf[:], hash)
 		b64 := base64.StdEncoding.EncodeToString(append(hbuf[:], sig...))
@@ -310,12 +322,18 @@ func (w *Witness) signChkpt(n *note.Note) ([]byte, []byte, error) {
 		sigs.WriteString(b64)
 		sigs.WriteString("\n")
 
+		// Also create a new note.Signature and pop it into the note's Sigs list (this will cause
+		// the signature to be present in the output when we call note.Sign below.
 		n.Sigs = append(n.Sigs, note.Signature{Name: name, Hash: hash, Base64: b64})
 	}
+	// Serialise the full signed note by calling Sign.
+	// Note that we're not passing any signers here because we've already added signatures in the loop above, so
+	// this call becomes just a serialisation function.
 	signed, err := note.Sign(n)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return signed, sigs.Bytes(), nil
 }
 
