@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/witness"
@@ -93,69 +94,62 @@ func TestHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewVerifier: %v", err)
 	}
-	logID := "logID"
+	logID := log.ID(testCPOrigin)
 	logs := map[string]config.Log{
 		logID: config.Log{Origin: testCPOrigin},
 	}
 	for _, test := range []struct {
 		name string
 		// fake witness control
-		witnessResp []byte
-		witnessErr  error
+		witness *testWitness
 		// responses
 		wantBody        string
 		wantStatus      int
 		wantContentType string
 	}{
 		{
-			name:        "Accepted by witness",
-			witnessResp: []byte(testCP),
-			wantStatus:  200,
-			wantBody:    testCPSig,
+			name:       "Accepted by witness",
+			witness:    &testWitness{updateResponse: []byte(testCPSig)},
+			wantStatus: 200,
+			wantBody:   testCPSig,
 		}, {
 			name:            "ErrCheckpointStale",
-			witnessResp:     []byte(testCP),
-			witnessErr:      witness.ErrCheckpointStale,
+			witness:         &testWitness{updateErr: witness.ErrCheckpointStale, updateSize: testCPSize},
 			wantStatus:      http.StatusConflict,
 			wantContentType: "text/x.tlog.size",
 			wantBody:        fmt.Sprintf("%d\n", testCPSize),
 		}, {
-			name:        "ErrNoValidSignature",
-			witnessResp: []byte(testCP),
-			witnessErr:  witness.ErrNoValidSignature,
-			wantStatus:  http.StatusForbidden,
+			name:       "ErrNoValidSignature",
+			witness:    &testWitness{updateErr: witness.ErrNoValidSignature},
+			wantStatus: http.StatusForbidden,
 		}, {
-			name:        "ErrUnknownLog",
-			witnessResp: []byte(testCP),
-			witnessErr:  witness.ErrUnknownLog,
-			wantStatus:  http.StatusNotFound,
+			name:       "ErrUnknownLog",
+			witness:    &testWitness{updateErr: witness.ErrUnknownLog},
+			wantStatus: http.StatusNotFound,
 		}, {
-			name:        "ErrInvalidProof",
-			witnessResp: []byte(testCP),
-			witnessErr:  witness.ErrInvalidProof,
-			wantStatus:  http.StatusUnprocessableEntity,
+			name:       "ErrInvalidProof",
+			witness:    &testWitness{updateErr: witness.ErrInvalidProof},
+			wantStatus: http.StatusUnprocessableEntity,
 		}, {
-			name:        "ErrOldSizeInvalid",
-			witnessResp: []byte(testCP),
-			witnessErr:  witness.ErrOldSizeInvalid,
-			wantStatus:  http.StatusBadRequest,
+			name:       "ErrOldSizeInvalid",
+			witness:    &testWitness{updateErr: witness.ErrOldSizeInvalid},
+			wantStatus: http.StatusBadRequest,
 		}, {
-			name:        "ErrRootMismatch",
-			witnessResp: []byte(testCP),
-			witnessErr:  witness.ErrRootMismatch,
-			wantStatus:  http.StatusConflict,
+			name:       "ErrRootMismatch",
+			witness:    &testWitness{updateErr: witness.ErrRootMismatch},
+			wantStatus: http.StatusConflict,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			a := httpHandler{
-				w:           &testWitness{updateResponse: test.witnessResp, updateErr: test.witnessErr},
+				update:      test.witness.Update,
 				witVerifier: v,
 				logs:        logs,
 			}
 			if err != nil {
 				t.Fatalf("NewRequest: %v", err)
 			}
-			sc, body, ct, err := a.handleUpdate(context.Background(), "logID", testCPOrigin, 0, []byte(testCP), [][]byte{})
+			sc, body, ct, err := a.handleUpdate(context.Background(), testCPOrigin, 0, []byte(testCP), [][]byte{})
 			if err != nil {
 				t.Fatalf("handleUpdate: %v", err)
 			}
@@ -176,6 +170,7 @@ type testWitness struct {
 	latestCPErr    error
 	latestCP       []byte
 	updateErr      error
+	updateSize     uint64
 	updateResponse []byte
 }
 
@@ -183,8 +178,8 @@ func (tw *testWitness) GetLatestCheckpoint(ctx context.Context, logID string) ([
 	return tw.latestCP, tw.latestCPErr
 }
 
-func (tw *testWitness) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
-	return tw.updateResponse, tw.updateErr
+func (tw *testWitness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
+	return tw.updateResponse, tw.updateSize, tw.updateErr
 }
 
 func d64(t *testing.T, s string) []byte {

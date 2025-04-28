@@ -177,7 +177,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, operatorConfig.WitnessVerifier)
+		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier)
 	}
 
 	srv := http.Server{
@@ -202,9 +202,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs []config.Log, distributorBaseURL string, bw witnessAdapter, witnessV note.Verifier) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs []config.Log, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
 	g.Go(func() error {
-		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, bw)
+		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}

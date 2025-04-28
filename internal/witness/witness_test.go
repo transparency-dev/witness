@@ -215,7 +215,7 @@ func TestGetChkpt(t *testing.T) {
 				}
 			}
 			// Try to get the latest checkpoint.
-			cosigned, err := w.GetCheckpoint(log.ID(test.queryOrigin))
+			cosigned, err := w.GetCheckpoint(ctx, log.ID(test.queryOrigin))
 			if !test.wantThere && err == nil {
 				t.Fatalf("returned a checkpoint but shouldn't have")
 			}
