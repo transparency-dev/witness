@@ -75,7 +75,6 @@ func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.
 			h := h
 			r = append(r, h[:])
 		}
-		klog.V(1).Infof("Fetched proof from %d -> %d: %x", from, to.Size, r)
 		return r, nil
 	}
 

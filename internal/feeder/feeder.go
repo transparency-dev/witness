@@ -132,8 +132,6 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 	// log any error messages directly in here before returning the error, as
 	// the backoff util doesn't seem to log them itself.
 	submitOp := func() ([]byte, error) {
-		logName := opts.LogSigVerifier.Name()
-
 		var err error
 		var conP [][]byte
 		if f.oldSize > cpSubmit.Size {
@@ -148,11 +146,12 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 			klog.Warning(e.Error())
 			return nil, e
 		}
-		klog.V(2).Infof("%q %d -> %d proof: %x", logName, f.oldSize, cpSubmit.Size, conP)
+		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, f.oldSize, cpSubmit.Size, conP)
 
 		witnessCp, actualSize, err := opts.Update(ctx, f.oldSize, cpRaw, conP)
 		switch {
 		case errors.Is(err, witness.ErrCheckpointStale):
+			klog.V(2).Infof("%q: %d is stale, bumping to %d: %x", cpSubmit.Origin, f.oldSize, cpSubmit.Size, conP)
 			f.oldSize = actualSize
 			return nil, backoff.RetryAfter(1)
 		case err != nil:
@@ -160,7 +159,12 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 			klog.Warning(e.Error())
 			return nil, e
 		default:
-			klog.V(1).Infof("\"%s: %s\" Updated witness - @%d → @%d: %x", logName, cpSubmit.Origin, f.oldSize, cpSubmit.Size, cpSubmit.Hash)
+			if f.oldSize == cpSubmit.Size {
+				klog.V(1).Infof("%q: Refreshed withess - @%d: %x", cpSubmit.Origin, cpSubmit.Size, cpSubmit.Hash)
+
+			} else {
+				klog.V(1).Infof("%q: Updated witness - @%d → @%d: %x", cpSubmit.Origin, f.oldSize, cpSubmit.Size, cpSubmit.Hash)
+			}
 			f.oldSize = cpSubmit.Size
 		}
 		return witnessCp, nil
