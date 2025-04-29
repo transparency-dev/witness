@@ -98,13 +98,20 @@ go run github.com/transparency-dev/witness/cmd/omniwitness@main --alsologtostder
 
 ## Testing
 
-If all is well then after a few minutes you should be able to see witnessed checkpoints locally:
+### Interactively
+
+You can use the [`/cmd/feedbastion`](/cmd/feedbastion) command to fetch checkpoints and send them to your
+witness instance by running the following command:
 
 ```
-# List all of the known logs
-curl -i http://localhost:8100/witness/v0/logs
-# Take a look at one of them
-curl -i http://localhost:8100/witness/v0/logs/bdc0d5078d38fc2b9491df373eb7c0d3365bfe661c83edc89112fd38719dc3a0/checkpoint
+# Change the --bastion_url value to point to your witness instance if necessary
+go run github.com/transparency-dev/witness/cmd/feedbastion@main --alsologtostderr --bastion_url=http://localhost:8080
 ```
 
-If you set up the distributors correctly, then you should see pull requests being raised against the GitHub distributors.
+### Passively 
+
+If all is well then after a few minutes you should see information printed in the logs of the above command
+about checkpoints being witnessed.
+
+If you've set up a REST distributor correctly, you should also see the witnessed checkpoints being pushed
+there too.

@@ -64,13 +64,7 @@ The witness is an HTTP service that stores checkpoints it has seen from
 different verifiable logs in a sqlite database.  This is a very lightweight way
 to help detect or even prevent split-view attacks.
 
-The witness provides three API endpoints (as defined in [api/http.go](api/http.go)):
-- `/witness/v0/logs` returns a list of all logs for which the witness is
-  currently storing a checkpoint.
-- `/witness/v0/logs/<logid>/update` acts to update the checkpoint stored for 
-  `logid`.
-- `/witness/v0/logs/<logid>/checkpoint` returns the latest checkpoint for
-  `logid`, signed by the witness.
+The HTTP service implements the https://c2sp.org/tlog-witness API.
 
 ## Running the witness
 

@@ -24,15 +24,15 @@ import (
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 )
 
-func TestGetLogs(t *testing.T) {
-	ptest.TestGetLogs(t, func() (persistence.LogStatePersistence, func() error) {
+func TestLogs(t *testing.T) {
+	ptest.TestLogs(t, func() (persistence.LogStatePersistence, func() error) {
 		db, close := mustCreateDB(t)
 		return NewPersistence(db), close
 	})
 }
 
-func TestWriteOps(t *testing.T) {
-	ptest.TestWriteOps(t, func() (persistence.LogStatePersistence, func() error) {
+func TestUpdate(t *testing.T) {
+	ptest.TestUpdate(t, func() (persistence.LogStatePersistence, func() error) {
 		db, close := mustCreateDB(t)
 		return NewPersistence(db), close
 	})

@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -41,12 +40,9 @@ const (
 	HTTPCheckpointByWitness = "/distributor/v0/logs/%s/byWitness/%s/checkpoint"
 )
 
-// Witness describes the operations the redistributor needs to interact with a witness.
-type Witness interface {
-	// GetLatestCheckpoint returns the latest checkpoint the witness holds for the given logID.
-	// Must return os.ErrNotExists if the logID is known, but it has no checkpoint for that log.
-	GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error)
-}
+// GetLatestCheckpointFn is the signature of a function which returns the latest checkpoint the witness holds for the given logID.
+// Implementations must return os.ErrNotExists if the logID is known, but it has no checkpoint for that log.
+type GetLatestCheckpointFn func(ctx context.Context, logID string) ([]byte, error)
 
 var (
 	doOnce                 sync.Once
@@ -64,24 +60,24 @@ func initMetrics() {
 }
 
 // NewDistributor creates a new Distributor from the given configuration.
-func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, wit Witness) (*Distributor, error) {
+func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, getLatest GetLatestCheckpointFn) (*Distributor, error) {
 	initMetrics()
 	return &Distributor{
-		baseURL: baseURL,
-		client:  client,
-		logs:    logs,
-		witSigV: witSigV,
-		witness: wit,
+		baseURL:     baseURL,
+		client:      client,
+		logs:        logs,
+		getLatest:   getLatest,
+		witnessName: witSigV.Name(),
 	}, nil
 }
 
 // Distributor distributes checkpoints to a REST API.
 type Distributor struct {
-	baseURL string
-	client  *http.Client
-	logs    []config.Log
-	witSigV note.Verifier
-	witness Witness
+	baseURL     string
+	client      *http.Client
+	logs        []config.Log
+	getLatest   GetLatestCheckpointFn
+	witnessName string
 }
 
 // DistributeOnce polls the witness for all logs and pushes the latest checkpoint to the
@@ -104,19 +100,12 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	logID := l.ID
 	counterDistRestAttempt.Inc(logID)
 
-	wRaw, err := d.witness.GetLatestCheckpoint(ctx, logID)
+	wRaw, err := d.getLatest(ctx, logID)
 	if err != nil {
-		return fmt.Errorf("GetLatestCheckpoint(): %v", err)
-	}
-	_, _, witnessNote, err := log.ParseCheckpoint(wRaw, l.Origin, l.Verifier, d.witSigV)
-	if err != nil {
-		return fmt.Errorf("couldn't parse witnessed checkpoint: %v", err)
-	}
-	if nWitSigs, want := len(witnessNote.Sigs)-1, 1; nWitSigs != want {
-		return fmt.Errorf("checkpoint has %d witness sigs, want %d", nWitSigs, want)
+		return fmt.Errorf("GetLatestFn(%s): %v", logID, err)
 	}
 
-	u, err := url.Parse(d.baseURL + fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witSigV.Name())))
+	u, err := url.Parse(d.baseURL + fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witnessName)))
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %v", err)
 	}

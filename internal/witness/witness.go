@@ -20,9 +20,14 @@ package witness
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle"
@@ -30,8 +35,6 @@ import (
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
 
@@ -116,165 +119,210 @@ func New(wo Opts) (*Witness, error) {
 	}, nil
 }
 
-// parse verifies the checkpoint under the appropriate keys for logID and returns
+// parse verifies the checkpoint under the appropriate key for the origin and returns
 // the parsed checkpoint and the note itself.
-func (w *Witness) parse(chkptRaw []byte, logID string) (*log.Checkpoint, *note.Note, error) {
+func (w *Witness) parse(chkptRaw []byte) (*log.Checkpoint, *note.Note, LogInfo, error) {
+	origin, _, found := strings.Cut(string(chkptRaw), "\n")
+	if !found {
+		return nil, nil, LogInfo{}, errors.New("invalid checkpoint")
+	}
+	logID := log.ID(origin)
 	logInfo, ok := w.Logs[logID]
 	if !ok {
-		return nil, nil, ErrUnknownLog
+		return nil, nil, LogInfo{}, ErrUnknownLog
 	}
 	cp, _, n, err := log.ParseCheckpoint(chkptRaw, logInfo.Origin, logInfo.SigV)
-	return cp, n, err
-}
-
-// GetLogs returns a list of all logs the witness is aware of.
-func (w *Witness) GetLogs() ([]string, error) {
-	return w.lsp.Logs()
+	return cp, n, logInfo, err
 }
 
 // GetCheckpoint gets a checkpoint for a given log, which is consistent with all
 // other checkpoints for the same log signed by this witness.
-func (w *Witness) GetCheckpoint(logID string) ([]byte, error) {
-	read, err := w.lsp.ReadOps(logID)
-	if err != nil {
-		return nil, fmt.Errorf("ReadOps(): %v", err)
-	}
-	chkpt, err := read.GetLatest()
-	if err != nil {
-		return nil, err
-	}
-	return chkpt, nil
+//
+// Returns a nil checkpoint if no checkpoint is stored for the given logID.
+func (w *Witness) GetCheckpoint(_ context.Context, logID string) ([]byte, error) {
+	return w.lsp.Latest(logID)
 }
 
 // Update updates the latest checkpoint if nextRaw is consistent with the current
 // latest one for this log.
 //
-// It returns the latest cosigned checkpoint held by the witness (which may be the provided checkpoint
-// if it's accepted).
-func (w *Witness) Update(ctx context.Context, logID string, oldSize uint64, nextRaw []byte, cProof [][]byte) ([]byte, error) {
-	// If we don't witness this log then no point in going further.
-	logInfo, ok := w.Logs[logID]
-	if !ok {
-		return nil, ErrUnknownLog
-	}
-	counterUpdateAttempt.Inc(logID)
+// The values returned depend on whether or not the new checkpoint is accepted, and
+// if not, the reason it was rejected. This can be determined through the error:
+//
+// - no error: The checkpoint was accepted, and a serialised note-signature is returned.
+// - ErrCheckpointStale or ErrOldSizeInvalid: the presented checkpoint is out of date, the size of the current checkpoint is returned.
+// - Any other error, no supporting values are returned.
+func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cProof [][]byte) ([]byte, uint64, error) {
 	// Check the signatures on the raw checkpoint and parse it
 	// into the log.Checkpoint format.
 	//
 	// SPEC: The witness MUST verify the checkpoint signature against the public key(s) it trusts for the
 	//       checkpoint origin, and it MUST ignore signatures from unknown keys.
-	next, nextNote, err := w.parse(nextRaw, logID)
+	next, nextNote, logInfo, err := w.parse(nextRaw)
 	if err != nil {
 		// TODO(al): Technically this could also be that the checkpoint body is invalid.
-		return nil, ErrNoValidSignature
+		return nil, 0, ErrNoValidSignature
 	}
-	// Get the latest one for the log because we don't want consistency proofs
+	logID := log.ID(logInfo.Origin)
+	counterUpdateAttempt.Inc(logID)
+
+	var retSigs []byte
+	var retSize uint64
+
+	// Get the latest checkpoint for the log because we don't want consistency proofs
 	// with respect to older checkpoints.  Bind this all in a transaction to
 	// avoid race conditions when updating the database.
-	write, err := w.lsp.WriteOps(logID)
-	if err != nil {
-		return nil, fmt.Errorf("WriteOps(%v): %v", logID, err)
-	}
-	// The WriteOps contract is that Close must always be called.
-	defer func() {
-		if err := write.Close(); err != nil {
-			klog.Errorf("Failed to close log state write ops: %v", err)
-		}
-	}()
-
-	// Get the latest checkpoint.
-	prevRaw, err := write.GetLatest()
-	if err != nil {
+	err = w.lsp.Update(logID, func(prevRaw []byte) ([]byte, error) {
 		// If there was nothing stored already then treat this new
 		// checkpoint as trust-on-first-use (TOFU).
-		if status.Code(err) == codes.NotFound {
+		if prevRaw == nil {
 			// Store a witness cosigned version of the checkpoint.
-			signed, err := w.signChkpt(nextNote)
+			signed, sigs, err := w.signChkpt(nextNote)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
+			counterUpdateSuccess.Inc(logID)
 
-			if err := write.Set(signed); err != nil {
-				return nil, fmt.Errorf("couldn't set TOFU checkpoint: %v", err)
+			retSize, retSigs = 0, sigs
+			return signed, nil
+		}
+
+		prev, _, _, err := w.parse(prevRaw)
+		if err != nil {
+			retSize, retSigs = 0, nil
+			return nil, fmt.Errorf("couldn't parse stored checkpoint: %v", err)
+		}
+
+		// SPEC: The old size MUST be equal to or lower than the (submitted) checkpoint size.
+		if oldSize > next.Size {
+			retSize, retSigs = prev.Size, nil
+			return nil, ErrOldSizeInvalid
+		}
+		// SPEC: The witness MUST check that the old size matches the size of the latest checkpoint it cosigned
+		//       for the checkpoint's origin (or zero if it never cosigned a checkpoint for that origin)
+		if oldSize != prev.Size {
+			retSize, retSigs = prev.Size, nil
+			return nil, ErrCheckpointStale
+		}
+		// SPEC: The old size MUST be equal to or lower than the checkpoint size.
+		if next.Size < prev.Size {
+			retSize, retSigs = prev.Size, nil
+			return nil, ErrOldSizeInvalid
+		}
+		// SPEC:  If the old size matches the checkpoint size, the witness MUST check that the root hashes are
+		//        also identical.
+		if next.Size == prev.Size {
+			if !bytes.Equal(next.Hash, prev.Hash) {
+				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logID, prev, next)
+				counterInconsistentCheckpoints.Inc(logID)
+
+				retSize, retSigs = 0, nil
+				return nil, ErrRootMismatch
 			}
+			// This used to short-circuit here to save work.
+			// However, having the most recently witnessed timestamp available is beneficial to demonstrate freshness.
+		}
+		// Checkpoints of size 0 are really placeholders and consistency proofs can't be performed.
+		// If we initialized on a tree size of 0, then we simply ratchet forward and effectively TOFU the new checkpoint.
+		if prev.Size == 0 {
+			// SPEC:  The proof MUST be empty if the old size is zero.
+			if len(cProof) > 0 {
+				retSize, retSigs = 0, nil
+				return nil, ErrInvalidProof
+			}
+			signed, sigs, err := w.signChkpt(nextNote)
+			if err != nil {
+				retSize, retSigs = 0, nil
+				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
+			}
+			retSize, retSigs = 0, sigs
 			counterUpdateSuccess.Inc(logID)
 			return signed, nil
 		}
-		return nil, fmt.Errorf("couldn't retrieve latest checkpoint: %v", err)
-	}
-	prev, _, err := w.parse(prevRaw, logID)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't parse stored checkpoint: %v", err)
-	}
 
-	// SPEC: The old size MUST be equal to or lower than the (submitted) checkpoint size.
-	if oldSize > next.Size {
-		return prevRaw, ErrOldSizeInvalid
-	}
-	// SPEC: The witness MUST check that the old size matches the size of the latest checkpoint it cosigned
-	//       for the checkpoint's origin (or zero if it never cosigned a checkpoint for that origin)
-	if oldSize != prev.Size {
-		return prevRaw, ErrCheckpointStale
-	}
-	// SPEC: The old size MUST be equal to or lower than the checkpoint size.
-	if next.Size < prev.Size {
-		return nil, ErrOldSizeInvalid
-	}
-	// SPEC:  If the old size matches the checkpoint size, the witness MUST check that the root hashes are
-	//        also identical.
-	if next.Size == prev.Size {
-		if !bytes.Equal(next.Hash, prev.Hash) {
-			// Code analysis complains about the next line, but it's fine; we've already bailed out
-			// further up the method if the log ID was not found.
-			klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logID, prev, next) // lgtm [go/log-injection]
-			counterInconsistentCheckpoints.Inc(logID)
-			return prevRaw, ErrRootMismatch
+		// The only remaining option is next.Size > prev.Size. This might be
+		// valid so we verify the consistency proofs.
+		if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
+			// Complain if the checkpoints aren't consistent.
+			counterInvalidConsistency.Inc(logID)
+			return nil, ErrInvalidProof
 		}
-		// This used to short-circuit here to save work.
-		// However, having the most recently witnessed timestamp available is beneficial to demonstrate freshness.
-	}
-	// Checkpoints of size 0 are really placeholders and consistency proofs can't be performed.
-	// If we initialized on a tree size of 0, then we simply ratchet forward and effectively TOFU the new checkpoint.
-	if next.Size == 0 {
-		// SPEC:  The proof MUST be empty if the old size is zero.
-		if len(cProof) > 0 {
-			return nil, fmt.Errorf("oldSize=0 but non-zero proof supplied")
-		}
-		signed, err := w.signChkpt(nextNote)
+		// If the consistency proof is good we store the witness cosigned nextRaw.
+		signed, sigs, err := w.signChkpt(nextNote)
 		if err != nil {
+			retSize, retSigs = 0, nil
 			return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 		}
-		if err := write.Set(signed); err != nil {
-			return nil, fmt.Errorf("couldn't set first non-zero checkpoint: %v", err)
-		}
-		counterUpdateSuccess.Inc(logID)
+		retSize, retSigs = 0, sigs
 		return signed, nil
+	})
+	if err == nil {
+		counterUpdateSuccess.Inc(logID)
 	}
 
-	// The only remaining option is next.Size > prev.Size. This might be
-	// valid so we verify the consistency proofs.
-	if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
-		// Complain if the checkpoints aren't consistent.
-		counterInvalidConsistency.Inc(logID)
-		return prevRaw, ErrInvalidProof
-	}
-	// If the consistency proof is good we store the witness cosigned nextRaw.
-	signed, err := w.signChkpt(nextNote)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
-	}
-	if err := write.Set(signed); err != nil {
-		return nil, fmt.Errorf("failed to store new checkpoint: %v", err)
-	}
-	counterUpdateSuccess.Inc(logID)
-	return signed, nil
+	return retSigs, retSize, err
 }
 
 // signChkpt adds the witness' signature to a checkpoint.
-func (w *Witness) signChkpt(n *note.Note) ([]byte, error) {
-	cosigned, err := note.Sign(n, w.Signers...)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't sign checkpoint: %v", err)
+//
+// Returns:
+// - A serialised signed note including new witness signatures.
+// - A serialised representation of just the witness signature line(s).
+func (w *Witness) signChkpt(n *note.Note) ([]byte, []byte, error) {
+	// Code below is a lightly tweaked snippet from sumdb/note/note.go
+	// https://cs.opensource.google/go/x/mod/+/refs/tags/v0.24.0:sumdb/note/note.go;l=625-649
+
+	// Prepare signatures.
+	//
+	// We need to return both a full serialised signed note, as well as the just the
+	// signature lines we're adding - this is because we want to _store_ the full note, but
+	// the tlog-witness API requires that we only return the signature lines.
+	//
+	// Rather than using note.Sign, then running note.Open in order to get access to our
+	// signatures, we'll instead use our note.Signer(s) directly to sign the note message
+	// and then use the returned signature bytes to create both the serialised signed note
+	// as well as the serialised signature lines.
+
+	var sigs = bytes.Buffer{}
+	for _, s := range w.Signers {
+		name := s.Name()
+		hash := s.KeyHash()
+		if !isValidSignerName(name) {
+			return nil, nil, errors.New("invalid signer")
+		}
+
+		sig, err := s.Sign([]byte(n.Text))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Create serialised signature line and append it to our sigs buffer:
+		var hbuf [4]byte
+		binary.BigEndian.PutUint32(hbuf[:], hash)
+		b64 := base64.StdEncoding.EncodeToString(append(hbuf[:], sig...))
+		sigs.WriteString("— ")
+		sigs.WriteString(name)
+		sigs.WriteString(" ")
+		sigs.WriteString(b64)
+		sigs.WriteString("\n")
+
+		// Also create a new note.Signature and pop it into the note's Sigs list (this will cause
+		// the signature to be present in the output when we call note.Sign below.
+		n.Sigs = append(n.Sigs, note.Signature{Name: name, Hash: hash, Base64: b64})
 	}
-	return cosigned, nil
+	// Serialise the full signed note by calling Sign.
+	// Note that we're not passing any signers here because we've already added signatures in the loop above, so
+	// this call becomes just a serialisation function.
+	signed, err := note.Sign(n)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return signed, sigs.Bytes(), nil
+}
+
+// isValiSignerdName reports whether name is valid.
+// It must be non-empty and not have any Unicode spaces or pluses.
+func isValidSignerName(name string) bool {
+	return name != "" && utf8.ValidString(name) && strings.IndexFunc(name, unicode.IsSpace) < 0 && !strings.Contains(name, "+")
 }

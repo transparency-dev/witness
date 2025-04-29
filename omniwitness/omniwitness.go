@@ -20,29 +20,26 @@ package omniwitness
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
-	ihttp "github.com/transparency-dev/witness/internal/http"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
+	"github.com/transparency-dev/witness/internal/bastion"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
-	"github.com/transparency-dev/witness/internal/feeder"
-	"github.com/transparency-dev/witness/internal/feeder/bastion"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -53,14 +50,6 @@ import (
 // LogStatePersistence describes functionality the omniwitness requires
 // in order to persist its view of log state.
 type LogStatePersistence = persistence.LogStatePersistence
-
-// LogStateReadOps provides read-only operations on the stored state for
-// a given log.
-type LogStateReadOps = persistence.LogStateReadOps
-
-// LogStateWriteOps provides write operations on the stored state for
-// a given log.
-type LogStateWriteOps = persistence.LogStateWriteOps
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
@@ -80,8 +69,9 @@ type OperatorConfig struct {
 	// BastionKey is the key used to authenticate the witness to the bastion host, if
 	// a BastionAddr is configured.
 	BastionKey ed25519.PrivateKey
-	// BastionRateLimit is the maximum number of bastion requests to serve per second.
-	BastionRateLimit float64
+
+	// RateLimit is the maximum number of update requests to serve per second.
+	RateLimit float64
 
 	// RestDistributorBaseURL is optional, and if provided gives the base URL
 	// to a distributor that takes witnessed checkpoints via a PUT request.
@@ -93,11 +83,12 @@ type OperatorConfig struct {
 }
 
 // logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, feeder.Witness, *http.Client, time.Duration) error
+type logFeeder func(context.Context, config.Log, feeder.UpdateFn, *http.Client, time.Duration) error
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
+	initMetrics()
 	// This error group will be used to run all top level processes.
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
@@ -135,12 +126,20 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		return fmt.Errorf("failed to create witness: %v", err)
 	}
 
-	if operatorConfig.DistributeInterval == 0 {
-		operatorConfig.DistributeInterval = defaultDistributeInterval
+	logsByID := make(map[string]config.Log)
+	for _, l := range logs {
+		logsByID[l.ID] = l
 	}
 
-	bw := witnessAdapter{
-		w: witness,
+	handler := &httpHandler{
+		update:      witness.Update,
+		logs:        logsByID,
+		witVerifier: operatorConfig.WitnessVerifier,
+		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit)),
+	}
+
+	if operatorConfig.DistributeInterval == 0 {
+		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
 
 	if operatorConfig.FeedInterval > 0 {
@@ -148,39 +147,39 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			c, f := c, f
 			// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
 			g.Go(func() error {
-				klog.Infof("Feeder %q goroutine started", c.Origin)
+				spreadDelay := time.Duration(rand.Int64N(int64(operatorConfig.FeedInterval)))
+				klog.Infof("Feeder %q goroutine will start after spread delay of %s", c.Origin, spreadDelay)
 				defer klog.Infof("Feeder %q goroutine done", c.Origin)
-				return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
+
+				time.Sleep(spreadDelay)
+				klog.Infof("Feeder %q running", c.Origin)
+				return f(ctx, c, witness.Update, httpClient, operatorConfig.FeedInterval)
 			})
 		}
 	}
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
+		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
 		bc := bastion.Config{
 			Addr:            operatorConfig.BastionAddr,
 			Logs:            logs,
 			BastionKey:      operatorConfig.BastionKey,
 			WitnessVerifier: operatorConfig.WitnessVerifier,
-			Limits: bastion.RequestLimits{
-				TotalPerSecond: rate.Limit(operatorConfig.BastionRateLimit),
-			}}
+		}
 		g.Go(func() error {
 			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
 			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)
-			return bastion.FeedBastion(ctx, bc, bw)
+			return bastion.Register(ctx, bc, handler)
 		})
 	}
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, operatorConfig.WitnessVerifier)
+		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier)
 	}
 
-	r := mux.NewRouter()
-	s := ihttp.NewServer(witness)
-	s.RegisterHandlers(r)
 	srv := http.Server{
-		Handler:      r,
+		Handler:      handler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  5 * time.Minute,
@@ -201,9 +200,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs []config.Log, distributorBaseURL string, bw witnessAdapter, witnessV note.Verifier) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs []config.Log, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
 	g.Go(func() error {
-		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, bw)
+		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}
@@ -282,25 +281,4 @@ func ParseFeeder(f string) (Feeder, error) {
 		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
 	}
 	return value, nil
-}
-
-// witnessAdapter binds the internal witness implementation to the feeder interface.
-// TODO(mhutchinson): Can we fix the difference between the API on the client and impl
-// so they both have the same contract?
-type witnessAdapter struct {
-	w *witness.Witness
-}
-
-func (w witnessAdapter) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	cp, err := w.w.GetCheckpoint(logID)
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, os.ErrNotExist
-		}
-	}
-	return cp, err
-}
-
-func (w witnessAdapter) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
-	return w.w.Update(ctx, logID, oldSize, newCP, proof)
 }

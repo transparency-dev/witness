@@ -20,8 +20,6 @@ import (
 	"fmt"
 
 	"github.com/transparency-dev/witness/internal/persistence"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
 
@@ -71,52 +69,39 @@ func (p *sqlLogPersistence) Logs() ([]string, error) {
 	return logs, nil
 }
 
-func (p *sqlLogPersistence) ReadOps(logID string) (persistence.LogStateReadOps, error) {
-	return &reader{
-		logID: logID,
-		db:    p.db,
-	}, nil
+func (p *sqlLogPersistence) Latest(logID string) ([]byte, error) {
+	return getLatestCheckpoint(p.db.QueryRow, logID)
+
 }
 
-func (p *sqlLogPersistence) WriteOps(logID string) (persistence.LogStateWriteOps, error) {
+func (p *sqlLogPersistence) Update(logID string, f persistence.UpdateFn) error {
 	tx, err := p.db.Begin()
 	if err != nil {
-		return nil, fmt.Errorf("tx.Begin(): %v", err)
+		return err
 	}
-	return &writer{
-		logID: logID,
-		tx:    tx,
-	}, nil
-}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-type reader struct {
-	logID string
-	db    *sql.DB
-}
-
-func (r *reader) GetLatest() ([]byte, error) {
-	return getLatestCheckpoint(r.db.QueryRow, r.logID)
-}
-
-type writer struct {
-	logID string
-	tx    *sql.Tx
-}
-
-func (w *writer) GetLatest() ([]byte, error) {
-	return getLatestCheckpoint(w.tx.QueryRow, w.logID)
-}
-
-func (w *writer) Set(c []byte) error {
-	_, err := w.tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, w.logID, c)
+	current, err := getLatestCheckpoint(tx.QueryRow, logID)
 	if err != nil {
+		return err
+	}
+	updated, err := f(current)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, logID, updated); err != nil {
 		return fmt.Errorf("Exec(): %v", err)
 	}
-	return w.tx.Commit()
-}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 
-func (w *writer) Close() error {
-	return w.tx.Rollback()
+	tx = nil
+	return nil
 }
 
 func getLatestCheckpoint(queryRow func(query string, args ...interface{}) *sql.Row, logID string) ([]byte, error) {
@@ -127,7 +112,7 @@ func getLatestCheckpoint(queryRow func(query string, args ...interface{}) *sql.R
 	var chkpt []byte
 	if err := row.Scan(&chkpt); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, status.Errorf(codes.NotFound, "no checkpoint for log %q", logID)
+			return nil, nil
 		}
 		return nil, err
 	}
