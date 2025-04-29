@@ -23,8 +23,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/witness"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
 
@@ -47,7 +45,10 @@ func (s *Server) getCheckpoint(w http.ResponseWriter, r *http.Request) {
 	// Get the signed checkpoint from the witness.
 	chkpt, err := s.w.GetCheckpoint(logID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to get checkpoint: %v", err), httpForCode(status.Code(err)))
+		http.Error(w, fmt.Sprintf("failed to get checkpoint: %v", err), http.StatusInternalServerError)
+		return
+	} else if chkpt == nil {
+		http.Error(w, "unknown log", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -79,17 +80,4 @@ func (s *Server) RegisterHandlers(r *mux.Router) {
 	logStr := "{logid:[a-zA-Z0-9-]+}"
 	r.HandleFunc(fmt.Sprintf(api.HTTPGetCheckpoint, logStr), s.getCheckpoint).Methods(http.MethodGet)
 	r.HandleFunc(api.HTTPGetLogs, s.getLogs).Methods(http.MethodGet)
-}
-
-func httpForCode(c codes.Code) int {
-	switch c {
-	case codes.AlreadyExists:
-		return http.StatusConflict
-	case codes.NotFound:
-		return http.StatusNotFound
-	case codes.FailedPrecondition, codes.InvalidArgument, codes.Unauthenticated:
-		return http.StatusBadRequest
-	default:
-		return http.StatusInternalServerError
-	}
 }

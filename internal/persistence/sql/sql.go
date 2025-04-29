@@ -71,7 +71,6 @@ func (p *sqlLogPersistence) Logs() ([]string, error) {
 
 func (p *sqlLogPersistence) Latest(logID string) ([]byte, error) {
 	return getLatestCheckpoint(p.db.QueryRow, logID)
-
 }
 
 func (p *sqlLogPersistence) Update(logID string, f persistence.UpdateFn) error {

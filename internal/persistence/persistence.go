@@ -37,7 +37,7 @@ type LogStatePersistence interface {
 	// should return the serialised form of the updated checkpoint, or an
 	// error.
 	//
-	// There is no requirement that the provuided ID is present in Logs(); if
+	// There is no requirement that the provided ID is present in Logs(); if
 	// the ID is not there, and this operation succeeds in committing
 	// a checkpoint, then Logs() will return the new ID afterwards.
 	Update(logID string, f UpdateFn) error

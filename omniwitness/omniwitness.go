@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -35,8 +34,6 @@ import (
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
@@ -53,14 +50,6 @@ import (
 // LogStatePersistence describes functionality the omniwitness requires
 // in order to persist its view of log state.
 type LogStatePersistence = persistence.LogStatePersistence
-
-// LogStateReadOps provides read-only operations on the stored state for
-// a given log.
-type LogStateReadOps = persistence.LogStateReadOps
-
-// LogStateWriteOps provides write operations on the stored state for
-// a given log.
-type LogStateWriteOps = persistence.LogStateWriteOps
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
@@ -291,14 +280,10 @@ type witnessAdapter struct {
 	w *witness.Witness
 }
 
+// GetLatestCheckpoint returns the latest stored checkpoint for the given log ID, or nil if
+// there is no such checkpoint.
 func (w witnessAdapter) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	cp, err := w.w.GetCheckpoint(logID)
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, os.ErrNotExist
-		}
-	}
-	return cp, err
+	return w.w.GetCheckpoint(logID)
 }
 
 func (w witnessAdapter) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
