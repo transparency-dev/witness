@@ -65,7 +65,9 @@ type httpHandler struct {
 
 // ServeHTTP is a http.Handler which speaks the tlog-witness protocol.
 func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() {
+		_ = r.Body.Close()
+	}()
 	counterHTTPIncomingRequest.Inc()
 
 	if !a.limiter.Allow() {
