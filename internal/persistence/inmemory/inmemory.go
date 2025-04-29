@@ -16,31 +16,23 @@
 package inmemory
 
 import (
-	"fmt"
-	"reflect"
 	"sync"
 
 	"github.com/transparency-dev/witness/internal/persistence"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // NewPersistence returns a persistence object that lives only in memory.
 func NewPersistence() persistence.LogStatePersistence {
 	return &inMemoryPersistence{
-		checkpoints: make(map[string]checkpointState),
+		checkpoints: make(map[string][]byte),
 	}
-}
-
-type checkpointState struct {
-	rawChkpt []byte
 }
 
 type inMemoryPersistence struct {
 	// mu allows checkpoints to be read concurrently, but
 	// exclusively locked for writing.
 	mu          sync.RWMutex
-	checkpoints map[string]checkpointState
+	checkpoints map[string][]byte
 }
 
 func (p *inMemoryPersistence) Init() error {
@@ -57,78 +49,20 @@ func (p *inMemoryPersistence) Logs() ([]string, error) {
 	return res, nil
 }
 
-func (p *inMemoryPersistence) ReadOps(logID string) (persistence.LogStateReadOps, error) {
+func (p *inMemoryPersistence) Latest(logID string) ([]byte, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	var cp *checkpointState
-	if got, ok := p.checkpoints[logID]; ok {
-		cp = &got
-	}
-	return &readWriter{
-		read: cp,
-	}, nil
+	return p.checkpoints[logID], nil
 }
 
-func (p *inMemoryPersistence) WriteOps(logID string) (persistence.LogStateWriteOps, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	var cp *checkpointState
-	if got, ok := p.checkpoints[logID]; ok {
-		cp = &got
-	}
-	return &readWriter{
-		write: func(old *checkpointState, new checkpointState) error {
-			return p.expectAndWrite(logID, old, new)
-		},
-		read: cp,
-	}, nil
-}
-
-func (p *inMemoryPersistence) expectAndWrite(logID string, old *checkpointState, new checkpointState) error {
+func (p *inMemoryPersistence) Update(logID string, f persistence.UpdateFn) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	got, found := p.checkpoints[logID]
-
-	// Detect the possible conflicts
-	if old != nil {
-		if !found {
-			return fmt.Errorf("expected old state %v but no state found when updating log %s", *old, logID)
-		}
-		if !reflect.DeepEqual(*old, got) {
-			return fmt.Errorf("expected old state %v but got %s when updating log %s", *old, got, logID)
-		}
-	} else {
-		if found {
-			return fmt.Errorf("expected no state but found %v when updating log %s", got, logID)
-		}
+	u, err := f(p.checkpoints[logID])
+	if err != nil {
+		return err
 	}
 
-	p.checkpoints[logID] = new
-	return nil
-}
-
-type readWriter struct {
-	write func(*checkpointState, checkpointState) error
-
-	read, toStore *checkpointState
-}
-
-func (rw *readWriter) GetLatest() ([]byte, error) {
-	if rw.read == nil {
-		return nil, status.Error(codes.NotFound, "no checkpoint found")
-	}
-	return rw.read.rawChkpt, nil
-}
-
-func (rw *readWriter) Set(c []byte) error {
-	rw.toStore = &checkpointState{
-		rawChkpt: c,
-	}
-
-	return rw.write(rw.read, *rw.toStore)
-}
-
-func (rw *readWriter) Close() error {
+	p.checkpoints[logID] = u
 	return nil
 }

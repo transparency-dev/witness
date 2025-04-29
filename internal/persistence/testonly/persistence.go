@@ -21,13 +21,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/transparency-dev/witness/internal/persistence"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"k8s.io/klog/v2"
 )
 
-// TestGetLogs exposes a test that can be invoked by tests for specific implementations of persistence.
-func TestGetLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
+// TestLogs exposes a test that can be invoked by tests for specific implementations of persistence.
+func TestLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
+	t.Helper()
+
 	lsp, close := lspFactory()
 	defer func() {
 		if err := close(); err != nil {
@@ -43,7 +42,8 @@ func TestGetLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistenc
 		t.Errorf("got %d logs, want %d", got, want)
 	}
 
-	if err := writeCheckpoint(lsp, "foo"); err != nil {
+	newCP := []byte("foo CP")
+	if err := checkAndSet(lsp, "foo", nil, newCP); err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,8 +54,10 @@ func TestGetLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistenc
 	}
 }
 
-// TestWriteOps exposes a test that can be invoked by tests for specific implementations of persistence.
-func TestWriteOps(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
+// TestUpdate exposes a test that can be invoked by tests for specific implementations of persistence.
+func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
+	t.Helper()
+
 	lsp, close := lspFactory()
 	defer func() {
 		if err := close(); err != nil {
@@ -66,44 +68,29 @@ func TestWriteOps(t *testing.T, lspFactory func() (persistence.LogStatePersisten
 		t.Fatalf("Init(): %v", err)
 	}
 
-	read, err := lsp.ReadOps("foo")
-	if err != nil {
-		t.Fatalf("ReadOps(): %v", err)
-	}
-	_, err = read.GetLatest()
-	if got, want := status.Code(err), codes.NotFound; got != want {
-		t.Fatalf("error code got != want (%s, %s): %v", got, want, err)
+	newCP := []byte("foo cp")
+	if err := checkAndSet(lsp, "foo", nil, newCP); err != nil {
+		t.Fatalf("checkAndSet(nil, %s): %v", newCP, err)
+
 	}
 
-	if err := writeCheckpoint(lsp, "foo"); err != nil {
-		t.Fatal(err)
-	}
-
-	read, err = lsp.ReadOps("foo")
+	cpRaw, err := lsp.Latest("foo")
 	if err != nil {
-		t.Fatalf("ReadOps(): %v", err)
-	}
-	var cpRaw []byte
-	if cpRaw, err = read.GetLatest(); err != nil {
-		t.Fatalf("GetLatest(): %v", err)
+		t.Fatalf("Latest(): %v", err)
 	}
 	if got, want := cpRaw, []byte("foo cp"); !bytes.Equal(got, want) {
 		t.Errorf("got != want (%s != %s)", got, want)
 	}
 }
 
-func writeCheckpoint(lsp persistence.LogStatePersistence, id string) error {
-	writeOps, err := lsp.WriteOps(id)
-	if err != nil {
-		return fmt.Errorf("WriteOps(%s): %v", id, err)
-	}
-	defer func() {
-		if err := writeOps.Close(); err != nil {
-			klog.Errorf("Failed to close log state write ops: %v", err)
+func checkAndSet(lsp persistence.LogStatePersistence, id string, expect []byte, write []byte) error {
+	if err := lsp.Update(id, func(current []byte) ([]byte, error) {
+		if !bytes.Equal(current, expect) {
+			return nil, fmt.Errorf("got current %x, want %x", current, expect)
 		}
-	}()
-	if err := writeOps.Set([]byte(fmt.Sprintf("%s cp", id))); err != nil {
-		return fmt.Errorf("Set(%s): %v", id, err)
+		return write, nil
+	}); err != nil {
+		return fmt.Errorf("Update(%s): %v", id, err)
 	}
 	return nil
 }
