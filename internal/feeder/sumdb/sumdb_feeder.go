@@ -36,11 +36,11 @@ const (
 
 // FeedLog continually feeds checkpoints from the given log into the witness.
 // This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
 	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
 
-	fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
-		if from.Size == 0 {
+	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+		if from == 0 {
 			return [][]byte{}, nil
 		}
 		tr := tileReader{c: sdb}
@@ -48,7 +48,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 			N:    int64(to.Size),
 			Hash: tlog.Hash(to.Hash),
 		}
-		proof, err := tlog.ProveTree(int64(to.Size), int64(from.Size), tlog.TileHashReader(tree, tr))
+		proof, err := tlog.ProveTree(int64(to.Size), int64(from), tlog.TileHashReader(tree, tr))
 		if err != nil {
 			return nil, fmt.Errorf("ProveTree: %v", err)
 		}
@@ -57,7 +57,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 			h := h
 			r = append(r, h[:])
 		}
-		klog.V(1).Infof("Fetched proof from %d -> %d", from.Size, to.Size)
+		klog.V(1).Infof("Fetched proof from %d -> %d", from, to.Size)
 		return r, nil
 	}
 
@@ -76,7 +76,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		FetchCheckpoint: fetchCheckpoint,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Witness:         w,
+		Update:          update,
 	}
 
 	if interval > 0 {

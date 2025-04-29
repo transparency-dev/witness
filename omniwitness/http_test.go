@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bastion
+package omniwitness
 
 import (
 	"bytes"
@@ -147,7 +147,7 @@ func TestHandler(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			a := addHandler{
+			a := httpHandler{
 				w:           &testWitness{updateResponse: test.witnessResp, updateErr: test.witnessErr},
 				witVerifier: v,
 				logs:        logs,

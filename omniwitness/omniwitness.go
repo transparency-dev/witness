@@ -20,29 +20,25 @@ package omniwitness
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/internal/config"
-	ihttp "github.com/transparency-dev/witness/internal/http"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
+	"github.com/transparency-dev/witness/internal/bastion"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
-	"github.com/transparency-dev/witness/internal/feeder"
-	"github.com/transparency-dev/witness/internal/feeder/bastion"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -80,8 +76,9 @@ type OperatorConfig struct {
 	// BastionKey is the key used to authenticate the witness to the bastion host, if
 	// a BastionAddr is configured.
 	BastionKey ed25519.PrivateKey
-	// BastionRateLimit is the maximum number of bastion requests to serve per second.
-	BastionRateLimit float64
+
+	// RateLimit is the maximum number of update requests to serve per second.
+	RateLimit float64
 
 	// RestDistributorBaseURL is optional, and if provided gives the base URL
 	// to a distributor that takes witnessed checkpoints via a PUT request.
@@ -93,7 +90,7 @@ type OperatorConfig struct {
 }
 
 // logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, feeder.Witness, *http.Client, time.Duration) error
+type logFeeder func(context.Context, config.Log, feeder.UpdateFn, *http.Client, time.Duration) error
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
@@ -135,12 +132,20 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		return fmt.Errorf("failed to create witness: %v", err)
 	}
 
-	if operatorConfig.DistributeInterval == 0 {
-		operatorConfig.DistributeInterval = defaultDistributeInterval
+	logsByID := make(map[string]config.Log)
+	for _, l := range logs {
+		logsByID[l.ID] = l
 	}
 
-	bw := witnessAdapter{
-		w: witness,
+	handler := &httpHandler{
+		update:      witness.Update,
+		logs:        logsByID,
+		witVerifier: operatorConfig.WitnessVerifier,
+		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit)),
+	}
+
+	if operatorConfig.DistributeInterval == 0 {
+		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
 
 	if operatorConfig.FeedInterval > 0 {
@@ -150,24 +155,23 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			g.Go(func() error {
 				klog.Infof("Feeder %q goroutine started", c.Origin)
 				defer klog.Infof("Feeder %q goroutine done", c.Origin)
-				return f(ctx, c, bw, httpClient, operatorConfig.FeedInterval)
+				return f(ctx, c, witness.Update, httpClient, operatorConfig.FeedInterval)
 			})
 		}
 	}
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
+		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
 		bc := bastion.Config{
 			Addr:            operatorConfig.BastionAddr,
 			Logs:            logs,
 			BastionKey:      operatorConfig.BastionKey,
 			WitnessVerifier: operatorConfig.WitnessVerifier,
-			Limits: bastion.RequestLimits{
-				TotalPerSecond: rate.Limit(operatorConfig.BastionRateLimit),
-			}}
+		}
 		g.Go(func() error {
 			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
 			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)
-			return bastion.FeedBastion(ctx, bc, bw)
+			return bastion.Register(ctx, bc, handler)
 		})
 	}
 
@@ -176,11 +180,8 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, bw, operatorConfig.WitnessVerifier)
 	}
 
-	r := mux.NewRouter()
-	s := ihttp.NewServer(witness)
-	s.RegisterHandlers(r)
 	srv := http.Server{
-		Handler:      r,
+		Handler:      handler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  5 * time.Minute,
@@ -282,25 +283,4 @@ func ParseFeeder(f string) (Feeder, error) {
 		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
 	}
 	return value, nil
-}
-
-// witnessAdapter binds the internal witness implementation to the feeder interface.
-// TODO(mhutchinson): Can we fix the difference between the API on the client and impl
-// so they both have the same contract?
-type witnessAdapter struct {
-	w *witness.Witness
-}
-
-func (w witnessAdapter) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	cp, err := w.w.GetCheckpoint(logID)
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, os.ErrNotExist
-		}
-	}
-	return cp, err
-}
-
-func (w witnessAdapter) Update(ctx context.Context, logID string, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, error) {
-	return w.w.Update(ctx, logID, oldSize, newCP, proof)
 }

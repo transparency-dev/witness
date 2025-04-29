@@ -32,16 +32,16 @@ import (
 )
 
 var (
-	// https://play.golang.org/p/PKcyNC2sjBL to regenerate any messages if needed.
+	// https://go.dev/play/p/FVJgyhl7URt to regenerate any messages if needed.
 	mPK       = "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT"
 	mSK       = "PRIVATE+KEY+monkeys+db4d9f7e+ATWIAF3yVBG+Hv1rZFQoNt/BaURkLPtOFMAM2HrEeIr6"
 	bPK       = "bananas+cf639f13+AaPjhFnPCQnid/Ql32KWhmh+uk72FVRfK+2DLmO3BI3M"
 	bSK       = "PRIVATE+KEY+bananas+cf639f13+AdjzytHoXdvn+1vG2UXXqFR3LZ+kvnmQZFretRaKfTIu"
 	wPK       = "witness+f13a86db+AdYV1Ztajd9BvyjP2HgpwrqYL6TjOwIjGMOq8Bu42xbN"
 	wSK       = "PRIVATE+KEY+witness+f13a86db+AaLa/dfyBhyo/m0Z7WCi98ENVZWtrP8pxgRNrx7tIWiA"
-	mInit     = []byte("Log Checkpoint v0\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— monkeys 202ffu1mJ0hrPIodgN0YQV7uZk9CAEzh+hOQyRjkf9CDY1IOr/oiH6WkzGIy7aEF0rw/9SHiZztjDiTOb53i6CE/zQ8=\n")
-	bInit     = []byte("Log Checkpoint v0\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— bananas z2OfE18+NwUjjJBXH7m+fh67bu29p1Jbypr4GFUQohgQgCeuPJZtGTvfR9Pquh2Iebfq+6bhl3G/77lsKiGIea6NAwE=\n")
-	mNext     = []byte("Log Checkpoint v0\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys 202ffm1n5/h7F3x0D6CCysNnqiL2WBu7iubseJggohhX6JBbeLts5NWKY/g0r6yNRVN/k+QJJx1Sii0MzbMUTnmO+wA=\n")
+	mInit     = []byte("monkeys\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— monkeys 202fftzGl3LVoqjXfwCFZZXs8I+5G22+Ek2K0AOyBuSJ/8/CZawNF+6fNlTKOCd622pbzJNkkJFWuw9DbicZCkEx9AY=\n")
+	bInit     = []byte("bananas\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— bananas z2OfE5Ry3t4bDdbukr7yXGjxfrdLJ+IMUDL68HbcinGrNKOCAqxJsU6gTplh79nGs4UlyARsb9VwEjAQbD8KFEYKRA8=\n")
+	mNext     = []byte("monkeys\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys 202ffoUEboiQYpHzICeaFmoy3RNviHTpAxYrq/eO4QQVQMvu9UebKBMX2MJC76NLthZaKsnKbCA8GxrjePZhvDCH7Ag=\n")
 	consProof = [][]byte{
 		dh("b9e1d62618f7fee8034e4c5010f727ab24d8e4705cb296c374bf2025a87a10d2", 32),
 		dh("aac66cd7a79ce4012d80762fe8eec3a77f22d1ca4145c3f4cee022e7efcd599d", 32),
@@ -52,8 +52,6 @@ var (
 	_ = mSK
 	_ = bSK
 )
-
-const logOrigin = "Log Checkpoint v0"
 
 type logOpts struct {
 	ID     string
@@ -109,41 +107,41 @@ func dh(h string, expLen int) []byte {
 func TestGetLogs(t *testing.T) {
 	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	for _, test := range []struct {
-		desc   string
-		logIDs []string
-		logPKs []string
-		chkpts [][]byte
+		desc       string
+		logOrigins []string
+		logPKs     []string
+		chkpts     [][]byte
 	}{
 		{
-			desc:   "no logs",
-			logIDs: []string{},
+			desc:       "no logs",
+			logOrigins: []string{},
 		}, {
-			desc:   "one log",
-			logIDs: []string{"monkeys"},
-			logPKs: []string{mPK},
-			chkpts: [][]byte{mInit},
+			desc:       "one log",
+			logOrigins: []string{"monkeys"},
+			logPKs:     []string{mPK},
+			chkpts:     [][]byte{mInit},
 		}, {
-			desc:   "two logs",
-			logIDs: []string{"bananas", "monkeys"},
-			logPKs: []string{bPK, mPK},
-			chkpts: [][]byte{bInit, mInit},
+			desc:       "two logs",
+			logOrigins: []string{"bananas", "monkeys"},
+			logPKs:     []string{bPK, mPK},
+			chkpts:     [][]byte{bInit, mInit},
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
-			logs := make([]logOpts, len(test.logIDs))
-			for i, logID := range test.logIDs {
+			logs := make([]logOpts, len(test.logOrigins))
+			for i, logOrigin := range test.logOrigins {
 				logs[i] = logOpts{
-					ID:     logID,
+					ID:     log.ID(logOrigin),
 					origin: logOrigin,
 					PK:     test.logPKs[i],
 				}
 			}
 			w := newWitness(t, logs)
 			// Update to a checkpoint for all logs.
-			for i, logID := range test.logIDs {
-				if _, err := w.Update(ctx, logID, 0, test.chkpts[i], nil); err != nil {
+			for i, _ := range test.logOrigins {
+				if _, _, err := w.Update(ctx, 0, test.chkpts[i], nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
@@ -152,13 +150,13 @@ func TestGetLogs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("couldn't get logs from witness: %v", err)
 			}
-			if len(knownLogs) != len(test.logIDs) {
-				t.Fatalf("got %d logs, want %d", len(knownLogs), len(test.logIDs))
+			if len(knownLogs) != len(test.logOrigins) {
+				t.Fatalf("got %d logs, want %d", len(knownLogs), len(test.logOrigins))
 			}
 			sort.Strings(knownLogs)
 			for i := range knownLogs {
-				if knownLogs[i] != test.logIDs[i] {
-					t.Fatalf("got %q, want %q", test.logIDs[i], knownLogs[i])
+				if testID := log.ID(test.logOrigins[i]); knownLogs[i] != testID {
+					t.Fatalf("got %q, want %q", testID, knownLogs[i])
 				}
 			}
 		})
@@ -168,56 +166,56 @@ func TestGetLogs(t *testing.T) {
 func TestGetChkpt(t *testing.T) {
 	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	for _, test := range []struct {
-		desc      string
-		setID     string
-		setPK     string
-		queryID   string
-		queryPK   string
-		c         []byte
-		wantThere bool
+		desc        string
+		setOrigin   string
+		setPK       string
+		queryOrigin string
+		queryPK     string
+		c           []byte
+		wantThere   bool
 	}{
 		{
-			desc:      "happy path",
-			setID:     "monkeys",
-			setPK:     mPK,
-			queryID:   "monkeys",
-			queryPK:   mPK,
-			c:         mInit,
-			wantThere: true,
+			desc:        "happy path",
+			setOrigin:   "monkeys",
+			setPK:       mPK,
+			queryOrigin: "monkeys",
+			queryPK:     mPK,
+			c:           mInit,
+			wantThere:   true,
 		}, {
-			desc:      "other log",
-			setID:     "monkeys",
-			setPK:     mPK,
-			queryID:   "bananas",
-			queryPK:   bPK,
-			c:         mInit,
-			wantThere: false,
+			desc:        "other log",
+			setOrigin:   "monkeys",
+			setPK:       mPK,
+			queryOrigin: "bananas",
+			queryPK:     bPK,
+			c:           mInit,
+			wantThere:   false,
 		}, {
-			desc:      "nothing there",
-			setID:     "monkeys",
-			setPK:     mPK,
-			queryID:   "monkeys",
-			queryPK:   mPK,
-			c:         nil,
-			wantThere: false,
+			desc:        "nothing there",
+			setOrigin:   "monkeys",
+			setPK:       mPK,
+			queryOrigin: "monkeys",
+			queryPK:     mPK,
+			c:           nil,
+			wantThere:   false,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:     test.setID,
-				origin: logOrigin,
+				ID:     log.ID(test.setOrigin),
+				origin: test.setOrigin,
 				PK:     test.setPK,
 			}})
 			// Set a checkpoint for the log if we want to for this test.
 			if test.c != nil {
-				if _, err := w.Update(ctx, test.setID, 0, test.c, nil); err != nil {
+				if _, _, err := w.Update(ctx, 0, test.c, nil); err != nil {
 					t.Errorf("failed to set checkpoint: %v", err)
 				}
 			}
 			// Try to get the latest checkpoint.
-			cosigned, err := w.GetCheckpoint(test.queryID)
+			cosigned, err := w.GetCheckpoint(log.ID(test.queryOrigin))
 			if !test.wantThere && err == nil {
 				t.Fatalf("returned a checkpoint but shouldn't have")
 			}
@@ -247,10 +245,10 @@ func TestGetChkpt(t *testing.T) {
 	}
 }
 
-func mustCreateCheckpoint(t *testing.T, sk string, size uint64, rootHash []byte) []byte {
+func mustCreateCheckpoint(t *testing.T, sk string, origin string, size uint64, rootHash []byte) []byte {
 	t.Helper()
 	cp := log.Checkpoint{
-		Origin: logOrigin,
+		Origin: origin,
 		Size:   size,
 		Hash:   rootHash,
 	}
@@ -269,7 +267,7 @@ func mustCreateCheckpoint(t *testing.T, sk string, size uint64, rootHash []byte)
 func TestUpdate(t *testing.T) {
 	for _, test := range []struct {
 		desc      string
-		logID     string
+		origin    string
 		initC     []byte
 		oldSize   uint64
 		newC      []byte
@@ -279,49 +277,56 @@ func TestUpdate(t *testing.T) {
 	}{
 		{
 			desc:    "vanilla consistency happy path",
-			initC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			origin:  "monkeys",
+			initC:   mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			oldSize: 5,
 			newC:    mNext,
 			pf:      consProof,
 			isGood:  true,
 		}, {
 			desc:      "oldSize doesn't match current state",
-			initC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			origin:    "monkeys",
+			initC:     mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			oldSize:   2,
 			newC:      mNext,
 			isGood:    false,
 			wantError: ErrCheckpointStale,
 		}, {
 			desc:    "vanilla consistency starting from tree size 0 with proof",
-			initC:   mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
+			origin:  "monkeys",
+			initC:   mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
 			oldSize: 0,
-			newC:    mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:    mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:      consProof,
 			// Proof should be empty.
 			isGood: false,
 		}, {
 			desc:      "vanilla consistency starting from tree size 0 without proof",
-			initC:     mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
+			origin:    "monkeys",
+			initC:     mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
 			oldSize:   0,
-			newC:      mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:      mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			wantError: ErrInvalidProof,
 		}, {
 			desc:    "vanilla resubmit known CP",
-			initC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			origin:  "monkeys",
+			initC:   mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			oldSize: 5,
-			newC:    mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:    mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			isGood:  true,
 		}, {
 			desc:      "resubmit known CP with changed root",
-			initC:     mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			origin:    "monkeys",
+			initC:     mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			oldSize:   5,
-			newC:      mustCreateCheckpoint(t, mSK, 5, dh("fffffffffffffffef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:      mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("fffffffffffffffef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			wantError: ErrRootMismatch,
 		}, {
 			desc:      "missing proof",
-			initC:     mustCreateCheckpoint(t, mSK, 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			origin:    "monkeys",
+			initC:     mustCreateCheckpoint(t, mSK, "monkeys", 4, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			oldSize:   4,
-			newC:      mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			newC:      mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			pf:        [][]byte{},
 			wantError: ErrInvalidProof,
 		}, {
@@ -347,19 +352,18 @@ func TestUpdate(t *testing.T) {
 	} {
 		t.Run(test.desc, func(t *testing.T) {
 			ctx := context.Background()
-			logID := "monkeys"
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:     logID,
-				origin: logOrigin,
+				ID:     log.ID("monkeys"),
+				origin: "monkeys",
 				PK:     mPK,
 			}})
 			// Set an initial checkpoint for the log.
-			if _, err := w.Update(ctx, logID, 0, test.initC, nil); err != nil {
+			if _, _, err := w.Update(ctx, 0, test.initC, nil); err != nil {
 				t.Errorf("failed to set checkpoint: %v", err)
 			}
 			// Now update from this checkpoint to a newer one.
-			_, err := w.Update(ctx, logID, test.oldSize, test.newC, test.pf)
+			_, _, err := w.Update(ctx, test.oldSize, test.newC, test.pf)
 			if test.isGood {
 				if err != nil {
 					t.Fatalf("can't update to new checkpoint: %v", err)
