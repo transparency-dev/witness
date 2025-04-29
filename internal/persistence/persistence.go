@@ -25,41 +25,27 @@ type LogStatePersistence interface {
 	// be read.
 	Logs() ([]string, error)
 
-	// ReadOps returns read-only operations for the given log ID.
-	// TODO(al): This method MUST return a valid LogStateReadOps even if
-	// the logID is unknown, otherwise WriteOps will never be called
-	// and the TOFU checkpoint will never be written.
-	ReadOps(logID string) (LogStateReadOps, error)
+	// Latest returns the latest checkpoint.
+	// If no checkpoint exists, it must return nil.
+	Latest(logID string) ([]byte, error)
 
-	// WriteOps shows intent to write data for the given logID. The
-	// returned operations must have Close() called when the intent
-	// is complete.
-	// There is no requirement that the ID is present in Logs(); if
-	// the ID is not there and this operation succeeds in committing
+	// Update allows for atomically updating the currently stored (if any)
+	// checkpoint for the given logID.
+	//
+	// The provided function will be passed the currently stored checkpoint
+	// for the provided log ID (or nil if no such checkpoint exists), and
+	// should return the serialised form of the updated checkpoint, or an
+	// error.
+	//
+	// There is no requirement that the provuided ID is present in Logs(); if
+	// the ID is not there, and this operation succeeds in committing
 	// a checkpoint, then Logs() will return the new ID afterwards.
-	WriteOps(logID string) (LogStateWriteOps, error)
+	Update(logID string, f UpdateFn) error
 }
 
-// LogStateReadOps allows the data about a single log to be read.
-type LogStateReadOps interface {
-	// GetLatest returns the latest checkpoint.
-	// If no checkpoint exists, it must return codes.NotFound.
-	GetLatest() ([]byte, error)
-}
-
-// LogStateWriteOps allows data about a single log to be read and written
-// in an ACID transaction. This naturally mirrors a DB transaction, but
-// implementations don't need to use a database.
-// Note that Close() must be called whenever these operations are no longer
-// needed.
-type LogStateWriteOps interface {
-	LogStateReadOps
-
-	// Set sets a new checkpoint for the log, committing the state to persistence.
-	// After this call, only Close() should be called on this object.
-	Set(checkpointRaw []byte) error
-
-	// Terminates the write operation, freeing all resources.
-	// This method MUST be called.
-	Close() error
-}
+// UpdateFn is the signature of a function which takes the currently stored
+// checkpoint and returns a newer version which should replace it.
+//
+// Implementations should interpret a nil argument as meaning there is no
+// currently stored checkpoint.
+type UpdateFn func(current []byte) (next []byte, err error)

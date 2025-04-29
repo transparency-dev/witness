@@ -22,44 +22,34 @@ import (
 	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"k8s.io/klog/v2"
 )
 
 var nopClose = func() error { return nil }
 
-func TestWriteOps(t *testing.T) {
-	ptest.TestWriteOps(t, func() (persistence.LogStatePersistence, func() error) {
+func TestLogs(t *testing.T) {
+	ptest.TestLogs(t, func() (persistence.LogStatePersistence, func() error) {
 		return NewPersistence(), nopClose
 	})
 }
 
-func TestWriteOpsConcurrent(t *testing.T) {
+func TestUpdate(t *testing.T) {
+	ptest.TestUpdate(t, func() (persistence.LogStatePersistence, func() error) {
+		return NewPersistence(), nopClose
+	})
+}
+
+func TestUpdateConcurrent(t *testing.T) {
 	p := NewPersistence()
 
 	g := errgroup.Group{}
+	logID := "foo"
 
 	for i := 0; i < 25; i++ {
 		i := i
 		g.Go(func() error {
-			w, err := p.WriteOps("foo")
-			if err != nil {
-				return fmt.Errorf("WriteOps %d: %v", i, err)
-			}
-			defer func() {
-				if err := w.Close(); err != nil {
-					klog.Errorf("Failed to close log state write ops: %v", err)
-				}
-			}()
-			if _, err := w.GetLatest(); err != nil {
-				if status.Code(err) != codes.NotFound {
-					return fmt.Errorf("GetLatest %d: %v", i, err)
-				}
-			}
-			// Ignore any error on Set because we expect some.
-			_ = w.Set([]byte(fmt.Sprintf("success %d", i)))
-			return nil
+			return p.Update(logID, func(current []byte) (next []byte, err error) {
+				return []byte(fmt.Sprintf("success %d", i)), nil
+			})
 		})
 	}
 
@@ -67,11 +57,7 @@ func TestWriteOpsConcurrent(t *testing.T) {
 		t.Error(err)
 	}
 
-	r, err := p.ReadOps("foo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cp, err := r.GetLatest()
+	cp, err := p.Latest(logID)
 	if err != nil {
 		t.Fatal(err)
 	}

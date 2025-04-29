@@ -156,8 +156,8 @@ func TestGetChkpt(t *testing.T) {
 			}
 			// Try to get the latest checkpoint.
 			cosigned, err := w.GetCheckpoint(ctx, log.ID(test.queryOrigin))
-			if !test.wantThere && err == nil {
-				t.Fatalf("returned a checkpoint but shouldn't have")
+			if !test.wantThere && err == nil && cosigned != nil {
+				t.Fatalf("returned a checkpoint but shouldn't have: %v", cosigned)
 			}
 			// If we got something then verify it under the log and
 			// witness public keys.
@@ -246,6 +246,7 @@ func TestUpdate(t *testing.T) {
 			initC:     mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
 			oldSize:   0,
 			newC:      mustCreateCheckpoint(t, mSK, "monkeys", 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			pf:        [][]byte{{2}},
 			wantError: ErrInvalidProof,
 		}, {
 			desc:    "vanilla resubmit known CP",
