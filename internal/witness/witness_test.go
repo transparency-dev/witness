@@ -19,7 +19,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"sort"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
@@ -102,65 +101,6 @@ func dh(h string, expLen int) []byte {
 		panic(fmt.Sprintf("decode %q: len=%d, want %d", h, got, expLen))
 	}
 	return r
-}
-
-func TestGetLogs(t *testing.T) {
-	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
-	for _, test := range []struct {
-		desc       string
-		logOrigins []string
-		logPKs     []string
-		chkpts     [][]byte
-	}{
-		{
-			desc:       "no logs",
-			logOrigins: []string{},
-		}, {
-			desc:       "one log",
-			logOrigins: []string{"monkeys"},
-			logPKs:     []string{mPK},
-			chkpts:     [][]byte{mInit},
-		}, {
-			desc:       "two logs",
-			logOrigins: []string{"bananas", "monkeys"},
-			logPKs:     []string{bPK, mPK},
-			chkpts:     [][]byte{bInit, mInit},
-		},
-	} {
-		t.Run(test.desc, func(t *testing.T) {
-			ctx := context.Background()
-			// Set up witness.
-			logs := make([]logOpts, len(test.logOrigins))
-			for i, logOrigin := range test.logOrigins {
-				logs[i] = logOpts{
-					ID:     log.ID(logOrigin),
-					origin: logOrigin,
-					PK:     test.logPKs[i],
-				}
-			}
-			w := newWitness(t, logs)
-			// Update to a checkpoint for all logs.
-			for i := range test.logOrigins {
-				if _, _, err := w.Update(ctx, 0, test.chkpts[i], nil); err != nil {
-					t.Errorf("failed to set checkpoint: %v", err)
-				}
-			}
-			// Now see if the witness knows about these logs.
-			knownLogs, err := w.GetLogs()
-			if err != nil {
-				t.Fatalf("couldn't get logs from witness: %v", err)
-			}
-			if len(knownLogs) != len(test.logOrigins) {
-				t.Fatalf("got %d logs, want %d", len(knownLogs), len(test.logOrigins))
-			}
-			sort.Strings(knownLogs)
-			for i := range knownLogs {
-				if testID := log.ID(test.logOrigins[i]); knownLogs[i] != testID {
-					t.Fatalf("got %q, want %q", testID, knownLogs[i])
-				}
-			}
-		})
-	}
 }
 
 func TestGetChkpt(t *testing.T) {
