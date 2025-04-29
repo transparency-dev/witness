@@ -176,7 +176,11 @@ func (w *Witness) Update(ctx context.Context, logID string, oldSize uint64, next
 		return nil, fmt.Errorf("WriteOps(%v): %v", logID, err)
 	}
 	// The WriteOps contract is that Close must always be called.
-	defer write.Close()
+	defer func() {
+		if err := write.Close(); err != nil {
+			klog.Errorf("Failed to close log state write ops: %v", err)
+		}
+	}()
 
 	// Get the latest checkpoint.
 	prevRaw, err := write.GetLatest()

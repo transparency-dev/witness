@@ -113,7 +113,11 @@ type addHandler struct {
 }
 
 func (a *addHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
 	bastionID := r.RemoteAddr
 	counterBastionIncomingRequest.Inc(bastionID)
 

@@ -23,6 +23,7 @@ import (
 	"github.com/transparency-dev/witness/internal/persistence"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog/v2"
 )
 
 // TestGetLogs exposes a test that can be invoked by tests for specific implementations of persistence.
@@ -96,7 +97,11 @@ func writeCheckpoint(lsp persistence.LogStatePersistence, id string) error {
 	if err != nil {
 		return fmt.Errorf("WriteOps(%s): %v", id, err)
 	}
-	defer writeOps.Close()
+	defer func() {
+		if err := writeOps.Close(); err != nil {
+			klog.Errorf("Failed to close log state write ops: %v", err)
+		}
+	}()
 	if err := writeOps.Set([]byte(fmt.Sprintf("%s cp", id))); err != nil {
 		return fmt.Errorf("Set(%s): %v", id, err)
 	}
