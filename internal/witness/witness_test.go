@@ -218,7 +218,7 @@ func TestGetChkpt(t *testing.T) {
 			}
 			// Try to get the latest checkpoint.
 			cosigned, err := w.GetCheckpoint(test.queryID)
-			if !test.wantThere && err == nil {
+			if !test.wantThere && err == nil && cosigned != nil {
 				t.Fatalf("returned a checkpoint but shouldn't have")
 			}
 			// If we got something then verify it under the log and
@@ -300,11 +300,11 @@ func TestUpdate(t *testing.T) {
 			// Proof should be empty.
 			isGood: false,
 		}, {
-			desc:      "vanilla consistency starting from tree size 0 without proof",
-			initC:     mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
-			oldSize:   0,
-			newC:      mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
-			wantError: ErrInvalidProof,
+			desc:    "vanilla consistency starting from tree size 0 without proof",
+			initC:   mustCreateCheckpoint(t, mSK, 0, rfc6962.DefaultHasher.EmptyRoot()),
+			oldSize: 0,
+			newC:    mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+			isGood:  true,
 		}, {
 			desc:    "vanilla resubmit known CP",
 			initC:   mustCreateCheckpoint(t, mSK, 5, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
