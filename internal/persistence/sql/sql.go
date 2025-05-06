@@ -88,6 +88,7 @@ func (p *sqlLogPersistence) Update(logID string, f persistence.UpdateFn) error {
 	if err != nil {
 		return err
 	}
+
 	updated, err := f(current)
 	if err != nil {
 		return err
