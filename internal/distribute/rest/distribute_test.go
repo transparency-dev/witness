@@ -71,7 +71,7 @@ func TestDistributeOnce(t *testing.T) {
 
 	wit := &silentWitness{}
 	wit.result = msg
-	d, err := rest.NewDistributor(ts.URL, http.DefaultClient, logs, wV, wit)
+	d, err := rest.NewDistributor(ts.URL, http.DefaultClient, logs, wV, wit.GetLatestCheckpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
