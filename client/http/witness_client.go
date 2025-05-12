@@ -64,7 +64,7 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 	_, _ = fmt.Fprintln(reqBody)
 	_, _ = reqBody.Write(newCP)
 
-	req, err := http.NewRequest(http.MethodPost, w.url.String(), reqBody)
+	req, err := http.NewRequest(http.MethodPost, w.url.JoinPath("/add-checkpoint").String(), reqBody)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to create request: %v", err)
 	}

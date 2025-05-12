@@ -51,7 +51,7 @@ var (
 	ErrNoValidSignature = errors.New("no valid signatures")
 	// ErrUnknownLog is returned by calls to Update if the provided checkpoint carries an Origin which is unknown to the
 	// witness.
-	ErrUnknownLog = errors.New("unknown log")
+	ErrUnknownLog = errors.New("unknown log!")
 	// ErrOldSizeInvalid is returned by calls to Update if the provided oldSize parameter is larger than the size of the
 	// submitted checkpoint.
 	ErrOldSizeInvalid = errors.New("old size > current")

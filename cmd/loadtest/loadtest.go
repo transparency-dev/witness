@@ -78,14 +78,18 @@ func main() {
 				case <-ctx.Done():
 					return
 				case <-thr.tokenChan:
-					nextCP, proof := l.next()
+					nextCP, nextSize, proof := l.next()
 					startTime := time.Now()
-					if _, size, err := c.Update(ctx, l.size, nextCP, proof); err != nil {
+					oldSize := l.witnessedSize
+					if _, curSize, err := c.Update(ctx, oldSize, nextCP, proof); err != nil {
 						if !errors.Is(err, witness.ErrCheckpointStale) {
 							klog.Exitf("Failed to update to checkpoint: %v\n%s", err, nextCP)
 						}
-						l.growTo(size)
+						l.syncToSize(curSize)
+						continue
 					}
+					l.witnessedSize = nextSize
+					klog.V(1).Infof("Updated %s from %d → %d", l.o, oldSize, nextSize)
 					elapsed := time.Since(startTime)
 					updateLatencyChan <- elapsed
 				}
@@ -201,10 +205,12 @@ type inMemoryLog struct {
 	vkey    string
 	genLeaf func(uint64) []byte
 
-	mu    sync.Mutex
-	size  uint64
-	state *compact.Range
-	store map[string][]byte // Node hashes, indexed by node (level, index).
+	mu            sync.Mutex
+	size          uint64
+	witnessedSize uint64
+	state         *compact.Range
+	store         map[string][]byte // Node hashes, indexed by node (level, index).
+	hasSynced     bool              // Set to true if this log has been clocked forward to synchronise with witness state - this should happen at most once.
 }
 
 func (l *inMemoryLog) appendLocked(hash []byte) {
@@ -217,18 +223,28 @@ func (l *inMemoryLog) appendLocked(hash []byte) {
 	l.size++
 }
 
-// growTo advances the state of this log to the given size.
-func (l *inMemoryLog) growTo(witSize uint64) {
+// syncToSize sets the state of this log to the given witness size.
+//
+// This is to allow for external long-running/persisted witnesses to be tested
+// with this loadtest command. Since the underlying in-memory logs are built
+// deterministically, the tree state from previous loadtest runs can be recreated.
+func (l *inMemoryLog) syncToSize(witSize uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	klog.Infof("%s growing to size %d", l.o, witSize)
+	if l.hasSynced {
+		klog.Exitf("Log %s of size %d asked to re-sync to %d", l.o, l.size, witSize)
+	}
+	l.hasSynced = true
+
+	klog.V(1).Infof("Log %s sync'd to witness size %d", l.o, witSize)
 
 	for l.size < witSize {
 		leaf := l.genLeaf(l.size)
 		leafHash := rfc6962.DefaultHasher.HashLeaf(leaf)
 		l.appendLocked(leafHash)
 	}
+	l.witnessedSize = witSize
 }
 
 // Hash returns the current root hash of the tree.
@@ -250,7 +266,7 @@ func (l *inMemoryLog) getNodes(ids []compact.NodeID) [][]byte {
 
 // next grows the tree by one leaf and returns a new checkpoint, and a consistency
 // proof from the previous size.
-func (l *inMemoryLog) next() (cpSigned []byte, consProof [][]byte) {
+func (l *inMemoryLog) next() (cpSigned []byte, cpSize uint64, consProof [][]byte) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -277,7 +293,7 @@ func (l *inMemoryLog) next() (cpSigned []byte, consProof [][]byte) {
 	if err != nil {
 		klog.Exitf("Failed to build consistency proof: %v", err)
 	}
-	return cpSigned, consProof
+	return cpSigned, l.size, consProof
 }
 
 func (l *inMemoryLog) config() string {
