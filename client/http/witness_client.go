@@ -18,20 +18,18 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
+	"strconv"
+	"strings"
 
-	wit_api "github.com/transparency-dev/witness/api"
+	"github.com/transparency-dev/witness/internal/witness"
 	"k8s.io/klog/v2"
 )
-
-// ErrCheckpointTooOld is returned if the checkpoint passed to Update needs to be updated.
-var ErrCheckpointTooOld = errors.New("checkpoint too old")
 
 // NewWitness returns a Witness accessed over http at the given URL
 // using the client provided.
@@ -42,79 +40,74 @@ func NewWitness(url *url.URL, c *http.Client) Witness {
 	}
 }
 
-// Witness is a simple client for interacting with witnesses over HTTP.
+// Witness is a simple client for interacting with tlog-witness compatible witnesses over HTTP.
 type Witness struct {
 	url    *url.URL
 	client *http.Client
 }
 
-// GetLatestCheckpoint returns a recent checkpoint from the witness for the specified log ID.
-func (w Witness) GetLatestCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	u, err := w.url.Parse(fmt.Sprintf(wit_api.HTTPGetCheckpoint, logID))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %v", err)
+// Update attempts to clock the witness forward.
+//
+// Returns the HTTP status code and the response body, or an error.
+func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
+	if l := len(proof); l > 63 {
+		return nil, 0, errors.New("too many proof lines")
 	}
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-	resp, err := w.client.Do(req.WithContext(ctx))
-	if err != nil {
-		return nil, fmt.Errorf("failed to do http request: %v", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			klog.Errorf("Failed to close response body: %v", err)
-		}
-	}()
-	if resp.StatusCode == 404 {
-		return nil, os.ErrNotExist
-	} else if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("bad status response: %s", resp.Status)
-	}
-	return io.ReadAll(resp.Body)
-}
 
-// Update attempts to clock the witness forward for the given logID.
-// The latest signed checkpoint will be returned if this succeeds, or if the error is
-// http.ErrCheckpointTooOld. In all other cases no checkpoint should be expected.
-func (w Witness) Update(ctx context.Context, logID string, cp []byte, proof [][]byte) ([]byte, error) {
-	reqBody, err := json.MarshalIndent(&wit_api.UpdateRequest{
-		Checkpoint: cp,
-		Proof:      proof,
-	}, "", " ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal update request: %v", err)
+	// bytes.Buffer cannot return an error for writes, so we can omit error checking on writes below.
+	reqBody := &bytes.Buffer{}
+
+	_, _ = fmt.Fprintf(reqBody, "old %d\n", oldSize)
+	for _, p := range proof {
+		_, _ = fmt.Fprintln(reqBody, base64.StdEncoding.EncodeToString(p))
 	}
-	u, err := w.url.Parse(fmt.Sprintf(wit_api.HTTPUpdate, logID))
+	_, _ = fmt.Fprintln(reqBody)
+	_, _ = reqBody.Write(newCP)
+
+	req, err := http.NewRequest(http.MethodPost, w.url.JoinPath("/add-checkpoint").String(), reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %v", err)
-	}
-	req, err := http.NewRequest(http.MethodPut, u.String(), bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, 0, fmt.Errorf("failed to create request: %v", err)
 	}
 	resp, err := w.client.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("failed to do http request: %v", err)
-	}
-	if resp.Request.Method != http.MethodPut {
-		return nil, fmt.Errorf("PUT request to %q was converted to %s request to %q", u.String(), resp.Request.Method, resp.Request.URL)
+		return nil, 0, fmt.Errorf("failed to do http request: %v", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			klog.Errorf("Failed to close response body: %v", err)
 		}
 	}()
+
+	if resp.Request.Method != http.MethodPost {
+		return nil, 0, fmt.Errorf("POST request to %q was converted to %s request to %q", w.url.String(), resp.Request.Method, resp.Request.URL)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %v", err)
+		return nil, 0, fmt.Errorf("failed to read body: %v", err)
 	}
-	if resp.StatusCode != 200 {
-		if resp.StatusCode == 409 {
-			return body, fmt.Errorf("%w: %s", ErrCheckpointTooOld, resp.Status)
+
+	switch resp.StatusCode {
+	case http.StatusOK, 0:
+		return body, 0, nil
+	case http.StatusConflict:
+		if resp.Header.Get("Content-Type") == "text/x.tlog.size" {
+			size, err := strconv.ParseUint(strings.TrimSpace(string(body)), 10, 64)
+			if err != nil {
+				return nil, 0, fmt.Errorf("invalid tlog size in response body: %v", err)
+			}
+			return nil, size, witness.ErrCheckpointStale
 		}
-		return nil, fmt.Errorf("bad status response (%s): %q", resp.Status, body)
+		return nil, 0, witness.ErrRootMismatch
+	case http.StatusNotFound:
+		return nil, 0, witness.ErrUnknownLog
+	case http.StatusForbidden:
+		return nil, 0, witness.ErrNoValidSignature
+	case http.StatusBadRequest:
+		return nil, 0, witness.ErrOldSizeInvalid
+	case http.StatusUnprocessableEntity:
+		return nil, 0, witness.ErrInvalidProof
+	default:
+		return nil, 0, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
-	return body, nil
 }

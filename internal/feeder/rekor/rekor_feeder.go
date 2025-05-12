@@ -66,7 +66,7 @@ type proof struct {
 //
 // Note that this feeder expects the configured URL to contain a "treeID" query parameter which contains the
 // correct Rekor log tree ID.
-func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
 		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
@@ -95,12 +95,12 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		}
 		return nil, fmt.Errorf("failed to find shard that matched log ID %s from config", l.ID)
 	}
-	fetchProof := func(ctx context.Context, from, to log.Checkpoint) ([][]byte, error) {
-		if from.Size == 0 {
+	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+		if from == 0 {
 			return [][]byte{}, nil
 		}
 		cp := proof{}
-		if err := getJSON(ctx, c, lURL, fmt.Sprintf("api/v1/log/proof?firstSize=%d&lastSize=%d&treeID=%s", from.Size, to.Size, treeID), &cp); err != nil {
+		if err := getJSON(ctx, c, lURL, fmt.Sprintf("api/v1/log/proof?firstSize=%d&lastSize=%d&treeID=%s", from, to.Size, treeID), &cp); err != nil {
 			return nil, fmt.Errorf("failed to fetch log info: %v", err)
 		}
 		var err error
@@ -120,7 +120,7 @@ func FeedLog(ctx context.Context, l config.Log, w feeder.Witness, c *http.Client
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Witness:         w,
+		Update:          update,
 	}
 	if interval > 0 {
 		return feeder.Run(ctx, interval, opts)
