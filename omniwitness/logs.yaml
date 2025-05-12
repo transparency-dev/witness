@@ -1,201 +1,58 @@
 Logs:
-  - Origin: example.com/inmemorylog/0
-    URL: http://example.com/inmemorylog/0/
-    PublicKey: example.com/inmemorylog/0+7fd3f320+AXX8yEKexoMqBPPwG4pGAhhjo5CyiHLiJZ7p3jg0aJZM
+  - Origin: go.sum database tree
+    URL: https://sum.golang.org
+    PublicKey: sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
+    Feeder: sumdb
+  - Origin: Armory Drive Prod 2
+    URL: https://raw.githubusercontent.com/f-secure-foundry/armory-drive-log/master/log/
+    PublicKey: armory-drive-log+16541b8f+AYDPmG5pQp4Bgu0a1mr5uDZ196+t8lIVIfWQSPWmP+Jv
+    Feeder: serverless
+  - Origin: rekor.sigstore.dev - 3904496407287907110
+    URL: https://rekor.sigstore.dev?treeID=3904496407287907110
+    PublicKeyType: ecdsa
+    PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
+    Feeder: rekor
+  - Origin: rekor.sigstore.dev - 2605736670972794746
+    URL: https://rekor.sigstore.dev?treeID=2605736670972794746
+    PublicKeyType: ecdsa
+    PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
+    Feeder: rekor
+  - Origin: rekor.sigstore.dev - 1193050959916656506
+    URL: https://rekor.sigstore.dev?treeID=1193050959916656506
+    PublicKeyType: ecdsa
+    PublicKey: rekor.sigstore.dev+c0d23d6a+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABNhtmPtrWm3U1eQXBogSMdGvXwBcK5AW5i0hrZLOC96l+smGNM7nwZ4QvFK/4sueRoVj//QP22Ni4Qt9DPfkWLc=
+    Feeder: rekor
+  - Origin: developers.google.com/android/binary_transparency/0
+    URL: https://developers.google.com/android/binary_transparency/
+    PublicKeyType: ecdsa
+    PublicKey: pixel_transparency_log+72c878db+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABFPN7lzVIk2BOd3Nk33VpqqVttGwV8uChH+RX/HVfBiypVQFyh8o8Ny6fSdxNMgkSf9/VynrgADBeys0r4Q9uPA=
+    Feeder: pixel
+  - Origin: developers.google.com/android/binary_transparency/google1p/0
+    URL: https://developers.google.com/android/binary_transparency/google1p/
+    PublicKeyType: ecdsa
+    PublicKey: developers.google.com/android/binary_transparency/google1p/0+aacba1b3+AjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABKh9xi5WKD+WxbAh/Ax8uTbaYyW0UMN3yTUgE0pqPDpV1DKdKHtdqkcBx7XT+5PVx5SbAmKfI49HUGmPjfX7Xy8=
+    Feeder: pixel
+  - Origin: lvfs
+    URL: https://fwupd.org/ftlog/lvfs/
+    PublicKey: lvfs+7908d142+ASnlGgOh+634tcE/2Lp3wV7k/cLoU6ncawmb/BLC1oMU
+    Feeder: serverless
+  - Origin: transparency.dev/armored-witness/firmware_transparency/prod/1
+    URL: https://api.transparency.dev/armored-witness-firmware/prod/log/1/
+    PublicKey: transparency.dev-aw-ftlog-prod-1+3e6d87ee+Aa3qdhefd2cc/98jV3blslJT2L+iFR8WKHeGcgFmyjnt
+    Feeder: serverless
+  - Origin: transparency.dev/armored-witness/firmware_transparency/ci/2
+    URL: https://api.transparency.dev/armored-witness-firmware/ci/log/2/
+    PublicKey: transparency.dev-aw-ftlog-ci-2+f77c6276+AZXqiaARpwF4MoNOxx46kuiIRjrML0PDTm+c7BLaAMt6
+    Feeder: serverless
+  - Origin: transparency.dev/armored-witness/firmware_transparency/ci/3
+    URL: https://api.transparency.dev/armored-witness-firmware/ci/log/3/
+    PublicKey: transparency.dev-aw-ftlog-ci-3+3f689522+Aa1Eifq6rRC8qiK+bya07yV1fXyP156pEMsX7CFBC6gg
+    Feeder: serverless
+  - Origin: sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1
+    URL: https://seasalp.glasklar.is
+    PublicKey: sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1+682b49db+AQ7H4WhDEZsSA3enOROsasvC0D2CQy4sNrhBsJqVhB8l
     Feeder: none
-  - Origin: example.com/inmemorylog/1
-    URL: http://example.com/inmemorylog/1/
-    PublicKey: example.com/inmemorylog/1+d6b76bb3+AS2t66Y8jqA6iglM+/cf9SK9to/kWF5ZOKQuzBizIkt0
-    Feeder: none
-  - Origin: example.com/inmemorylog/2
-    URL: http://example.com/inmemorylog/2/
-    PublicKey: example.com/inmemorylog/2+6002fc9a+AZZB18AupYoobUi++orjEXTQXs5hADlr2qmWSEF1QF03
-    Feeder: none
-  - Origin: example.com/inmemorylog/3
-    URL: http://example.com/inmemorylog/3/
-    PublicKey: example.com/inmemorylog/3+2e79c94b+Aeb/wrDMh+K6ePnsCa8tCZ1VGdZrekcn981a3lu8RTNz
-    Feeder: none
-  - Origin: example.com/inmemorylog/4
-    URL: http://example.com/inmemorylog/4/
-    PublicKey: example.com/inmemorylog/4+077b5e25+AdENMJ7roiENzm8NZkJp2Ab/YgX03/S9nKqhtY5ziXz3
-    Feeder: none
-  - Origin: example.com/inmemorylog/5
-    URL: http://example.com/inmemorylog/5/
-    PublicKey: example.com/inmemorylog/5+5a1a204b+AXhylT5b4WBj97QDCip0j2tyUfHoPCqRXLEhkV70RqdK
-    Feeder: none
-  - Origin: example.com/inmemorylog/6
-    URL: http://example.com/inmemorylog/6/
-    PublicKey: example.com/inmemorylog/6+c70112ff+AdrqJRTIbtgTWs/dEMu76q62q4lSbf0O4Z9H61ijZYWm
-    Feeder: none
-  - Origin: example.com/inmemorylog/7
-    URL: http://example.com/inmemorylog/7/
-    PublicKey: example.com/inmemorylog/7+12af122d+AZVD+MMfLq4VTUdAkaShpPhKCrYxZtkuDysOPBUWv41D
-    Feeder: none
-  - Origin: example.com/inmemorylog/8
-    URL: http://example.com/inmemorylog/8/
-    PublicKey: example.com/inmemorylog/8+1e515327+AcoawYane0W5D4GbZEf4jPXEjzVFHAkgIhcMaOvzuQel
-    Feeder: none
-  - Origin: example.com/inmemorylog/9
-    URL: http://example.com/inmemorylog/9/
-    PublicKey: example.com/inmemorylog/9+a7d1f7c9+AZ7IxhHbsA1DlJt6zfoY617Paib7gtkXRD2Tz9uWYiaI
-    Feeder: none
-  - Origin: example.com/inmemorylog/10
-    URL: http://example.com/inmemorylog/10/
-    PublicKey: example.com/inmemorylog/10+5ecee45a+AUSFenA3UWAwjsxtmx1ij2V3z7O/JhFkqD6fwKwpnNc/
-    Feeder: none
-  - Origin: example.com/inmemorylog/11
-    URL: http://example.com/inmemorylog/11/
-    PublicKey: example.com/inmemorylog/11+7d96d763+AfES7psNRpLPkRJR9zEDJnfyL33PKi/Atb2tgFNCv2GQ
-    Feeder: none
-  - Origin: example.com/inmemorylog/12
-    URL: http://example.com/inmemorylog/12/
-    PublicKey: example.com/inmemorylog/12+9d06d21c+AXdevlK8Ofr5OV5qT6oJHZa06MAQQTytCYbpgZc9KpYe
-    Feeder: none
-  - Origin: example.com/inmemorylog/13
-    URL: http://example.com/inmemorylog/13/
-    PublicKey: example.com/inmemorylog/13+7669bbb8+Af93APDNJkM9DOf9NJagTx6czd8i/ApDdo3iaroFoJcF
-    Feeder: none
-  - Origin: example.com/inmemorylog/14
-    URL: http://example.com/inmemorylog/14/
-    PublicKey: example.com/inmemorylog/14+2b66f075+AWqzryT9alexir6F8SdPRWTol2Pp24tqph5gYLVglTMH
-    Feeder: none
-  - Origin: example.com/inmemorylog/15
-    URL: http://example.com/inmemorylog/15/
-    PublicKey: example.com/inmemorylog/15+da8e5fe2+AdWVWSuxK5LgzOkPaWiTL2oGsJtZaThxAZ+FbLgoHfTk
-    Feeder: none
-  - Origin: example.com/inmemorylog/16
-    URL: http://example.com/inmemorylog/16/
-    PublicKey: example.com/inmemorylog/16+26e1b8d7+AX6nSUPzkBFdjkJoWG0G1bMRS/X3VYBR76HPSQvdpiGL
-    Feeder: none
-  - Origin: example.com/inmemorylog/17
-    URL: http://example.com/inmemorylog/17/
-    PublicKey: example.com/inmemorylog/17+702cb68f+AWHX4AWl4pvJH0oKSgsbIh//FjTPIWJ+nX/0RdMFTL5U
-    Feeder: none
-  - Origin: example.com/inmemorylog/18
-    URL: http://example.com/inmemorylog/18/
-    PublicKey: example.com/inmemorylog/18+bc03ae1e+ATiEDil2twBgBzHAneoBgdiIAUEFVuz2na/gXgNnbnuQ
-    Feeder: none
-  - Origin: example.com/inmemorylog/19
-    URL: http://example.com/inmemorylog/19/
-    PublicKey: example.com/inmemorylog/19+1ca97027+AQX+DcAjrgPX19fDz/KxDAgSZ8cB0APCfTR5ys2qF0Ol
-    Feeder: none
-  - Origin: example.com/inmemorylog/20
-    URL: http://example.com/inmemorylog/20/
-    PublicKey: example.com/inmemorylog/20+f92353a7+AROXEgy1/y/mrps0ajTi9psUXyRWTG00CrwRo3RBgNJX
-    Feeder: none
-  - Origin: example.com/inmemorylog/21
-    URL: http://example.com/inmemorylog/21/
-    PublicKey: example.com/inmemorylog/21+23a566c2+AfZtQcIsqjgphHeZl4TcPcxRkmpWP8Pu5usApMcJ3C+D
-    Feeder: none
-  - Origin: example.com/inmemorylog/22
-    URL: http://example.com/inmemorylog/22/
-    PublicKey: example.com/inmemorylog/22+8e95e691+Ac/Jv7K0S4uTxtrESxwsx0vnvTajOWr1Jv3ByHSqIF4j
-    Feeder: none
-  - Origin: example.com/inmemorylog/23
-    URL: http://example.com/inmemorylog/23/
-    PublicKey: example.com/inmemorylog/23+1eb5f219+AWiHdyx9WB6hphKy+ujV7F8dWYyv/6uYvYzntn55Tdbx
-    Feeder: none
-  - Origin: example.com/inmemorylog/24
-    URL: http://example.com/inmemorylog/24/
-    PublicKey: example.com/inmemorylog/24+27dc77f8+AVIGqh5VZKlihzRswewpiLJqRrCX5PtqK3o6M7yVGJ6O
-    Feeder: none
-  - Origin: example.com/inmemorylog/25
-    URL: http://example.com/inmemorylog/25/
-    PublicKey: example.com/inmemorylog/25+47646736+AVPqVY7lBgu//WfexFUZ9/vZIBRkgmER1pQklYPnaRMo
-    Feeder: none
-  - Origin: example.com/inmemorylog/26
-    URL: http://example.com/inmemorylog/26/
-    PublicKey: example.com/inmemorylog/26+c035235a+Aeq4au7WxJb9PMzCQuoJJTygpllLXNoYjNC0HrHF06r1
-    Feeder: none
-  - Origin: example.com/inmemorylog/27
-    URL: http://example.com/inmemorylog/27/
-    PublicKey: example.com/inmemorylog/27+7d921c48+AX8XHvBunsyIuMPxLzQi0TKdlJba2gMrkKPNfEY28NKO
-    Feeder: none
-  - Origin: example.com/inmemorylog/28
-    URL: http://example.com/inmemorylog/28/
-    PublicKey: example.com/inmemorylog/28+5b755fb6+Aa/cBagJMLIqQ+fp/M6sFRcWcv+cTwUlcURNBF4xRpRa
-    Feeder: none
-  - Origin: example.com/inmemorylog/29
-    URL: http://example.com/inmemorylog/29/
-    PublicKey: example.com/inmemorylog/29+a58a4bde+Ad3cgmmSZJ/MDVw2+OjjEMN6pZWqJHNGy7LrK81y3JY6
-    Feeder: none
-  - Origin: example.com/inmemorylog/30
-    URL: http://example.com/inmemorylog/30/
-    PublicKey: example.com/inmemorylog/30+bf0b137a+Abb7fEvItJzdSgAbmH+2tnwizdAWhz7b17kc5jrKkNVk
-    Feeder: none
-  - Origin: example.com/inmemorylog/31
-    URL: http://example.com/inmemorylog/31/
-    PublicKey: example.com/inmemorylog/31+99e1a062+AenHMNy01UH0QsgT+kjhue6Hgv0TCi1KxEllF0/gpqJ2
-    Feeder: none
-  - Origin: example.com/inmemorylog/32
-    URL: http://example.com/inmemorylog/32/
-    PublicKey: example.com/inmemorylog/32+7b097e53+AW7VYG26cv1zsOkWKTZ4jQ+cwloi+rKAxXizpZxWZZiL
-    Feeder: none
-  - Origin: example.com/inmemorylog/33
-    URL: http://example.com/inmemorylog/33/
-    PublicKey: example.com/inmemorylog/33+725de5fe+AV+l/732iELIkF82PkF/dT2aqh6BduedWcdHL69Gvbvw
-    Feeder: none
-  - Origin: example.com/inmemorylog/34
-    URL: http://example.com/inmemorylog/34/
-    PublicKey: example.com/inmemorylog/34+d197b814+ASIRGVkTKHQy6Iw+ZN0NXxFAZcQAEV9dp/n7YO9jLz42
-    Feeder: none
-  - Origin: example.com/inmemorylog/35
-    URL: http://example.com/inmemorylog/35/
-    PublicKey: example.com/inmemorylog/35+ea4113d3+AZQtmaTozJH53dra81BTDQNfuUKcaN/OYI7s5kxcoGUs
-    Feeder: none
-  - Origin: example.com/inmemorylog/36
-    URL: http://example.com/inmemorylog/36/
-    PublicKey: example.com/inmemorylog/36+1780bfca+AcQ91qgCfPlrMrUKDT4g0b7MGooCaGZmFciU2BoK7/Iz
-    Feeder: none
-  - Origin: example.com/inmemorylog/37
-    URL: http://example.com/inmemorylog/37/
-    PublicKey: example.com/inmemorylog/37+391db64a+ATcgsB7tw03TGkKF1IufMGVvszqPd2mppapleace+VIu
-    Feeder: none
-  - Origin: example.com/inmemorylog/38
-    URL: http://example.com/inmemorylog/38/
-    PublicKey: example.com/inmemorylog/38+0b602913+Afrrmt2RKSqfGOx6jSUi6LhOrta6n1AJguKksYq/YnIb
-    Feeder: none
-  - Origin: example.com/inmemorylog/39
-    URL: http://example.com/inmemorylog/39/
-    PublicKey: example.com/inmemorylog/39+6843f31a+AfcEf+f1UOpoZEkg2Qj4qXMAbxINmklK0w7pNKZz96xJ
-    Feeder: none
-  - Origin: example.com/inmemorylog/40
-    URL: http://example.com/inmemorylog/40/
-    PublicKey: example.com/inmemorylog/40+6529fc35+ATAjSMcbsw0qydq8Ub9wJdleXQrZF1pMIdOB/MVzi5CU
-    Feeder: none
-  - Origin: example.com/inmemorylog/41
-    URL: http://example.com/inmemorylog/41/
-    PublicKey: example.com/inmemorylog/41+f03102e3+Aa8EdFHLeTejUtZFNtzDG51B2Vos6mr3xEDrLpBjBOKL
-    Feeder: none
-  - Origin: example.com/inmemorylog/42
-    URL: http://example.com/inmemorylog/42/
-    PublicKey: example.com/inmemorylog/42+4d8afcdd+AR8tO5nG9liHxcJyY0YiG6ZvTwP4S638WqtcV9HRdFMO
-    Feeder: none
-  - Origin: example.com/inmemorylog/43
-    URL: http://example.com/inmemorylog/43/
-    PublicKey: example.com/inmemorylog/43+891f58a7+AQjxa1qAJEbspr6eE9TZtznVrE/s0EsG6OIugY5NSFmM
-    Feeder: none
-  - Origin: example.com/inmemorylog/44
-    URL: http://example.com/inmemorylog/44/
-    PublicKey: example.com/inmemorylog/44+6b763ed0+Afp09QQ9gKDwq6CNubLRnVuk1Q7dvjknJsOeDhQYXd4S
-    Feeder: none
-  - Origin: example.com/inmemorylog/45
-    URL: http://example.com/inmemorylog/45/
-    PublicKey: example.com/inmemorylog/45+f4ae074c+AewuPOOhHx2TfRu81ORH0e1am1F5Fwsc8VlNO54+N7UE
-    Feeder: none
-  - Origin: example.com/inmemorylog/46
-    URL: http://example.com/inmemorylog/46/
-    PublicKey: example.com/inmemorylog/46+cd486d90+AQBxaLPyKbb3cAvyqBlsB/hY8n3zVek8/Dg8E2kxzP8b
-    Feeder: none
-  - Origin: example.com/inmemorylog/47
-    URL: http://example.com/inmemorylog/47/
-    PublicKey: example.com/inmemorylog/47+5a8eae46+AXcPltBgjUpNR4KHRnPcjN0WPkf3Jb0oVKrlNdJbh8vG
-    Feeder: none
-  - Origin: example.com/inmemorylog/48
-    URL: http://example.com/inmemorylog/48/
-    PublicKey: example.com/inmemorylog/48+4f021846+AeHHQR4qYHUwWxaWgSC5rYSqH5kcrxKO4RGYd++uzxW+
-    Feeder: none
-  - Origin: example.com/inmemorylog/49
-    URL: http://example.com/inmemorylog/49/
-    PublicKey: example.com/inmemorylog/49+67cdea49+AS+w7qYvSD2iw82BOu00lbLRoJprR5dQhnHEsvsbQBTd
-    Feeder: none
+  - Origin: tlog.andxor.it
+    URL: https://tlog.andxor.it/
+    PublicKey: tlog.andxor.it+d5e6b3d0+AU6uJ3h8tb+RRMdGjHV4KCrrHoKfIYGbhL2A46thEhKQ
+    Feeder: tiles

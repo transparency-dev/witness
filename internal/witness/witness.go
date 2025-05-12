@@ -51,7 +51,7 @@ var (
 	ErrNoValidSignature = errors.New("no valid signatures")
 	// ErrUnknownLog is returned by calls to Update if the provided checkpoint carries an Origin which is unknown to the
 	// witness.
-	ErrUnknownLog = errors.New("unknown log!")
+	ErrUnknownLog = errors.New("unknown log")
 	// ErrOldSizeInvalid is returned by calls to Update if the provided oldSize parameter is larger than the size of the
 	// submitted checkpoint.
 	ErrOldSizeInvalid = errors.New("old size > current")
@@ -68,11 +68,11 @@ var (
 func initMetrics() {
 	doOnce.Do(func() {
 		mf := monitoring.GetMetricFactory()
-		const logIDLabel = "logid"
-		counterUpdateAttempt = mf.NewCounter("witness_update_request", "Number of attempted requests made to update checkpoints for the log ID", logIDLabel)
-		counterUpdateSuccess = mf.NewCounter("witness_update_success", "Number of successful requests made to update checkpoints for the log ID", logIDLabel)
-		counterInvalidConsistency = mf.NewCounter("witness_update_invalid_consistency", "Number of times the witness received a bad consistency proof for the log ID", logIDLabel)
-		counterInconsistentCheckpoints = mf.NewCounter("witness_update_inconsistent_checkpoints", "Number of times the witness received inconsistent checkpoints for the log ID", logIDLabel)
+		const logOriginLabel = "log_origin"
+		counterUpdateAttempt = mf.NewCounter("witness_update_request", "Number of attempted requests made to update checkpoints for the log origin", logOriginLabel)
+		counterUpdateSuccess = mf.NewCounter("witness_update_success", "Number of successful requests made to update checkpoints for the log origin", logOriginLabel)
+		counterInvalidConsistency = mf.NewCounter("witness_update_invalid_consistency", "Number of times the witness received a bad consistency proof for the log origin", logOriginLabel)
+		counterInconsistentCheckpoints = mf.NewCounter("witness_update_inconsistent_checkpoints", "Number of times the witness received inconsistent checkpoints for the log origin", logOriginLabel)
 	})
 }
 
@@ -160,12 +160,10 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	//       checkpoint origin, and it MUST ignore signatures from unknown keys.
 	next, nextNote, logInfo, err := w.parse(nextRaw)
 	if err != nil {
-		// TODO(al): Technically this could also be that the checkpoint body is invalid.
-		return nil, 0, ErrNoValidSignature
+		return nil, 0, err
 	}
 
-	logID := log.ID(logInfo.Origin)
-	counterUpdateAttempt.Inc(logID)
+	counterUpdateAttempt.Inc(logInfo.Origin)
 
 	var retSigs []byte
 	var retSize uint64
@@ -173,7 +171,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	// Get the latest checkpoint for the log because we don't want consistency proofs
 	// with respect to older checkpoints.  Bind this all in a transaction to
 	// avoid race conditions when updating the database.
-	err = w.lsp.Update(logID, func(prevRaw []byte) ([]byte, error) {
+	err = w.lsp.Update(log.ID(logInfo.Origin), func(prevRaw []byte) ([]byte, error) {
 		// If there was nothing stored already then treat this new
 		// checkpoint as trust-on-first-use (TOFU).
 		if prevRaw == nil {
@@ -182,7 +180,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 			if err != nil {
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
-			counterUpdateSuccess.Inc(logID)
+			counterUpdateSuccess.Inc(logInfo.Origin)
 			retSigs = sigs
 			return signed, nil
 		}
@@ -213,8 +211,8 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		//        also identical.
 		if next.Size == prev.Size {
 			if !bytes.Equal(next.Hash, prev.Hash) {
-				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logID, prev, next)
-				counterInconsistentCheckpoints.Inc(logID)
+				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logInfo.Origin, prev, next)
+				counterInconsistentCheckpoints.Inc(logInfo.Origin)
 
 				retSize, retSigs = 0, nil
 				return nil, ErrRootMismatch
@@ -236,7 +234,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
 			retSize, retSigs = 0, sigs
-			counterUpdateSuccess.Inc(logID)
+			counterUpdateSuccess.Inc(logInfo.Origin)
 			return signed, nil
 		}
 
@@ -244,7 +242,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		// valid so we verify the consistency proofs.
 		if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
 			// Complain if the checkpoints aren't consistent.
-			counterInvalidConsistency.Inc(logID)
+			counterInvalidConsistency.Inc(logInfo.Origin)
 			return nil, ErrInvalidProof
 		}
 		// If the consistency proof is good we store the witness cosigned nextRaw.
@@ -257,7 +255,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		return signed, nil
 	})
 	if err == nil {
-		counterUpdateSuccess.Inc(logID)
+		counterUpdateSuccess.Inc(logInfo.Origin)
 	}
 
 	return retSigs, retSize, err

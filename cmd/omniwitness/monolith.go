@@ -52,7 +52,7 @@ var (
 	restDistributorBaseURL = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
 	bastionAddr            = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
 	bastionKeyPath         = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
-	rateLimit              = flag.Float64("rate_limit", 20, "Maximum number of update requests per second to serve")
+	rateLimit              = flag.Float64("rate_limit", 0, "Maximum number of update requests per second to serve, or zero to disable")
 	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 
 	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")

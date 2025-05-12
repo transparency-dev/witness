@@ -70,7 +70,7 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	counterHTTPIncomingRequest.Inc()
 
-	if !a.limiter.Allow() {
+	if a.limiter != nil && !a.limiter.Allow() {
 		counterHTTPIncomingPushback.Inc()
 		klog.V(1).Infof("Too many HTTP requests, pushing back.")
 		w.WriteHeader(http.StatusTooManyRequests)

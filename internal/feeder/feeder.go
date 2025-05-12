@@ -160,7 +160,7 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 			return nil, e
 		default:
 			if f.oldSize == cpSubmit.Size {
-				klog.V(1).Infof("%q: Refreshed withess - @%d: %x", cpSubmit.Origin, cpSubmit.Size, cpSubmit.Hash)
+				klog.V(1).Infof("%q: Refreshed witness - @%d: %x", cpSubmit.Origin, cpSubmit.Size, cpSubmit.Hash)
 
 			} else {
 				klog.V(1).Infof("%q: Updated witness - @%d → @%d: %x", cpSubmit.Origin, f.oldSize, cpSubmit.Size, cpSubmit.Hash)

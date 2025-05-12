@@ -131,11 +131,15 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		logsByID[l.ID] = l
 	}
 
+	var limiter *rate.Limiter
+	if operatorConfig.RateLimit > 0 {
+		limiter = rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit))
+	}
 	handler := &httpHandler{
 		update:      witness.Update,
 		logs:        logsByID,
 		witVerifier: operatorConfig.WitnessVerifier,
-		limiter:     rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit)),
+		limiter:     limiter,
 	}
 
 	if operatorConfig.DistributeInterval == 0 {
