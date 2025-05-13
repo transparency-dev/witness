@@ -73,7 +73,7 @@ func (p *sqlLogPersistence) Latest(logID string) ([]byte, error) {
 	return getLatestCheckpoint(p.db.QueryRow, logID)
 }
 
-func (p *sqlLogPersistence) Update(logID string, f persistence.UpdateFn) error {
+func (p *sqlLogPersistence) Update(logID string, f func([]byte) ([]byte, error)) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
