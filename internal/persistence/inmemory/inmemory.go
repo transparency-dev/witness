@@ -55,7 +55,7 @@ func (p *inMemoryPersistence) Latest(logID string) ([]byte, error) {
 	return p.checkpoints[logID], nil
 }
 
-func (p *inMemoryPersistence) Update(logID string, f persistence.UpdateFn) error {
+func (p *inMemoryPersistence) Update(logID string, f func([]byte) ([]byte, error)) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	u, err := f(p.checkpoints[logID])
