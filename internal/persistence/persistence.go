@@ -40,12 +40,5 @@ type LogStatePersistence interface {
 	// There is no requirement that the provided ID is present in Logs(); if
 	// the ID is not there, and this operation succeeds in committing
 	// a checkpoint, then Logs() will return the new ID afterwards.
-	Update(logID string, f UpdateFn) error
+	Update(logID string, f func([]byte) ([]byte, error)) error
 }
-
-// UpdateFn is the signature of a function which takes the currently stored
-// checkpoint and returns a newer version which should replace it.
-//
-// Implementations should interpret a nil argument as meaning there is no
-// currently stored checkpoint.
-type UpdateFn func(current []byte) (next []byte, err error)
