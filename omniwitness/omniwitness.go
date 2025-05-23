@@ -41,7 +41,7 @@ import (
 	"github.com/transparency-dev/witness/internal/bastion"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
-	"github.com/transparency-dev/witness/internal/feeder/rekor"
+	"github.com/transparency-dev/witness/internal/feeder/rekor_v1"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 	"github.com/transparency-dev/witness/internal/feeder/tiles"
@@ -270,7 +270,7 @@ func (f Feeder) FeedFunc() logFeeder {
 	case Pixel:
 		return pixelbt.FeedLog
 	case Rekor:
-		return rekor.FeedLog
+		return rekor_v1.FeedLog
 	case Tiles:
 		return tiles.FeedLog
 	}

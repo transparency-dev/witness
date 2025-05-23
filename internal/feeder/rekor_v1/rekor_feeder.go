@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package rekor is an implementation of a witness feeder for the Sigstore log: Rekór.
-package rekor
+package rekor_v1
 
 import (
 	"context"
@@ -80,7 +80,7 @@ func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.
 		// Each Rekor feeder will request the same log info.
 		// TODO: Explore if it's feasible to request this once for all Rekor feeders.
 		li := logInfo{}
-		if err := getJSON(ctx, c, lURL, "api/v1/log?stable=true", &li); err != nil {
+		if err := getJSON(ctx, c, lURL, "api/v1/log", &li); err != nil {
 			return nil, fmt.Errorf("failed to fetch log info: %v", err)
 		}
 		// Active shard
