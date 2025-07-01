@@ -10,6 +10,7 @@
 This repository contains libraries and binaries for running witnesses.
 A witness verifies that logs are evolving in an append-only manner and counter-signs checkpoints that represent an append-only evolution from any previously witnessed checkpoints.
 These witnessed checkpoints can be consumed by clients that want protection against split-views.
+The signature format used is [`cosignature/v1`](https://C2SP.org/tlog-cosignature@v1.0.0-rc.1).
 
 Users wishing to run this should start with the [OmniWitness](./cmd/omniwitness/).
 

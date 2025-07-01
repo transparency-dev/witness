@@ -105,17 +105,13 @@ func main() {
 		}
 	}
 
-	signerLegacy, err := note.NewSigner(*signingKey)
-	if err != nil {
-		klog.Exitf("Failed to init signer v0: %v", err)
-	}
 	signerCosigV1, err := f_note.NewSignerForCosignatureV1(*signingKey)
 	if err != nil {
 		klog.Exitf("Failed to init signer v1: %v", err)
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:            []note.Signer{signerLegacy, signerCosigV1},
+		WitnessKeys:            []note.Signer{signerCosigV1},
 		WitnessVerifier:        signerCosigV1.Verifier(),
 		RestDistributorBaseURL: *restDistributorBaseURL,
 		BastionAddr:            *bastionAddr,
