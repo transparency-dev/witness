@@ -37,8 +37,7 @@ type sqlLogPersistence struct {
 func (p *sqlLogPersistence) Init() error {
 	_, err := p.db.Exec(`CREATE TABLE IF NOT EXISTS chkpts (
 		logID BLOB PRIMARY KEY,
-		chkpt BLOB,
-		range BLOB
+		chkpt BLOB
 		)`)
 	return err
 }
