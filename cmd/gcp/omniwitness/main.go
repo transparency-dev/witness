@@ -17,14 +17,9 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/x509"
-	"encoding/pem"
 	"flag"
-	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,15 +32,11 @@ import (
 
 var (
 	addr        = flag.String("listen", ":8080", "Address to listen on")
-	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
-	spannerURI  = flag.String("spanner", "", "Spanner resource URI. Format: projects/{projectName}/instances/{spannerInstance}/databases/{databaseName}")
+	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics. Set to empty string to disable metric export.")
+	spannerURI  = flag.String("spanner", "", "Spanner resource URI. Format: projects/{projectName}/instances/{spannerInstance}/databases/{databaseName}.")
 
 	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
-	restDistributorBaseURL     = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
-	bastionAddr                = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
-	bastionKeyPath             = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
-	rateLimit                  = flag.Float64("rate_limit", 0, "Maximum number of update requests per second to serve, or zero to disable")
-	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
+	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
 
 	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
@@ -89,27 +80,15 @@ func main() {
 		Timeout: *httpTimeout,
 	}
 
-	var bastionKey ed25519.PrivateKey
-	if *bastionKeyPath != "" {
-		bastionKey, err = readPrivateKey(*bastionKeyPath)
-		if err != nil {
-			klog.Exitf("Failed to read provided bastion key file %q: %v", *bastionKeyPath, err)
-		}
-	}
-
 	signer, err := NewSecretManagerSigner(ctx, *signerPrivateKeySecretName)
 	if err != nil {
 		klog.Exitf("Failed to init signer v1: %v", err)
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:            []note.Signer{signer},
-		WitnessVerifier:        signer.Verifier(),
-		RestDistributorBaseURL: *restDistributorBaseURL,
-		BastionAddr:            *bastionAddr,
-		BastionKey:             bastionKey,
-		RateLimit:              *rateLimit,
-		FeedInterval:           *pollInterval,
+		WitnessKeys:     []note.Signer{signer},
+		WitnessVerifier: signer.Verifier(),
+		FeedInterval:    *pollInterval,
 	}
 	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
 	if err != nil {
@@ -124,28 +103,4 @@ func main() {
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)
 	}
-}
-
-func readPrivateKey(f string) (ed25519.PrivateKey, error) {
-	p, err := os.ReadFile(f)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read from %q: %v", f, err)
-	}
-
-	b, _ := pem.Decode(p)
-	if b == nil || b.Type != "PRIVATE KEY" {
-		return nil, fmt.Errorf("invalid private key file %q: %v", f, err)
-	}
-
-	k, err := x509.ParsePKCS8PrivateKey(b.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("invalid private key: %v", err)
-	}
-
-	e, ok := k.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("incorrect private key type %T, must be ed25519", e)
-	}
-	return e, nil
-
 }
