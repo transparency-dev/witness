@@ -83,7 +83,7 @@ func newWitness(t *testing.T, logs []logOpts) *Witness {
 		KnownLogs:   logMap,
 	}
 	// Create the witness
-	w, err := New(opts)
+	w, err := New(t.Context(), opts)
 	if err != nil {
 		t.Fatalf("couldn't create witness: %v", err)
 	}

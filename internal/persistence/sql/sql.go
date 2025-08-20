@@ -16,6 +16,7 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -34,7 +35,7 @@ type sqlLogPersistence struct {
 	db *sql.DB
 }
 
-func (p *sqlLogPersistence) Init() error {
+func (p *sqlLogPersistence) Init(_ context.Context) error {
 	_, err := p.db.Exec(`CREATE TABLE IF NOT EXISTS chkpts (
 		logID BLOB PRIMARY KEY,
 		chkpt BLOB
@@ -42,7 +43,7 @@ func (p *sqlLogPersistence) Init() error {
 	return err
 }
 
-func (p *sqlLogPersistence) Logs() ([]string, error) {
+func (p *sqlLogPersistence) Logs(_ context.Context) ([]string, error) {
 	rows, err := p.db.Query("SELECT logID FROM chkpts")
 	if err != nil {
 		return nil, err
@@ -68,11 +69,11 @@ func (p *sqlLogPersistence) Logs() ([]string, error) {
 	return logs, nil
 }
 
-func (p *sqlLogPersistence) Latest(logID string) ([]byte, error) {
+func (p *sqlLogPersistence) Latest(_ context.Context, logID string) ([]byte, error) {
 	return getLatestCheckpoint(p.db.QueryRow, logID)
 }
 
-func (p *sqlLogPersistence) Update(logID string, f func([]byte) ([]byte, error)) error {
+func (p *sqlLogPersistence) Update(_ context.Context, logID string, f func([]byte) ([]byte, error)) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
