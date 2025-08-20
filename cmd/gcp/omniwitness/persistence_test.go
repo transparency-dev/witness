@@ -69,7 +69,11 @@ func TestUpdate(t *testing.T) {
 
 func TestUpdateConcurrent(t *testing.T) {
 	p, shutdown := mustNewPersistence(t)()
-	defer shutdown()
+	defer func() {
+		if err := shutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	}()
 
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Failed to init persistence: %v", err)

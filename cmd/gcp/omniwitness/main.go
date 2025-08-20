@@ -33,14 +33,12 @@ import (
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
-
-	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 )
 
 var (
 	addr        = flag.String("listen", ":8080", "Address to listen on")
 	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
-	spannerURI  = flag.String("spanner", "", "Spanner resource URI (projects/.../...)")
+	spannerURI  = flag.String("spanner", "", "Spanner resource URI. Format: projects/{projectName}/instances/{spannerInstance}/databases/{databaseName}")
 
 	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
 	restDistributorBaseURL     = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
