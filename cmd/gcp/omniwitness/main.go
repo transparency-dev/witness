@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -43,12 +42,12 @@ var (
 	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 	spannerURI  = flag.String("spanner", "", "Spanner resource URI (projects/.../...)")
 
-	signingKey             = flag.String("private_key", "", "The note-compatible signing key to use")
-	restDistributorBaseURL = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
-	bastionAddr            = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
-	bastionKeyPath         = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
-	rateLimit              = flag.Float64("rate_limit", 0, "Maximum number of update requests per second to serve, or zero to disable")
-	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
+	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
+	restDistributorBaseURL     = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
+	bastionAddr                = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
+	bastionKeyPath             = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
+	rateLimit                  = flag.Float64("rate_limit", 0, "Maximum number of update requests per second to serve, or zero to disable")
+	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 
 	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
@@ -100,14 +99,14 @@ func main() {
 		}
 	}
 
-	signerCosigV1, err := f_note.NewSignerForCosignatureV1(*signingKey)
+	signer, err := NewSecretManagerSigner(ctx, *signerPrivateKeySecretName)
 	if err != nil {
 		klog.Exitf("Failed to init signer v1: %v", err)
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:            []note.Signer{signerCosigV1},
-		WitnessVerifier:        signerCosigV1.Verifier(),
+		WitnessKeys:            []note.Signer{signer},
+		WitnessVerifier:        signer.Verifier(),
 		RestDistributorBaseURL: *restDistributorBaseURL,
 		BastionAddr:            *bastionAddr,
 		BastionKey:             bastionKey,
