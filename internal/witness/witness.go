@@ -105,11 +105,11 @@ type Witness struct {
 }
 
 // New creates a new witness, which initially has no logs to follow.
-func New(wo Opts) (*Witness, error) {
+func New(ctx context.Context, wo Opts) (*Witness, error) {
 	initMetrics()
 
 	// Create the chkpts table if needed.
-	if err := wo.Persistence.Init(); err != nil {
+	if err := wo.Persistence.Init(ctx); err != nil {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
 	}
 	return &Witness{
@@ -139,8 +139,8 @@ func (w *Witness) parse(chkptRaw []byte) (*log.Checkpoint, *note.Note, LogInfo, 
 // other checkpoints for the same log signed by this witness.
 //
 // Returns a nil checkpoint if no checkpoint is stored for the given logID.
-func (w *Witness) GetCheckpoint(_ context.Context, logID string) ([]byte, error) {
-	return w.lsp.Latest(logID)
+func (w *Witness) GetCheckpoint(ctx context.Context, logID string) ([]byte, error) {
+	return w.lsp.Latest(ctx, logID)
 }
 
 // Update updates the latest checkpoint if nextRaw is consistent with the current
@@ -171,7 +171,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	// Get the latest checkpoint for the log because we don't want consistency proofs
 	// with respect to older checkpoints.  Bind this all in a transaction to
 	// avoid race conditions when updating the database.
-	err = w.lsp.Update(log.ID(logInfo.Origin), func(prevRaw []byte) ([]byte, error) {
+	err = w.lsp.Update(ctx, log.ID(logInfo.Origin), func(prevRaw []byte) ([]byte, error) {
 		// If there was nothing stored already then treat this new
 		// checkpoint as trust-on-first-use (TOFU).
 		if prevRaw == nil {

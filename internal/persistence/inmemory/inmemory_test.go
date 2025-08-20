@@ -47,7 +47,7 @@ func TestUpdateConcurrent(t *testing.T) {
 	for i := 0; i < 25; i++ {
 		i := i
 		g.Go(func() error {
-			return p.Update(logID, func(current []byte) (next []byte, err error) {
+			return p.Update(t.Context(), logID, func(current []byte) (next []byte, err error) {
 				return []byte(fmt.Sprintf("success %d", i)), nil
 			})
 		})
@@ -57,7 +57,7 @@ func TestUpdateConcurrent(t *testing.T) {
 		t.Error(err)
 	}
 
-	cp, err := p.Latest(logID)
+	cp, err := p.Latest(t.Context(), logID)
 	if err != nil {
 		t.Fatal(err)
 	}

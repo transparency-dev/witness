@@ -117,7 +117,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if err != nil {
 		return fmt.Errorf("failed to convert witness config to map: %v", err)
 	}
-	witness, err := witness.New(witness.Opts{
+	witness, err := witness.New(ctx, witness.Opts{
 		Persistence: p,
 		Signers:     operatorConfig.WitnessKeys,
 		KnownLogs:   knownLogs,

@@ -16,6 +16,7 @@ package persistence
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 
@@ -33,21 +34,21 @@ func TestLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistence, 
 			t.Fatalf("close(): %v", err)
 		}
 	}()
-	if err := lsp.Init(); err != nil {
+	if err := lsp.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
-	if logs, err := lsp.Logs(); err != nil {
+	if logs, err := lsp.Logs(t.Context()); err != nil {
 		t.Errorf("Logs(): %v", err)
 	} else if got, want := len(logs), 0; got != want {
 		t.Errorf("got %d logs, want %d", got, want)
 	}
 
 	newCP := []byte("foo CP")
-	if err := checkAndSet(lsp, "foo", nil, newCP); err != nil {
+	if err := checkAndSet(t.Context(), lsp, "foo", nil, newCP); err != nil {
 		t.Fatal(err)
 	}
 
-	if logs, err := lsp.Logs(); err != nil {
+	if logs, err := lsp.Logs(t.Context()); err != nil {
 		t.Errorf("Logs(): %v", err)
 	} else if got, want := logs, []string{"foo"}; !cmp.Equal(got, want) {
 		t.Errorf("got != want (%v != %v)", got, want)
@@ -64,17 +65,17 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 			t.Fatalf("close(): %v", err)
 		}
 	}()
-	if err := lsp.Init(); err != nil {
+	if err := lsp.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
 
 	newCP := []byte("foo cp")
-	if err := checkAndSet(lsp, "foo", nil, newCP); err != nil {
+	if err := checkAndSet(t.Context(), lsp, "foo", nil, newCP); err != nil {
 		t.Fatalf("checkAndSet(nil, %s): %v", newCP, err)
 
 	}
 
-	cpRaw, err := lsp.Latest("foo")
+	cpRaw, err := lsp.Latest(t.Context(), "foo")
 	if err != nil {
 		t.Fatalf("Latest(): %v", err)
 	}
@@ -83,8 +84,8 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 	}
 }
 
-func checkAndSet(lsp persistence.LogStatePersistence, id string, expect []byte, write []byte) error {
-	if err := lsp.Update(id, func(current []byte) ([]byte, error) {
+func checkAndSet(ctx context.Context, lsp persistence.LogStatePersistence, id string, expect []byte, write []byte) error {
+	if err := lsp.Update(ctx, id, func(current []byte) ([]byte, error) {
 		if !bytes.Equal(current, expect) {
 			return nil, fmt.Errorf("got current %x, want %x", current, expect)
 		}
