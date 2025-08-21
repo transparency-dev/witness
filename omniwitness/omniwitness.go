@@ -81,6 +81,8 @@ type OperatorConfig struct {
 
 	FeedInterval       time.Duration
 	DistributeInterval time.Duration
+
+	ServeMux *http.ServeMux
 }
 
 // logFeeder is the de-facto interface that feeders implement.
@@ -93,6 +95,11 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	// This error group will be used to run all top level processes.
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
+
+	// If no ServeMux is provided, make a new private one.
+	if operatorConfig.ServeMux == nil {
+		operatorConfig.ServeMux = &http.ServeMux{}
+	}
 
 	feeders := make(map[config.Log]logFeeder)
 
@@ -162,10 +169,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			})
 		}
 	}
-	// Set up a mux for mapping witness API calls.
-	// We'll use this to serve both the bastion and regular HTTP requests.
-	witMux := &http.ServeMux{}
-	witMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
+	operatorConfig.ServeMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
 		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
@@ -178,7 +182,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		g.Go(func() error {
 			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
 			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)
-			return bastion.Register(ctx, bc, witMux)
+			return bastion.Register(ctx, bc, operatorConfig.ServeMux)
 		})
 	}
 
@@ -188,7 +192,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	srv := http.Server{
-		Handler:      witMux,
+		Handler:      operatorConfig.ServeMux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  5 * time.Minute,
