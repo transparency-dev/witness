@@ -17,11 +17,13 @@ package persistence
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/transparency-dev/witness/internal/persistence"
+	"github.com/transparency-dev/witness/internal/witness"
 )
 
 // TestLogs exposes a test that can be invoked by tests for specific implementations of persistence.
@@ -69,18 +71,32 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 		t.Fatalf("Init(): %v", err)
 	}
 
-	newCP := []byte("foo cp")
-	if err := checkAndSet(t.Context(), lsp, "foo", nil, newCP); err != nil {
-		t.Fatalf("checkAndSet(nil, %s): %v", newCP, err)
+	// Test that a successful update is visible.
+	{
+		newCP := []byte("foo cp")
+		if err := checkAndSet(t.Context(), lsp, "foo", nil, newCP); err != nil {
+			t.Fatalf("checkAndSet(nil, %s): %v", newCP, err)
 
+		}
+
+		cpRaw, err := lsp.Latest(t.Context(), "foo")
+		if err != nil {
+			t.Fatalf("Latest(): %v", err)
+		}
+		if got, want := cpRaw, []byte("foo cp"); !bytes.Equal(got, want) {
+			t.Errorf("got != want (%s != %s)", got, want)
+		}
 	}
 
-	cpRaw, err := lsp.Latest(t.Context(), "foo")
-	if err != nil {
-		t.Fatalf("Latest(): %v", err)
-	}
-	if got, want := cpRaw, []byte("foo cp"); !bytes.Equal(got, want) {
-		t.Errorf("got != want (%s != %s)", got, want)
+	// Test that underlying witness errors are properly wrapped by the persistence implementation.
+	{
+		wantErr := witness.ErrCheckpointStale
+		err := lsp.Update(t.Context(), "foo", func(_ []byte) ([]byte, error) {
+			return nil, wantErr
+		})
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("Got %[1]v (%[1]T), want %[2]v (%[2]T)", err, wantErr)
+		}
 	}
 }
 
@@ -91,7 +107,7 @@ func checkAndSet(ctx context.Context, lsp persistence.LogStatePersistence, id st
 		}
 		return write, nil
 	}); err != nil {
-		return fmt.Errorf("Update(%s): %v", id, err)
+		return fmt.Errorf("Update(%s): %w", id, err)
 	}
 	return nil
 }

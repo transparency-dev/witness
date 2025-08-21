@@ -200,7 +200,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		//       for the checkpoint's origin (or zero if it never cosigned a checkpoint for that origin)
 		if oldSize != prev.Size {
 			retSize, retSigs = prev.Size, nil
-			return nil, ErrCheckpointStale
+			return nil, fmt.Errorf("%w (%d != %d)", ErrCheckpointStale, oldSize, prev.Size)
 		}
 		// SPEC: The old size MUST be equal to or lower than the checkpoint size.
 		if next.Size < prev.Size {
