@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -128,18 +129,18 @@ func (a *httpHandler) handleUpdate(ctx context.Context, origin string, oldSize u
 	sigs, trustedSize, updateErr := a.update(ctx, oldSize, newCP, proof)
 	// Finally, handle any "soft" error from the update:
 	if updateErr != nil {
-		switch updateErr {
-		case witness.ErrCheckpointStale:
-			return http.StatusConflict, []byte(fmt.Sprintf("%d\n", trustedSize)), "text/x.tlog.size", nil
-		case witness.ErrUnknownLog:
+		switch {
+		case errors.Is(updateErr, witness.ErrCheckpointStale):
+			return http.StatusConflict, fmt.Appendf(nil, "%d\n", trustedSize), "text/x.tlog.size", nil
+		case errors.Is(updateErr, witness.ErrUnknownLog):
 			return http.StatusNotFound, nil, "", nil
-		case witness.ErrNoValidSignature:
+		case errors.Is(updateErr, witness.ErrNoValidSignature):
 			return http.StatusForbidden, nil, "", nil
-		case witness.ErrOldSizeInvalid:
+		case errors.Is(updateErr, witness.ErrOldSizeInvalid):
 			return http.StatusBadRequest, nil, "", nil
-		case witness.ErrInvalidProof:
+		case errors.Is(updateErr, witness.ErrInvalidProof):
 			return http.StatusUnprocessableEntity, nil, "", nil
-		case witness.ErrRootMismatch:
+		case errors.Is(updateErr, witness.ErrRootMismatch):
 			return http.StatusConflict, nil, "", nil
 		default:
 			return http.StatusInternalServerError, nil, "", updateErr
