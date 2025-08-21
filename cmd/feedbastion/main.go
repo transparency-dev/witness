@@ -27,10 +27,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
@@ -93,7 +95,6 @@ func main() {
 	}
 	eg := errgroup.Group{}
 	for o, lf := range feeders {
-		lf := lf
 		if r.Match([]byte(o)) {
 			eg.Go(func() error {
 				if err := rl.Wait(ctx); err != nil {
@@ -133,7 +134,11 @@ func (b *bastionClient) Update(ctx context.Context, oldSize uint64, newCP []byte
 	body += string(newCP)
 
 	klog.V(1).Infof("%q: sending:\n%s", name, body)
-	resp, err := b.httpClient.Post(b.url, "", bytes.NewReader([]byte(body)))
+	p, err := url.JoinPath(b.url, api.HTTPAddCheckpoint)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to construct submission URL: %v", err)
+	}
+	resp, err := b.httpClient.Post(p, "", bytes.NewReader([]byte(body)))
 	if err != nil {
 		return nil, 0, err
 	}

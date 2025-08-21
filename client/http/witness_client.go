@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/witness"
 	"k8s.io/klog/v2"
 )
@@ -64,7 +65,7 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 	_, _ = fmt.Fprintln(reqBody)
 	_, _ = reqBody.Write(newCP)
 
-	req, err := http.NewRequest(http.MethodPost, w.url.JoinPath("/add-checkpoint").String(), reqBody)
+	req, err := http.NewRequest(http.MethodPost, w.url.JoinPath(api.HTTPAddCheckpoint).String(), reqBody)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to create request: %v", err)
 	}
