@@ -155,7 +155,7 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 			f.oldSize = actualSize
 			return nil, backoff.RetryAfter(1)
 		case err != nil:
-			e := fmt.Errorf("failed to submit checkpoint to witness: %v", err)
+			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %v", cpSubmit.Origin, err)
 			klog.Warning(e.Error())
 			return nil, e
 		default:

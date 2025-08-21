@@ -114,7 +114,7 @@ func (p *spannerPersistence) Update(ctx context.Context, logID string, f func([]
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to update: %v", err)
+		return fmt.Errorf("failed to update: %w", err)
 	}
 
 	return nil
