@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/transparency-dev/witness/api"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
@@ -161,6 +162,10 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 			})
 		}
 	}
+	// Set up a mux for mapping witness API calls.
+	// We'll use this to serve both the bastion and regular HTTP requests.
+	witMux := &http.ServeMux{}
+	witMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
 		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
@@ -173,7 +178,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		g.Go(func() error {
 			klog.Infof("Bastion feeder %q goroutine started", bc.Addr)
 			defer klog.Infof("Bastion feeder %q goroutine done", bc.Addr)
-			return bastion.Register(ctx, bc, handler)
+			return bastion.Register(ctx, bc, witMux)
 		})
 	}
 
@@ -183,7 +188,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	srv := http.Server{
-		Handler:      handler,
+		Handler:      witMux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  5 * time.Minute,
