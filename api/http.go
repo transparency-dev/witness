@@ -16,7 +16,7 @@
 package api
 
 const (
-	// HTTPUpdate is the path of the URL to update to a new checkpoint.
+	// HTTPAddCheckpoint is the path of the URL to update to a new checkpoint.
 	// This endpoint expects a https://c2sp.org/tlog-witness compliant request.
-	HTTPUpdate = "/"
+	HTTPAddCheckpoint = "/add-checkpoint"
 )
