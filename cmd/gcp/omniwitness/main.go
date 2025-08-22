@@ -31,9 +31,8 @@ import (
 )
 
 var (
-	addr        = flag.String("listen", ":8080", "Address to listen on")
-	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics. Set to empty string to disable metric export.")
-	spannerURI  = flag.String("spanner", "", "Spanner resource URI. Format: projects/{projectName}/instances/{spannerInstance}/databases/{databaseName}.")
+	addr       = flag.String("listen", ":8080", "Address to listen on")
+	spannerURI = flag.String("spanner", "", "Spanner resource URI. Format: projects/{projectName}/instances/{spannerInstance}/databases/{databaseName}.")
 
 	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
 	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
@@ -48,29 +47,13 @@ func main() {
 
 	ctx := context.Background()
 
-	if *metricsAddr == "" {
-		klog.Info("No metrics_listen address provided so skipping prometheus setup")
-		mf := monitoring.InertMetricFactory{}
-		monitoring.SetMetricFactory(mf)
-	} else {
-		mf := prometheus.MetricFactory{
-			Prefix: "omniwitness_",
-		}
-		monitoring.SetMetricFactory(mf)
-
-		go func() {
-			http.Handle("/metrics", promhttp.Handler())
-			srv := &http.Server{
-				Addr:         *metricsAddr,
-				ReadTimeout:  5 * time.Second,
-				WriteTimeout: 10 * time.Second,
-			}
-			if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-				klog.Errorf("Error serving metrics: %v", err)
-			}
-		}()
-		klog.Infof("Prometheus configured to listen on %q", *metricsAddr)
+	mf := prometheus.MetricFactory{
+		Prefix: "omniwitness_",
 	}
+	monitoring.SetMetricFactory(mf)
+	mux := &http.ServeMux{}
+	mux.Handle("/metrics", promhttp.Handler())
+	klog.Infof("Prometheus configured on %s", *addr)
 
 	httpListener, err := net.Listen("tcp", *addr)
 	if err != nil {
@@ -89,6 +72,7 @@ func main() {
 		WitnessKeys:     []note.Signer{signer},
 		WitnessVerifier: signer.Verifier(),
 		FeedInterval:    *pollInterval,
+		ServeMux:        mux,
 	}
 	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
 	if err != nil {
