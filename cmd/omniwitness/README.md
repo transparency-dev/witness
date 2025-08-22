@@ -100,12 +100,12 @@ go run github.com/transparency-dev/witness/cmd/omniwitness@main --alsologtostder
 
 ### Interactively
 
-You can use the [`/cmd/witness`](/cmd/feedwitness) command to fetch checkpoints and send them to your
+You can use the [`/cmd/feedwitness`](/cmd/feedwitness) command to fetch checkpoints and send them to your
 witness instance by running the following command:
 
 ```
-# Change the --bastion_url value to point to your witness instance if necessary
-go run github.com/transparency-dev/witness/cmd/feedwitness@main --alsologtostderr --bastion_url=http://localhost:8080
+# Change the --witness_url value to point to your witness instance if necessary
+go run github.com/transparency-dev/witness/cmd/feedwitness@main --alsologtostderr --witness_url=http://localhost:8080
 ```
 
 ### Passively 

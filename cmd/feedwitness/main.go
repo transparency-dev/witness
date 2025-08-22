@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// feedbastion is a one-shot tool for submitting checkpoints from known logs
-// to witnesses behind bastions.
+// feedwitness is a tool for submitting checkpoints from known logs
+// to witnesses, either directly or behind bastions.
 //
-// The primary use case for this tool is testing a bastion + witness setup.
+// The primary use case for this tool is testing bastion and/or witness setups,
+// but it may also be useful for feeding checkpoints from logs which do not
+// actively participate in witnessing to witnesses.
 package main
 
 import (
@@ -42,10 +44,10 @@ import (
 )
 
 var (
-	bastionURL   = flag.String("bastion_url", "https://localhost:8443", "URL of the bastion service")
-	feed         = flag.String("feed", ".*", "RegEx matching log origins to feed to bastion")
-	loopInterval = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
-	rateLimit    = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send via bastion")
+	witnessURL    = flag.String("witness_url", "https://localhost:8443", "URL of the witness to submit checkpoints to (either directly, or via a bastion)")
+	feed          = flag.String("feed", ".*", "RegEx matching log origins to feed checkpoints from")
+	loopInterval  = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
+	rateLimit     = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send")
 )
 
 type logFeeder struct {
@@ -89,8 +91,8 @@ func main() {
 
 	r := regexp.MustCompile(*feed)
 	bc := &bastionClient{
-		httpClient:    insecureHttpClient,
-		url:           *bastionURL,
+		httpClient:    httpClient,
+		url:           *witnessURL,
 		originByLogID: originByID,
 	}
 	eg := errgroup.Group{}
