@@ -21,21 +21,19 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 
-	"github.com/transparency-dev/witness/api"
+	w_http "github.com/transparency-dev/witness/client/http"
 	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -43,8 +41,13 @@ import (
 	"k8s.io/klog/v2"
 )
 
+func init() {
+	flag.Var(&witnessURL, "witness_url", "Root URL of the witness to submit checkpoints to (either directly, or via a bastion), can be specified multple times to submit to multiple witnesses")
+}
+
 var (
-	witnessURL    = flag.String("witness_url", "https://localhost:8443", "URL of the witness to submit checkpoints to (either directly, or via a bastion)")
+	witnessURL    multiStringFlag
+	httpsInsecure = flag.Bool("https_insecure", false, "Set to true to disable TLS verification of the witness service")
 	feed          = flag.String("feed", ".*", "RegEx matching log origins to feed checkpoints from")
 	loopInterval  = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
 	rateLimit     = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send")
@@ -63,10 +66,12 @@ func main() {
 	ctx := context.Background()
 	rl := rate.NewLimiter(rate.Limit(*rateLimit), 1)
 
-	httpClient := &http.Client{}
-	insecureHttpClient := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	},
+	httpClient := http.DefaultClient
+	if *httpsInsecure {
+		httpClient = &http.Client{Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+		}
 	}
 	cfg := omniwitness.LogConfig{}
 	if err := yaml.Unmarshal(omniwitness.ConfigLogs, &cfg); err != nil {
@@ -74,7 +79,6 @@ func main() {
 	}
 
 	feeders := make(map[string]logFeeder)
-	originByID := make(map[string]string)
 	for _, l := range cfg.Logs {
 		lc, err := config.NewLog(l.Origin, l.PublicKey, l.URL)
 		if err != nil {
@@ -86,24 +90,31 @@ func main() {
 				info: l,
 			}
 		}
-		originByID[lc.ID] = l.Origin
 	}
 
 	r := regexp.MustCompile(*feed)
-	bc := &bastionClient{
-		httpClient:    httpClient,
-		url:           *witnessURL,
-		originByLogID: originByID,
+	if len(witnessURL) == 0 {
+		klog.Exitf("At least one --witness_url must be specifed")
 	}
 	eg := errgroup.Group{}
-	for o, lf := range feeders {
-		if r.Match([]byte(o)) {
-			eg.Go(func() error {
-				if err := rl.Wait(ctx); err != nil {
-					return err
-				}
-				return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc.Update, httpClient, *loopInterval)
-			})
+	for _, wu := range witnessURL {
+		u, err := url.Parse(wu)
+		if err != nil {
+			klog.Exitf("Invalid witness URL %q: %v", wu, err)
+		}
+		bc := &loggingClient{
+			witness: w_http.NewWitness(u, httpClient),
+			url:     wu,
+		}
+		for o, lf := range feeders {
+			if r.Match([]byte(o)) {
+				eg.Go(func() error {
+					if err := rl.Wait(ctx); err != nil {
+						return err
+					}
+					return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc.Update, httpClient, *loopInterval)
+				})
+			}
 		}
 	}
 	if err := eg.Wait(); err != nil {
@@ -111,67 +122,39 @@ func main() {
 	}
 }
 
-type bastionClient struct {
-	httpClient    *http.Client
-	url           string
-	originByLogID map[string]string
+type loggingClient struct {
+	witness w_http.Witness
+	url     string
 }
 
 // Update attempts to clock the witness forward for the given logID.
 // The latest signed checkpoint will be returned if this succeeds, or if the error is
 // http.ErrCheckpointTooOld. In all other cases no checkpoint should be expected.
-func (b *bastionClient) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
-	name, _, _ := strings.Cut(string(newCP), "\n")
+func (lc *loggingClient) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
+	rb, size, err := lc.witness.Update(ctx, oldSize, newCP, proof)
 
-	// The request body MUST be a sequence of
-	// - a previous size line,
-	// - zero or more consistency proof lines,
-	// - and an empty line,
-	// - followed by a [checkpoint][].
-	body := fmt.Sprintf("old %d\n", oldSize)
-	for _, p := range proof {
-		body += base64.StdEncoding.EncodeToString(p) + "\n"
-	}
-	body += "\n"
-	body += string(newCP)
-
-	klog.V(1).Infof("%q: sending:\n%s", name, body)
-	p, err := url.JoinPath(b.url, api.HTTPAddCheckpoint)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to construct submission URL: %v", err)
-	}
-	resp, err := b.httpClient.Post(p, "", bytes.NewReader([]byte(body)))
-	if err != nil {
-		return nil, 0, err
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			klog.Errorf("Failed to close response body: %v", err)
-		}
-	}()
-
-	rb, err := io.ReadAll(resp.Body)
-	if err != nil {
-		klog.Errorf("❌ %q: failed to read response body: %v", name, err)
-	}
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		klog.Infof("✅ %s: updated with signature(s):\n%s", name, string(rb))
-	case http.StatusConflict:
-		msg := ""
-		if resp.Header.Get("Content-Type") == "text/x.tlog.size" {
-			size, err := strconv.Atoi(strings.TrimSpace(string(rb)))
-			if err != nil {
-				msg = fmt.Sprintf("Invalid size in body %q", string(rb))
-			} else {
-				msg = fmt.Sprintf("View stale, witness has checkpoint size %d (we have %d)", size, oldSize)
-			}
-		}
-		klog.Infof("🫣 %q: conflict: %s", name, msg)
+	switch name := strings.Split(string(newCP), "\n")[0]; {
+	case err == nil:
+		klog.Infof("✅ %s ← %s: updated with signature(s):\n%s", lc.url, name, string(rb))
+	case errors.Is(err, witness.ErrCheckpointStale):
+		msg := fmt.Sprintf("View stale, witness has checkpoint size %d (we have %d)", size, oldSize)
+		klog.Infof("🫣 %s ← %s: conflict: %s", lc.url, name, msg)
 	default:
-		klog.Infof("❌ %q: status %d: %s", name, resp.StatusCode, string(rb))
+		klog.Infof("❌ %s ← %s: %v", lc.url, name, err)
 	}
 
 	return nil, 0, nil
+}
+
+// multiStringFlag allows a flag to be specified multiple times on the command
+// line, and stores all of these values.
+type multiStringFlag []string
+
+func (ms *multiStringFlag) String() string {
+	return strings.Join(*ms, ",")
+}
+
+func (ms *multiStringFlag) Set(w string) error {
+	*ms = append(*ms, w)
+	return nil
 }
