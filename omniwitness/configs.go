@@ -17,52 +17,99 @@ package omniwitness
 import (
 	_ "embed" // embed is needed to embed files as constants
 	"fmt"
+	"iter"
 
 	logfmt "github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 var (
-	// ConfigLogs is the config for the witness used in the omniwitness.
+	// DefaultConfigLogs is the config for the witness used in the omniwitness.
 	// Its schema is LogConfig
 	//go:embed logs.yaml
-	ConfigLogs []byte
+	DefaultConfigLogs []byte
 )
 
-// LogConfig contains a list of LogInfo (configuration options for a log).
-type LogConfig struct {
-	Logs []LogInfo `yaml:"Logs"`
+// cfg contains a list of configuration options for known logs.
+type cfg struct {
+	Logs []logCfg `yaml:"Logs"`
 }
 
-// AsLogMap loads the log configuration information into a map, keyed by log ID.
-func (config LogConfig) AsLogMap() (map[string]witness.LogInfo, error) {
-	logMap := make(map[string]witness.LogInfo)
-	h := rfc6962.DefaultHasher
-	for _, log := range config.Logs {
-		logV, err := f_note.NewVerifier(log.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
-		}
-		logInfo := witness.LogInfo{
-			SigV:   logV,
-			Origin: log.Origin,
-			Hasher: h,
-		}
-		logID := logfmt.ID(log.Origin)
-		if oldLog, found := logMap[logID]; found {
-			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
-		}
-		logMap[logID] = logInfo
-	}
-	return logMap, nil
-}
-
-// LogInfo contains the details about a log.
-type LogInfo struct {
+// logCfg contains the details about a log.
+type logCfg struct {
 	Origin    string `yaml:"Origin"`
 	PublicKey string `yaml:"PublicKey"`
 	URL       string `yaml:"URL"`
 	Feeder    Feeder `yaml:"Feeder"`
+}
+
+// NewStaticLogConfig creates a new LogConfig based on the provided YAML data.
+func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
+	cfg := &cfg{}
+	if err := yaml.Unmarshal(yamlCfg, cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal witness config: %v", err)
+	}
+	r := &staticLogConfig{
+		logs: make(map[string]parsedLog),
+	}
+	for _, log := range cfg.Logs {
+		logV, err := f_note.NewVerifier(log.PublicKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
+		}
+		logID := logfmt.ID(log.Origin)
+		logInfo := parsedLog{
+			Config: config.Log{
+				ID:       logID,
+				Verifier: logV,
+				Origin:   log.Origin,
+				URL:      log.URL,
+			},
+			Feeder: log.Feeder,
+		}
+		if oldLog, found := r.logs[logID]; found {
+			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
+		}
+		r.logs[logID] = logInfo
+	}
+	return r, nil
+}
+
+type parsedLog struct {
+	Config config.Log
+	// Feeder is the feeder to use for this log, if any.
+	Feeder Feeder
+}
+
+type staticLogConfig struct {
+	logs map[string]parsedLog
+}
+
+func (s *staticLogConfig) Logs() iter.Seq[config.Log] {
+	return func(yield func(config.Log) bool) {
+		for _, v := range s.logs {
+			if !yield(v.Config) {
+				return
+			}
+		}
+	}
+}
+
+func (s *staticLogConfig) Feeders() iter.Seq2[Feeder, config.Log] {
+	return func(yield func(Feeder, config.Log) bool) {
+		for _, v := range s.logs {
+			if v.Feeder != None {
+				if !yield(v.Feeder, v.Config) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (s *staticLogConfig) Log(id string) (config.Log, bool) {
+	l, ok := s.logs[id]
+	return l.Config, ok
 }

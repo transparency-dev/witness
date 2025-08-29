@@ -95,9 +95,10 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("NewVerifier: %v", err)
 	}
 	logID := log.ID(testCPOrigin)
-	logs := map[string]config.Log{
-		logID: config.Log{Origin: testCPOrigin},
-	}
+	logs := &staticLogConfig{
+		logs: map[string]parsedLog{
+			logID: parsedLog{Config: config.Log{Origin: testCPOrigin}},
+		}}
 	for _, test := range []struct {
 		name string
 		// fake witness control

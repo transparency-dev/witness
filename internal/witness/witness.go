@@ -30,8 +30,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/merkle"
 	"github.com/transparency-dev/merkle/proof"
+	"github.com/transparency-dev/merkle/rfc6962"
+	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -78,30 +79,17 @@ func initMetrics() {
 
 // Opts is the options passed to a witness.
 type Opts struct {
-	Persistence persistence.LogStatePersistence
-	Signers     []note.Signer
-	KnownLogs   map[string]LogInfo
-}
-
-// LogInfo contains the information needed to verify log checkpoints.
-type LogInfo struct {
-	// The verifier for signatures from the log.
-	SigV note.Verifier
-	// The expected Origin string in the checkpoints.
-	Origin string
-	// The hash strategy that should be used in verifying consistency.
-	Hasher merkle.LogHasher
+	Persistence    persistence.LogStatePersistence
+	Signers        []note.Signer
+	ConfigForLogID func(string) (config.Log, bool)
 }
 
 // Witness consists of a database for storing checkpoints, a signer, and a list
 // of logs for which it stores and verifies checkpoints.
 type Witness struct {
-	lsp     persistence.LogStatePersistence
-	Signers []note.Signer
-	// At some point we might want to store this information in a table in
-	// the database too but as I imagine it being populated from a static
-	// config file it doesn't seem very urgent to do that.
-	Logs map[string]LogInfo
+	lsp            persistence.LogStatePersistence
+	Signers        []note.Signer
+	ConfigForLogID func(string) (config.Log, bool)
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -113,26 +101,26 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
 	}
 	return &Witness{
-		lsp:     wo.Persistence,
-		Signers: wo.Signers,
-		Logs:    wo.KnownLogs,
+		lsp:            wo.Persistence,
+		Signers:        wo.Signers,
+		ConfigForLogID: wo.ConfigForLogID,
 	}, nil
 }
 
 // parse verifies the checkpoint under the appropriate key for the origin and returns
 // the parsed checkpoint and the note itself.
-func (w *Witness) parse(chkptRaw []byte) (*log.Checkpoint, *note.Note, LogInfo, error) {
+func (w *Witness) parse(chkptRaw []byte) (*log.Checkpoint, *note.Note, string, error) {
 	origin, _, found := strings.Cut(string(chkptRaw), "\n")
 	if !found {
-		return nil, nil, LogInfo{}, errors.New("invalid checkpoint")
+		return nil, nil, "", errors.New("invalid checkpoint")
 	}
 	logID := log.ID(origin)
-	logInfo, ok := w.Logs[logID]
+	logInfo, ok := w.ConfigForLogID(logID)
 	if !ok {
-		return nil, nil, LogInfo{}, ErrUnknownLog
+		return nil, nil, "", ErrUnknownLog
 	}
-	cp, _, n, err := log.ParseCheckpoint(chkptRaw, logInfo.Origin, logInfo.SigV)
-	return cp, n, logInfo, err
+	cp, _, n, err := log.ParseCheckpoint(chkptRaw, origin, logInfo.Verifier)
+	return cp, n, origin, err
 }
 
 // GetCheckpoint gets a checkpoint for a given log, which is consistent with all
@@ -158,12 +146,12 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	//
 	// SPEC: The witness MUST verify the checkpoint signature against the public key(s) it trusts for the
 	//       checkpoint origin, and it MUST ignore signatures from unknown keys.
-	next, nextNote, logInfo, err := w.parse(nextRaw)
+	next, nextNote, origin, err := w.parse(nextRaw)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	counterUpdateAttempt.Inc(logInfo.Origin)
+	counterUpdateAttempt.Inc(origin)
 
 	var retSigs []byte
 	var retSize uint64
@@ -171,7 +159,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	// Get the latest checkpoint for the log because we don't want consistency proofs
 	// with respect to older checkpoints.  Bind this all in a transaction to
 	// avoid race conditions when updating the database.
-	err = w.lsp.Update(ctx, log.ID(logInfo.Origin), func(prevRaw []byte) ([]byte, error) {
+	err = w.lsp.Update(ctx, log.ID(origin), func(prevRaw []byte) ([]byte, error) {
 		// If there was nothing stored already then treat this new
 		// checkpoint as trust-on-first-use (TOFU).
 		if prevRaw == nil {
@@ -180,7 +168,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 			if err != nil {
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
-			counterUpdateSuccess.Inc(logInfo.Origin)
+			counterUpdateSuccess.Inc(origin)
 			retSigs = sigs
 			return signed, nil
 		}
@@ -211,8 +199,8 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		//        also identical.
 		if next.Size == prev.Size {
 			if !bytes.Equal(next.Hash, prev.Hash) {
-				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", logInfo.Origin, prev, next)
-				counterInconsistentCheckpoints.Inc(logInfo.Origin)
+				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", origin, prev, next)
+				counterInconsistentCheckpoints.Inc(origin)
 
 				retSize, retSigs = 0, nil
 				return nil, ErrRootMismatch
@@ -234,15 +222,15 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
 			retSize, retSigs = 0, sigs
-			counterUpdateSuccess.Inc(logInfo.Origin)
+			counterUpdateSuccess.Inc(origin)
 			return signed, nil
 		}
 
 		// The only remaining option is next.Size > prev.Size. This might be
 		// valid so we verify the consistency proofs.
-		if err := proof.VerifyConsistency(logInfo.Hasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
+		if err := proof.VerifyConsistency(rfc6962.DefaultHasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
 			// Complain if the checkpoints aren't consistent.
-			counterInvalidConsistency.Inc(logInfo.Origin)
+			counterInvalidConsistency.Inc(origin)
 			return nil, ErrInvalidProof
 		}
 		// If the consistency proof is good we store the witness cosigned nextRaw.
@@ -255,7 +243,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		return signed, nil
 	})
 	if err == nil {
-		counterUpdateSuccess.Inc(logInfo.Origin)
+		counterUpdateSuccess.Inc(origin)
 	}
 
 	return retSigs, retSize, err

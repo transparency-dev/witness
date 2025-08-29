@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,11 +47,15 @@ func TestDistributeOnce(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	log, err := config.NewLog("Log Checkpoint v0", "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT", "http://example.com/log62")
-	if err != nil {
-		t.Fatal(err)
+	lc := &logConfig{
+		lc: config.Log{
+			ID:       "monkeys",
+			Origin:   "Log Checkpoint v0",
+			Verifier: mustVerifier(t, lPK),
+			URL:      "http://example.com/log62",
+		},
 	}
-	logs := []config.Log{log}
+
 	wV, err := f_note.NewVerifierForCosignatureV1(wPK)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +76,7 @@ func TestDistributeOnce(t *testing.T) {
 
 	wit := &silentWitness{}
 	wit.result = msg
-	d, err := rest.NewDistributor(ts.URL, http.DefaultClient, logs, wV, wit.GetLatestCheckpoint)
+	d, err := rest.NewDistributor(ts.URL, http.DefaultClient, lc, wV, wit.GetLatestCheckpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +86,7 @@ func TestDistributeOnce(t *testing.T) {
 	if got, want := fd.lastCheckpoint, wit.result; !bytes.Equal(got, want) {
 		t.Errorf("got %v != want %v", got, want)
 	}
-	if got, want := fd.lastLogID, log.ID; got != want {
+	if got, want := fd.lastLogID, lc.lc.ID; got != want {
 		t.Errorf("got %q != want %q", got, want)
 	}
 	if got, want := fd.lastWitID, "witness"; got != want {
@@ -115,4 +120,25 @@ func (d *fakeDistributor) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.lastCheckpoint = body
+}
+
+func mustVerifier(t *testing.T, v string) note.Verifier {
+	t.Helper()
+	ver, err := f_note.NewVerifier(v)
+	if err != nil {
+		t.Fatalf("Invalid verifier string: %v", err)
+	}
+	return ver
+}
+
+type logConfig struct {
+	lc config.Log
+}
+
+var _ rest.LogConfig = &logConfig{}
+
+func (l *logConfig) Logs() iter.Seq[config.Log] {
+	return func(yield func(config.Log) bool) {
+		yield(l.lc)
+	}
 }

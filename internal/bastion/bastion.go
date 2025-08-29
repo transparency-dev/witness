@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
@@ -40,7 +39,6 @@ import (
 type Config struct {
 	Addr            string
 	Prefix          string
-	Logs            []config.Log
 	BastionKey      ed25519.PrivateKey
 	WitnessVerifier note.Verifier
 }

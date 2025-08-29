@@ -18,25 +18,8 @@
 package config
 
 import (
-	"github.com/transparency-dev/formats/log"
-	f_note "github.com/transparency-dev/formats/note"
 	"golang.org/x/mod/sumdb/note"
 )
-
-// NewLog creates a Log from the given origin, public key & type, and URL.
-func NewLog(origin, pk, url string) (Log, error) {
-	id := log.ID(origin)
-	logV, err := f_note.NewVerifier(pk)
-	if err != nil {
-		return Log{}, err
-	}
-	return Log{
-		ID:       id,
-		Origin:   origin,
-		Verifier: logV,
-		URL:      url,
-	}, nil
-}
 
 // Log describes a verifiable log.
 type Log struct {

@@ -32,12 +32,10 @@ import (
 	"strings"
 
 	w_http "github.com/transparency-dev/witness/client/http"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 )
 
@@ -52,11 +50,6 @@ var (
 	loopInterval  = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
 	rateLimit     = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send")
 )
-
-type logFeeder struct {
-	cfg  config.Log
-	info omniwitness.LogInfo
-}
 
 func main() {
 	klog.InitFlags(nil)
@@ -73,23 +66,9 @@ func main() {
 		},
 		}
 	}
-	cfg := omniwitness.LogConfig{}
-	if err := yaml.Unmarshal(omniwitness.ConfigLogs, &cfg); err != nil {
-		klog.Exitf("failed to unmarshal witness config: %v", err)
-	}
-
-	feeders := make(map[string]logFeeder)
-	for _, l := range cfg.Logs {
-		lc, err := config.NewLog(l.Origin, l.PublicKey, l.URL)
-		if err != nil {
-			klog.Exitf("invalid log configuration: %v", err)
-		}
-		if l.Feeder != omniwitness.None {
-			feeders[l.Origin] = logFeeder{
-				cfg:  lc,
-				info: l,
-			}
-		}
+	cfg, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
+	if err != nil {
+		klog.Exitf("failed to instantiate default witness config: %v", err)
 	}
 
 	r := regexp.MustCompile(*feed)
@@ -106,13 +85,13 @@ func main() {
 			witness: w_http.NewWitness(u, httpClient),
 			url:     wu,
 		}
-		for o, lf := range feeders {
-			if r.Match([]byte(o)) {
+		for f, lc := range cfg.Feeders() {
+			if r.Match([]byte(lc.Origin)) {
 				eg.Go(func() error {
 					if err := rl.Wait(ctx); err != nil {
 						return err
 					}
-					return lf.info.Feeder.FeedFunc()(ctx, lf.cfg, bc.Update, httpClient, *loopInterval)
+					return f.FeedFunc()(ctx, lc, bc.Update, httpClient, *loopInterval)
 				})
 			}
 		}

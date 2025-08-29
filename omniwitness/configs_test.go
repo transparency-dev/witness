@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/transparency-dev/witness/omniwitness"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -32,25 +31,30 @@ var (
 
 func testConfig(t *testing.T, cfg []byte) {
 	t.Helper()
-	logCfg := omniwitness.LogConfig{}
-	if err := yaml.Unmarshal(cfg, &logCfg); err != nil {
+	logCfg, err := omniwitness.NewStaticLogConfig(cfg)
+	if err != nil {
 		t.Fatal("failed to unmarshal config", err)
 	}
-	if len(logCfg.Logs) == 0 {
-		t.Fatal("no logs defined in config")
-	}
-	for _, l := range logCfg.Logs {
-		if l.Feeder == 0 {
-			t.Errorf("log %q has unknown feeder", l.Origin)
-		}
+	c := 0
+	for l := range logCfg.Logs() {
+		c++
 		if len(l.URL) == 0 {
 			t.Errorf("log %q has no URL", l.URL)
+		}
+	}
+	if c == 0 {
+		t.Fatal("no logs defined in config")
+	}
+
+	for f, l := range logCfg.Feeders() {
+		if f == omniwitness.None {
+			t.Errorf("log %q has unknown feeder", l.Origin)
 		}
 	}
 }
 
 func TestProdConfig(t *testing.T) {
-	testConfig(t, omniwitness.ConfigLogs)
+	testConfig(t, omniwitness.DefaultConfigLogs)
 }
 
 func TestConfig(t *testing.T) {

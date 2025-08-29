@@ -27,7 +27,6 @@ import (
 	"sync"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -59,7 +58,7 @@ func initMetrics() {
 // httpHandler knows how to handle tlog-witness HTTP requests.
 type httpHandler struct {
 	update      func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
-	logs        map[string]config.Log
+	logs        LogConfig
 	witVerifier note.Verifier
 	limiter     *rate.Limiter
 }
@@ -94,7 +93,7 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logID := log.ID(s[0])
-	logCfg, ok := a.logs[logID]
+	logCfg, ok := a.logs.Log(logID)
 	if !ok {
 		klog.V(1).Infof("unknown log: %v", logID)
 		w.WriteHeader(http.StatusNotFound)
