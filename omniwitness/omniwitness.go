@@ -22,6 +22,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"fmt"
+	"iter"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -36,7 +37,6 @@ import (
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
 	"github.com/transparency-dev/witness/internal/bastion"
@@ -83,6 +83,21 @@ type OperatorConfig struct {
 	DistributeInterval time.Duration
 
 	ServeMux *http.ServeMux
+
+	// Logs provides the witness with the log configuration.
+	// If unset, uses the embedded default config.
+	Logs LogConfig
+}
+
+// LogConfig is the contract of something which knows how to provide log configuration info for the witness.
+type LogConfig interface {
+	// Logs returns an iterator of all known logs.
+	Logs() iter.Seq[config.Log]
+	// Feeders returns an iterator of all feedable logs.
+	Feeders() iter.Seq2[Feeder, config.Log]
+
+	// Log returns the configuration info of the log with the specified log ID, if it exists.
+	Log(id string) (config.Log, bool)
 }
 
 // logFeeder is the de-facto interface that feeders implement.
@@ -101,42 +116,27 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		operatorConfig.ServeMux = &http.ServeMux{}
 	}
 
-	feeders := make(map[config.Log]logFeeder)
-
-	logCfg := LogConfig{}
-	if err := yaml.Unmarshal(ConfigLogs, &logCfg); err != nil {
-		return fmt.Errorf("failed to unmarshal witness config: %v", err)
-	}
-
-	logs := []config.Log{}
-	for _, l := range logCfg.Logs {
-		lc, err := config.NewLog(l.Origin, l.PublicKey, l.URL)
+	if operatorConfig.Logs == nil {
+		l, err := NewStaticLogConfig(DefaultConfigLogs)
 		if err != nil {
-			return fmt.Errorf("invalid log configuration: %v", err)
+			return fmt.Errorf("failed to instantiate default logs config: %v", err)
 		}
-		if l.Feeder != None {
-			feeders[lc] = l.Feeder.FeedFunc()
-		}
-		logs = append(logs, lc)
-		klog.Infof("Added log %q: %s", lc.Origin, lc.ID)
+		operatorConfig.Logs = l
 	}
 
-	knownLogs, err := logCfg.AsLogMap()
-	if err != nil {
-		return fmt.Errorf("failed to convert witness config to map: %v", err)
-	}
 	witness, err := witness.New(ctx, witness.Opts{
 		Persistence: p,
 		Signers:     operatorConfig.WitnessKeys,
-		KnownLogs:   knownLogs,
+		ConfigForLogID: func(id string) (config.Log, bool) {
+			l, ok := operatorConfig.Logs.Log(id)
+			if !ok {
+				return config.Log{}, false
+			}
+			return l, true
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create witness: %v", err)
-	}
-
-	logsByID := make(map[string]config.Log)
-	for _, l := range logs {
-		logsByID[l.ID] = l
 	}
 
 	var limiter *rate.Limiter
@@ -145,7 +145,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 	handler := &httpHandler{
 		update:      witness.Update,
-		logs:        logsByID,
+		logs:        operatorConfig.Logs,
 		witVerifier: operatorConfig.WitnessVerifier,
 		limiter:     limiter,
 	}
@@ -155,18 +155,19 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	if operatorConfig.FeedInterval > 0 {
-		for c, f := range feeders {
-			c, f := c, f
-			// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
-			g.Go(func() error {
-				spreadDelay := time.Duration(rand.Int64N(int64(operatorConfig.FeedInterval)))
-				klog.Infof("Feeder %q goroutine will start after spread delay of %s", c.Origin, spreadDelay)
-				defer klog.Infof("Feeder %q goroutine done", c.Origin)
+		for f, l := range operatorConfig.Logs.Feeders() {
+			if f != None {
+				// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
+				g.Go(func() error {
+					spreadDelay := time.Duration(rand.Int64N(int64(operatorConfig.FeedInterval)))
+					klog.Infof("Feeder %q goroutine will start after spread delay of %s", l.Origin, spreadDelay)
+					defer klog.Infof("Feeder %q goroutine done", l.Origin)
 
-				time.Sleep(spreadDelay)
-				klog.Infof("Feeder %q running", c.Origin)
-				return f(ctx, c, witness.Update, httpClient, operatorConfig.FeedInterval)
-			})
+					time.Sleep(spreadDelay)
+					klog.Infof("Feeder %q running", l.Origin)
+					return f.FeedFunc()(ctx, l, witness.Update, httpClient, operatorConfig.FeedInterval)
+				})
+			}
 		}
 	}
 	operatorConfig.ServeMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
@@ -175,7 +176,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
 		bc := bastion.Config{
 			Addr:            operatorConfig.BastionAddr,
-			Logs:            logs,
 			BastionKey:      operatorConfig.BastionKey,
 			WitnessVerifier: operatorConfig.WitnessVerifier,
 		}
@@ -188,7 +188,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier)
+		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier)
 	}
 
 	srv := http.Server{
@@ -213,7 +213,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs []config.Log, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
 	g.Go(func() error {
 		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest)
 		if err != nil {

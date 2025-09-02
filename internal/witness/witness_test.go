@@ -25,6 +25,7 @@ import (
 	"github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
+	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -57,30 +58,35 @@ type logOpts struct {
 	PK     string
 }
 
+type cfg map[string]config.Log
+
+func (c *cfg) Log(id string) (config.Log, bool) {
+	v, ok := (*c)[id]
+	return v, ok
+}
+
 func newWitness(t *testing.T, logs []logOpts) *Witness {
 	// Set up Opts for the witness.
 	ns, err := f_note.NewSignerForCosignatureV1(wSK)
 	if err != nil {
 		t.Fatalf("couldn't create a witness signer: %v", err)
 	}
-	h := rfc6962.DefaultHasher
-	logMap := make(map[string]LogInfo)
+	logMap := make(cfg)
 	for _, log := range logs {
 		logV, err := note.NewVerifier(log.PK)
 		if err != nil {
 			t.Fatalf("couldn't create a log verifier: %v", err)
 		}
-		logInfo := LogInfo{
-			Origin: log.origin,
-			SigV:   logV,
-			Hasher: h,
+		logInfo := config.Log{
+			Origin:   log.origin,
+			Verifier: logV,
 		}
 		logMap[log.ID] = logInfo
 	}
 	opts := Opts{
-		Persistence: inmemory.NewPersistence(),
-		Signers:     []note.Signer{ns},
-		KnownLogs:   logMap,
+		Persistence:    inmemory.NewPersistence(),
+		Signers:        []note.Signer{ns},
+		ConfigForLogID: logMap.Log,
 	}
 	// Create the witness
 	w, err := New(t.Context(), opts)

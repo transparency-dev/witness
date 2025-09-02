@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 	"sync"
@@ -59,13 +60,20 @@ func initMetrics() {
 	})
 }
 
+// LogConfig describes the API contract of a source of logs to be distributed.
+type LogConfig interface {
+	// Logs should return the _current_ set of logs whose checkpoints should be distributed.
+	// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
+	Logs() iter.Seq[config.Log]
+}
+
 // NewDistributor creates a new Distributor from the given configuration.
-func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witSigV note.Verifier, getLatest GetLatestCheckpointFn) (*Distributor, error) {
+func NewDistributor(baseURL string, client *http.Client, lc LogConfig, witSigV note.Verifier, getLatest GetLatestCheckpointFn) (*Distributor, error) {
 	initMetrics()
 	return &Distributor{
 		baseURL:     baseURL,
 		client:      client,
-		logs:        logs,
+		logConfig:   lc,
 		getLatest:   getLatest,
 		witnessName: witSigV.Name(),
 	}, nil
@@ -75,7 +83,7 @@ func NewDistributor(baseURL string, client *http.Client, logs []config.Log, witS
 type Distributor struct {
 	baseURL     string
 	client      *http.Client
-	logs        []config.Log
+	logConfig   LogConfig
 	getLatest   GetLatestCheckpointFn
 	witnessName string
 }
@@ -84,14 +92,16 @@ type Distributor struct {
 // RESTful distributor.
 func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
-	for _, log := range d.logs {
+	numLogs := 0
+	for log := range d.logConfig.Logs() {
+		numLogs++
 		if err := d.distributeForLog(ctx, log); err != nil {
 			klog.Warningf("Failed to distribute %q (%s): %v", d.baseURL, log.Origin, err)
 			numErrs++
 		}
 	}
 	if numErrs > 0 {
-		return fmt.Errorf("failed to distribute %d out of %d logs", numErrs, len(d.logs))
+		return fmt.Errorf("failed to distribute %d out of %d logs", numErrs, numLogs)
 	}
 	return nil
 }
