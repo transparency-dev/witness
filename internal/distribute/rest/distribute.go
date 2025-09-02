@@ -60,7 +60,10 @@ func initMetrics() {
 	})
 }
 
+// LogConfig describes the API contract of a source of logs to be distributed.
 type LogConfig interface {
+	// Logs should return the _current_ set of logs whose checkpoints should be distributed.
+	// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
 	Logs() iter.Seq[config.Log]
 }
 
