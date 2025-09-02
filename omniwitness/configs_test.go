@@ -60,3 +60,43 @@ func TestProdConfig(t *testing.T) {
 func TestConfig(t *testing.T) {
 	testConfig(t, testConfigLogs)
 }
+
+func TestMerge(t *testing.T) {
+	base, err := omniwitness.NewStaticLogConfig([]byte(`
+Logs:
+  - Origin: go.sum database tree
+    URL: https://sum.golang.org
+    PublicKey: sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
+    Feeder: sumdb
+`))
+	if err != nil {
+		t.Fatalf("Failed to parse base config: %v", err)
+	}
+
+	extra, err := omniwitness.NewStaticLogConfig([]byte(`
+Logs:
+  - Origin: Armory Drive Prod 2
+    URL: https://raw.githubusercontent.com/f-secure-foundry/armory-drive-log/master/log/
+    PublicKey: armory-drive-log+16541b8f+AYDPmG5pQp4Bgu0a1mr5uDZ196+t8lIVIfWQSPWmP+Jv
+    Feeder: serverless
+`))
+	if err != nil {
+		t.Fatalf("Failed to parse extra config: %v", err)
+	}
+
+	base.Merge(extra)
+	want := map[string]struct{}{
+		"go.sum database tree": struct{}{},
+		"Armory Drive Prod 2":  struct{}{},
+	}
+	for l := range base.Logs() {
+		if _, ok := want[l.Origin]; ok {
+			delete(want, l.Origin)
+		} else {
+			t.Errorf("Did not find expected log with origin %q in merged config", l.Origin)
+		}
+	}
+	if l := len(want); l != 0 {
+		t.Fatalf("Found %d unexpected extra logs in merged config", l)
+	}
+}
