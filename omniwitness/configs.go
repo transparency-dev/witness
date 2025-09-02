@@ -18,6 +18,7 @@ import (
 	_ "embed" // embed is needed to embed files as constants
 	"fmt"
 	"iter"
+	"maps"
 
 	logfmt "github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
@@ -112,4 +113,11 @@ func (s *staticLogConfig) Feeders() iter.Seq2[Feeder, config.Log] {
 func (s *staticLogConfig) Log(id string) (config.Log, bool) {
 	l, ok := s.logs[id]
 	return l.Config, ok
+}
+
+// Merge adds all logs configured in other to this config.
+//
+// Logs in the base config with the same LogID in the config to be merged will be overridden.
+func (s *staticLogConfig) Merge(other *staticLogConfig) {
+	maps.Copy(s.logs, other.logs)
 }

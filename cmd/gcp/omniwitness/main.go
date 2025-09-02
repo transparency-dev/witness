@@ -20,6 +20,7 @@ import (
 	"flag"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -39,6 +40,7 @@ var (
 
 	pollInterval      = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 	feederConcurrency = flag.Uint("feeder_concurrency", 1, "Maximum number of concurrent feeder tasks")
+	additionalLogYaml = flag.String("additional_logs", "", "The path to an optional addition logs YAML file. Entries in this file will be *added* to the logs configured by default")
 )
 
 func main() {
@@ -67,6 +69,22 @@ func main() {
 	signer, err := NewSecretManagerSigner(ctx, *signerPrivateKeySecretName)
 	if err != nil {
 		klog.Exitf("Failed to init signer v1: %v", err)
+	}
+
+	logs, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
+	if err != nil {
+		klog.Exitf("Failed to parse default logs config: %v", err)
+	}
+	if *additionalLogYaml != "" {
+		y, err := os.ReadFile(*additionalLogYaml)
+		if err != nil {
+			klog.Exitf("Failed to read additional log config from %q: %v", *additionalLogYaml, err)
+		}
+		additional, err := omniwitness.NewStaticLogConfig(y)
+		if err != nil {
+			klog.Exitf("Failed to parse additional log config from %q: %v", *additionalLogYaml, err)
+		}
+		logs.Merge(additional)
 	}
 
 	opConfig := omniwitness.OperatorConfig{
