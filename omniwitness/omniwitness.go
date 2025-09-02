@@ -23,7 +23,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"iter"
-	"math/rand/v2"
 	"net"
 	"net/http"
 	"strings"
@@ -87,6 +86,9 @@ type OperatorConfig struct {
 	// Logs provides the witness with the log configuration.
 	// If unset, uses the embedded default config.
 	Logs LogConfig
+
+	// NumFeederWorkers specifies the number of concurrent workers doing feeder work to the witness.
+	NumFeederWorkers uint
 }
 
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
@@ -155,20 +157,12 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	if operatorConfig.FeedInterval > 0 {
-		for f, l := range operatorConfig.Logs.Feeders() {
-			if f != None {
-				// Continually feed this log in its own goroutine, hooked up to the global waitgroup.
-				g.Go(func() error {
-					spreadDelay := time.Duration(rand.Int64N(int64(operatorConfig.FeedInterval)))
-					klog.Infof("Feeder %q goroutine will start after spread delay of %s", l.Origin, spreadDelay)
-					defer klog.Infof("Feeder %q goroutine done", l.Origin)
-
-					time.Sleep(spreadDelay)
-					klog.Infof("Feeder %q running", l.Origin)
-					return f.FeedFunc()(ctx, l, witness.Update, httpClient, operatorConfig.FeedInterval)
-				})
-			}
+		// Must have at least one worker if feeding is enabled.
+		if operatorConfig.NumFeederWorkers == 0 {
+			operatorConfig.NumFeederWorkers = 1
 		}
+		runFeeders(ctx, g, httpClient, operatorConfig.NumFeederWorkers, operatorConfig.FeedInterval, operatorConfig.Logs, witness.Update)
+
 	}
 	operatorConfig.ServeMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
 
@@ -211,6 +205,49 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	})
 
 	return g.Wait()
+}
+
+func runFeeders(ctx context.Context, g *errgroup.Group, httpClient *http.Client, numWorkers uint, interval time.Duration, logs LogConfig, update feeder.UpdateFn) {
+	feedWork := make(chan func() error, numWorkers)
+
+	klog.Infof("Starting %d feeder worker(s)", numWorkers)
+	for range numWorkers {
+		g.Go(func() error {
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case f := <-feedWork:
+					if err := f(); err != nil {
+						// Log this, but don't return the error as we want to continue
+						// executing feeder jobs until the context is done.
+						klog.Infof("Feed job failed: %v", err)
+					}
+				}
+			}
+		})
+	}
+
+	// Send feeder work to workers
+	g.Go(func() error {
+		klog.Infof("Starting feeder jobs")
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(interval):
+			}
+
+			for f, l := range logs.Feeders() {
+				if f != None {
+					klog.Infof("Request to feed %s", l.Origin)
+					feedWork <- func() error {
+						return f.FeedFunc()(ctx, l, update, httpClient, 0 /* zero interval == run once and return */)
+					}
+				}
+			}
+		}
+	})
 }
 
 func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
