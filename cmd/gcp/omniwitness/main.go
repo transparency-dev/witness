@@ -37,7 +37,8 @@ var (
 	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
 	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
 
-	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
+	pollInterval      = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
+	feederConcurrency = flag.Uint("feeder_concurrency", 1, "Maximum number of concurrent feeder tasks")
 )
 
 func main() {
@@ -69,10 +70,11 @@ func main() {
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:     []note.Signer{signer},
-		WitnessVerifier: signer.Verifier(),
-		FeedInterval:    *pollInterval,
-		ServeMux:        mux,
+		WitnessKeys:      []note.Signer{signer},
+		WitnessVerifier:  signer.Verifier(),
+		FeedInterval:     *pollInterval,
+		NumFeederWorkers: *feederConcurrency,
+		ServeMux:         mux,
 	}
 	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
 	if err != nil {
