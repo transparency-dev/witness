@@ -81,7 +81,7 @@ func initMetrics() {
 type Opts struct {
 	Persistence    persistence.LogStatePersistence
 	Signers        []note.Signer
-	ConfigForLogID func(string) (config.Log, bool)
+	ConfigForLogID func(context.Context, string) (config.Log, bool, error)
 }
 
 // Witness consists of a database for storing checkpoints, a signer, and a list
@@ -89,7 +89,7 @@ type Opts struct {
 type Witness struct {
 	lsp            persistence.LogStatePersistence
 	Signers        []note.Signer
-	ConfigForLogID func(string) (config.Log, bool)
+	ConfigForLogID func(context.Context, string) (config.Log, bool, error)
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -109,13 +109,16 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 
 // parse verifies the checkpoint under the appropriate key for the origin and returns
 // the parsed checkpoint and the note itself.
-func (w *Witness) parse(chkptRaw []byte) (*log.Checkpoint, *note.Note, string, error) {
+func (w *Witness) parse(ctx context.Context, chkptRaw []byte) (*log.Checkpoint, *note.Note, string, error) {
 	origin, _, found := strings.Cut(string(chkptRaw), "\n")
 	if !found {
 		return nil, nil, "", errors.New("invalid checkpoint")
 	}
 	logID := log.ID(origin)
-	logInfo, ok := w.ConfigForLogID(logID)
+	logInfo, ok, err := w.ConfigForLogID(ctx, logID)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	if !ok {
 		return nil, nil, "", ErrUnknownLog
 	}
@@ -146,7 +149,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	//
 	// SPEC: The witness MUST verify the checkpoint signature against the public key(s) it trusts for the
 	//       checkpoint origin, and it MUST ignore signatures from unknown keys.
-	next, nextNote, origin, err := w.parse(nextRaw)
+	next, nextNote, origin, err := w.parse(ctx, nextRaw)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -173,7 +176,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 			return signed, nil
 		}
 
-		prev, _, _, err := w.parse(prevRaw)
+		prev, _, _, err := w.parse(ctx, prevRaw)
 		if err != nil {
 			retSize, retSigs = 0, nil
 			return nil, fmt.Errorf("couldn't parse stored checkpoint: %v", err)

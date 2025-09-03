@@ -94,12 +94,16 @@ type OperatorConfig struct {
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
 type LogConfig interface {
 	// Logs returns an iterator of all known logs.
-	Logs() iter.Seq[config.Log]
+	Logs(ctx context.Context) iter.Seq2[config.Log, error]
 	// Feeders returns an iterator of all feedable logs.
-	Feeders() iter.Seq2[Feeder, config.Log]
-
+	Feeders(ctx context.Context) iter.Seq2[FeederConfig, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
-	Log(id string) (config.Log, bool)
+	Log(ctx context.Context, id string) (config.Log, bool, error)
+}
+
+type FeederConfig struct {
+	Log    config.Log
+	Feeder Feeder
 }
 
 // logFeeder is the de-facto interface that feeders implement.
@@ -129,12 +133,8 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	witness, err := witness.New(ctx, witness.Opts{
 		Persistence: p,
 		Signers:     operatorConfig.WitnessKeys,
-		ConfigForLogID: func(id string) (config.Log, bool) {
-			l, ok := operatorConfig.Logs.Log(id)
-			if !ok {
-				return config.Log{}, false
-			}
-			return l, true
+		ConfigForLogID: func(ctx context.Context, id string) (config.Log, bool, error) {
+			return operatorConfig.Logs.Log(ctx, id)
 		},
 	})
 	if err != nil {
@@ -238,11 +238,15 @@ func runFeeders(ctx context.Context, g *errgroup.Group, httpClient *http.Client,
 			case <-time.After(interval):
 			}
 
-			for f, l := range logs.Feeders() {
-				if f != None {
-					klog.Infof("Request to feed %s", l.Origin)
+			for c, err := range logs.Feeders(ctx) {
+				if err != nil {
+					klog.Warningf("Feeders: %v", err)
+					break
+				}
+				if c.Feeder != None {
+					klog.Infof("Request to feed %s", c.Log.Origin)
 					feedWork <- func() error {
-						return f.FeedFunc()(ctx, l, update, httpClient, 0 /* zero interval == run once and return */)
+						return c.Feeder.FeedFunc()(ctx, c.Log, update, httpClient, 0 /* zero interval == run once and return */)
 					}
 				}
 			}

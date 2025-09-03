@@ -60,9 +60,9 @@ type logOpts struct {
 
 type cfg map[string]config.Log
 
-func (c *cfg) Log(id string) (config.Log, bool) {
+func (c *cfg) Log(_ context.Context, id string) (config.Log, bool, error) {
 	v, ok := (*c)[id]
-	return v, ok
+	return v, ok, nil
 }
 
 func newWitness(t *testing.T, logs []logOpts) *Witness {

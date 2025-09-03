@@ -35,20 +35,30 @@ func testConfig(t *testing.T, cfg []byte) {
 	if err != nil {
 		t.Fatal("failed to unmarshal config", err)
 	}
-	c := 0
-	for l := range logCfg.Logs() {
-		c++
-		if len(l.URL) == 0 {
-			t.Errorf("log %q has no URL", l.URL)
+	{
+		c := 0
+		for l, err := range logCfg.Logs(t.Context()) {
+			if err != nil {
+				t.Fatalf("Failed to iterate over logs: %v", err)
+			}
+			c++
+			if len(l.URL) == 0 {
+				t.Errorf("log %q has no URL", l.URL)
+			}
+		}
+		if c == 0 {
+			t.Fatal("no logs defined in config")
 		}
 	}
-	if c == 0 {
-		t.Fatal("no logs defined in config")
-	}
 
-	for f, l := range logCfg.Feeders() {
-		if f == omniwitness.None {
-			t.Errorf("log %q has unknown feeder", l.Origin)
+	{
+		for f, err := range logCfg.Feeders(t.Context()) {
+			if err != nil {
+				t.Fatalf("Failed to iterate over feeders: %v", err)
+			}
+			if f.Feeder == omniwitness.None {
+				t.Errorf("log %q has unknown feeder", f.Log.Origin)
+			}
 		}
 	}
 }
@@ -86,10 +96,13 @@ Logs:
 
 	base.Merge(extra)
 	want := map[string]struct{}{
-		"go.sum database tree": struct{}{},
-		"Armory Drive Prod 2":  struct{}{},
+		"go.sum database tree": {},
+		"Armory Drive Prod 2":  {},
 	}
-	for l := range base.Logs() {
+	for l, err := range base.Logs(t.Context()) {
+		if err != nil {
+			t.Fatalf("Failed to iterate over logs: %v", err)
+		}
 		if _, ok := want[l.Origin]; ok {
 			delete(want, l.Origin)
 		} else {

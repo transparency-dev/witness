@@ -64,7 +64,7 @@ func initMetrics() {
 type LogConfig interface {
 	// Logs should return the _current_ set of logs whose checkpoints should be distributed.
 	// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
-	Logs() iter.Seq[config.Log]
+	Logs(context.Context) iter.Seq2[config.Log, error]
 }
 
 // NewDistributor creates a new Distributor from the given configuration.
@@ -93,7 +93,10 @@ type Distributor struct {
 func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
 	numLogs := 0
-	for log := range d.logConfig.Logs() {
+	for log, err := range d.logConfig.Logs(ctx) {
+		if err != nil {
+			return fmt.Errorf("failed to get logs iterator: %v", err)
+		}
 		numLogs++
 		if err := d.distributeForLog(ctx, log); err != nil {
 			klog.Warningf("Failed to distribute %q (%s): %v", d.baseURL, log.Origin, err)

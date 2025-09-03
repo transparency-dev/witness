@@ -15,6 +15,7 @@
 package omniwitness
 
 import (
+	"context"
 	_ "embed" // embed is needed to embed files as constants
 	"fmt"
 	"iter"
@@ -88,21 +89,24 @@ type staticLogConfig struct {
 	logs map[string]parsedLog
 }
 
-func (s *staticLogConfig) Logs() iter.Seq[config.Log] {
-	return func(yield func(config.Log) bool) {
+func (s *staticLogConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
+	return func(yield func(config.Log, error) bool) {
 		for _, v := range s.logs {
-			if !yield(v.Config) {
+			if !yield(v.Config, nil) {
 				return
 			}
 		}
 	}
 }
 
-func (s *staticLogConfig) Feeders() iter.Seq2[Feeder, config.Log] {
-	return func(yield func(Feeder, config.Log) bool) {
+func (s *staticLogConfig) Feeders(_ context.Context) iter.Seq2[FeederConfig, error] {
+	return func(yield func(FeederConfig, error) bool) {
 		for _, v := range s.logs {
 			if v.Feeder != None {
-				if !yield(v.Feeder, v.Config) {
+				if !yield(FeederConfig{
+					Feeder: v.Feeder,
+					Log:    v.Config,
+				}, nil) {
 					return
 				}
 			}
@@ -110,9 +114,9 @@ func (s *staticLogConfig) Feeders() iter.Seq2[Feeder, config.Log] {
 	}
 }
 
-func (s *staticLogConfig) Log(id string) (config.Log, bool) {
+func (s *staticLogConfig) Log(_ context.Context, id string) (config.Log, bool, error) {
 	l, ok := s.logs[id]
-	return l.Config, ok
+	return l.Config, ok, nil
 }
 
 // Merge adds all logs configured in other to this config.

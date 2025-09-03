@@ -137,8 +137,8 @@ type logConfig struct {
 
 var _ rest.LogConfig = &logConfig{}
 
-func (l *logConfig) Logs() iter.Seq[config.Log] {
-	return func(yield func(config.Log) bool) {
-		yield(l.lc)
+func (l *logConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
+	return func(yield func(config.Log, error) bool) {
+		yield(l.lc, nil)
 	}
 }
