@@ -34,13 +34,13 @@ var (
 	DefaultConfigLogs []byte
 )
 
-// cfg contains a list of configuration options for known logs.
-type cfg struct {
-	Logs []logCfg `yaml:"Logs"`
+// ConfigYAML contains a list of configuration options for known logs.
+type ConfigYAML struct {
+	Logs []LogYAML `yaml:"Logs"`
 }
 
-// logCfg contains the details about a log.
-type logCfg struct {
+// LogYAML contains the details about a log.
+type LogYAML struct {
 	Origin    string `yaml:"Origin"`
 	PublicKey string `yaml:"PublicKey"`
 	URL       string `yaml:"URL"`
@@ -49,7 +49,7 @@ type logCfg struct {
 
 // NewStaticLogConfig creates a new LogConfig based on the provided YAML data.
 func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
-	cfg := &cfg{}
+	cfg := &ConfigYAML{}
 	if err := yaml.Unmarshal(yamlCfg, cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}

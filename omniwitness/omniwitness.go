@@ -297,10 +297,17 @@ var (
 		"tiles":      Tiles,
 		"none":       None,
 	}
+	feederNameByID = func() map[Feeder]string {
+		r := make(map[Feeder]string)
+		for k, v := range feederByName {
+			r[v] = k
+		}
+		return r
+	}()
 )
 
 // UnmarshalYAML populates the log from yaml using the unmarshal func provided.
-func (f *Feeder) UnmarshalYAML(unmarshal func(interface{}) error) (err error) {
+func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	var raw string
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -327,12 +334,16 @@ func (f Feeder) FeedFunc() logFeeder {
 	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }
 
+func (f Feeder) String() string {
+	return feederNameByID[f]
+}
+
 // ParseFeeder takes a string and returns a valid enum or an error.
 func ParseFeeder(f string) (Feeder, error) {
 	f = strings.TrimSpace(strings.ToLower(f))
 	value, ok := feederByName[f]
 	if !ok {
-		return Feeder(0), fmt.Errorf("uknown feeder type %q", f)
+		return Feeder(0), fmt.Errorf("unknown feeder type %q", f)
 	}
 	return value, nil
 }

@@ -23,6 +23,7 @@ import (
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
+	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -86,6 +87,21 @@ func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (p *spannerPersistence) AddLogs(ctx context.Context, lc omniwitness.ConfigYAML) error {
+	_, err := p.spanner.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		m := []*spanner.Mutation{}
+		for _, l := range lc.Logs {
+			m = append(m, spanner.InsertOrUpdate(
+				"logs",
+				[]string{"logID", "origin", "vkey", "url", "feeder"},
+				[]any{logfmt.ID(l.Origin), l.Origin, l.PublicKey, l.URL, l.Feeder.String()},
+			))
+		}
+		return txn.BufferWrite(m)
+	})
+	return err
 }
 
 func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
