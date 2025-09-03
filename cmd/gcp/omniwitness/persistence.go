@@ -74,24 +74,6 @@ func (p *spannerPersistence) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *spannerPersistence) Logs(ctx context.Context) ([]string, error) {
-	var logs []string
-	err := p.spanner.Single().Read(ctx, "checkpoints", spanner.AllKeys(), []string{"logID"}).Do(
-		func(r *spanner.Row) error {
-			var logID string
-			err := r.Column(0, &logID)
-			if err != nil {
-				return err
-			}
-			logs = append(logs, logID)
-			return nil
-		})
-	if err != nil {
-		return nil, err
-	}
-	return logs, nil
-}
-
 func (p *spannerPersistence) Latest(ctx context.Context, logID string) ([]byte, error) {
 	return getLatestCheckpoint(ctx, p.spanner.Single().ReadRow, logID)
 }

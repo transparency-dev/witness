@@ -40,16 +40,6 @@ func (p *inMemoryPersistence) Init(_ context.Context) error {
 	return nil
 }
 
-func (p *inMemoryPersistence) Logs(_ context.Context) ([]string, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	res := make([]string, 0, len(p.checkpoints))
-	for k := range p.checkpoints {
-		res = append(res, k)
-	}
-	return res, nil
-}
-
 func (p *inMemoryPersistence) Latest(_ context.Context, logID string) ([]byte, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

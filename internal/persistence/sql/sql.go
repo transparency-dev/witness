@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/transparency-dev/witness/internal/persistence"
-	"k8s.io/klog/v2"
 )
 
 // NewPersistence returns a persistence object that is backed by the SQL database.
@@ -41,32 +40,6 @@ func (p *sqlLogPersistence) Init(_ context.Context) error {
 		chkpt BLOB
 		)`)
 	return err
-}
-
-func (p *sqlLogPersistence) Logs(_ context.Context) ([]string, error) {
-	rows, err := p.db.Query("SELECT logID FROM chkpts")
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			klog.Errorf("Failed to close rows: %v", err)
-		}
-	}()
-
-	var logs []string
-	for rows.Next() {
-		var logID string
-		err := rows.Scan(&logID)
-		if err != nil {
-			return nil, err
-		}
-		logs = append(logs, logID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return logs, nil
 }
 
 func (p *sqlLogPersistence) Latest(_ context.Context, logID string) ([]byte, error) {

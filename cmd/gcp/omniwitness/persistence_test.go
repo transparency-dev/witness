@@ -59,10 +59,6 @@ func mustNewPersistence(t *testing.T) func() (persistence.LogStatePersistence, f
 	}
 }
 
-func TestLogs(t *testing.T) {
-	ptest.TestLogs(t, mustNewPersistence(t))
-}
-
 func TestUpdate(t *testing.T) {
 	ptest.TestUpdate(t, mustNewPersistence(t))
 }
