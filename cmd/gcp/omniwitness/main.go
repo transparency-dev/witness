@@ -71,6 +71,16 @@ func main() {
 		klog.Exitf("Failed to init signer v1: %v", err)
 	}
 
+	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
+	if err != nil {
+		klog.Exitf("Failed to create spanner persistence: %v", err)
+	}
+	defer func() {
+		if err := shutdown(); err != nil {
+			klog.Warningf("shutdown: %v", err)
+		}
+	}()
+
 	logs, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
 	if err != nil {
 		klog.Exitf("Failed to parse default logs config: %v", err)
@@ -93,17 +103,8 @@ func main() {
 		FeedInterval:     *pollInterval,
 		NumFeederWorkers: *feederConcurrency,
 		ServeMux:         mux,
+		Logs:             p,
 	}
-	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
-	if err != nil {
-		klog.Exitf("Failed to create spanner persistence: %v", err)
-	}
-	defer func() {
-		if err := shutdown(); err != nil {
-			klog.Warningf("shutdown: %v", err)
-		}
-	}()
-
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)
 	}
