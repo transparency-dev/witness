@@ -31,8 +31,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/monitoring"
+	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -49,6 +52,7 @@ var (
 	feed          = flag.String("feed", ".*", "RegEx matching log origins to feed checkpoints from")
 	loopInterval  = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
 	rateLimit     = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send")
+	metricsAddr   = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 )
 
 func main() {
@@ -75,6 +79,22 @@ func main() {
 	if len(witnessURL) == 0 {
 		klog.Exitf("At least one --witness_url must be specifed")
 	}
+
+	if *metricsAddr != "" {
+		mf := prometheus.MetricFactory{
+			Prefix: "omnifeeder_",
+		}
+		monitoring.SetMetricFactory(mf)
+
+		http.Handle("/metrics", promhttp.Handler())
+		go func() {
+			if err := http.ListenAndServe(*metricsAddr, nil); err != nil {
+				klog.Errorf("ListenAndServe: %v", err)
+			}
+		}()
+		klog.Infof("Prometheus configured to listen on %q", *metricsAddr)
+	}
+
 	eg := errgroup.Group{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
