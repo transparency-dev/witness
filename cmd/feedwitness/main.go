@@ -87,7 +87,7 @@ func main() {
 		}
 		for f, err := range cfg.Feeders(ctx) {
 			if err != nil {
-				klog.Exitf("Failed to iterator over logs: %v", err)
+				klog.Exitf("Failed to enumerate feedable logs: %v", err)
 			}
 			if r.Match([]byte(f.Log.Origin)) {
 				eg.Go(func() error {

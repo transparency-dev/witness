@@ -95,7 +95,7 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	numLogs := 0
 	for log, err := range d.logConfig.Logs(ctx) {
 		if err != nil {
-			return fmt.Errorf("failed to get logs iterator: %v", err)
+			return fmt.Errorf("failed to enumerate logs: %v", err)
 		}
 		numLogs++
 		if err := d.distributeForLog(ctx, log); err != nil {
