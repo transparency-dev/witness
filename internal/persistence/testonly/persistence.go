@@ -21,41 +21,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 )
-
-// TestLogs exposes a test that can be invoked by tests for specific implementations of persistence.
-func TestLogs(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
-	t.Helper()
-
-	lsp, close := lspFactory()
-	defer func() {
-		if err := close(); err != nil {
-			t.Fatalf("close(): %v", err)
-		}
-	}()
-	if err := lsp.Init(t.Context()); err != nil {
-		t.Fatalf("Init(): %v", err)
-	}
-	if logs, err := lsp.Logs(t.Context()); err != nil {
-		t.Errorf("Logs(): %v", err)
-	} else if got, want := len(logs), 0; got != want {
-		t.Errorf("got %d logs, want %d", got, want)
-	}
-
-	newCP := []byte("foo CP")
-	if err := checkAndSet(t.Context(), lsp, "foo", nil, newCP); err != nil {
-		t.Fatal(err)
-	}
-
-	if logs, err := lsp.Logs(t.Context()); err != nil {
-		t.Errorf("Logs(): %v", err)
-	} else if got, want := logs, []string{"foo"}; !cmp.Equal(got, want) {
-		t.Errorf("got != want (%v != %v)", got, want)
-	}
-}
 
 // TestUpdate exposes a test that can be invoked by tests for specific implementations of persistence.
 func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {

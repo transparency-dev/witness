@@ -1,8 +1,17 @@
 # OmniGCP
 
 This binary is a GCP-native and opinionated version of the generic `omniwitness` binary, which uses:
-- Cloud Spanner for storing the witness state, and
+- Cloud Spanner for storing the witness state & the set of known logs, and
 - Secret Manager for storing the witness key.
+
+## Log configuration
+
+`OmniGCP` stores its configuration of known logs in a Spanner table. This allows the operator to add (or,
+less likely, remove) logs by updating the table either directly via Spanner Studio, or using a tool.
+
+Like the main `omniwitness` binary, `OmniGCP` also embeds the common list of known logs stored in this repo,
+however this list is only used by `OmniGCP` to insert any previously unknown logs into the Spanner table
+used as the canonical source of log information.
 
 > [!NOTE]
 > We're using *Secret Manager* as opposed to *Cloud KMS* - this means that the running binary has the witness

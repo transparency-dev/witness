@@ -93,7 +93,13 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logID := log.ID(s[0])
-	logCfg, ok := a.logs.Log(logID)
+	logCfg, ok, err := a.logs.Log(r.Context(), logID)
+	if err != nil {
+		klog.Warningf("Log: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		counterHTTPIncomingResponse.Inc("unknown", strconv.Itoa(http.StatusInternalServerError))
+		return
+	}
 	if !ok {
 		klog.V(1).Infof("unknown log: %v", logID)
 		w.WriteHeader(http.StatusNotFound)

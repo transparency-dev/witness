@@ -18,16 +18,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
-	"github.com/transparency-dev/witness/internal/persistence"
+	logfmt "github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/formats/note"
+	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/omniwitness"
 	"k8s.io/klog/v2"
 )
 
 // newSpannerPersistence returns a persistence object that is backed by the SQL database.
-func newSpannerPersistence(ctx context.Context, spannerURI string) (persistence.LogStatePersistence, func() error, error) {
+func newSpannerPersistence(ctx context.Context, spannerURI string) (*spannerPersistence, func() error, error) {
 	sc, err := spanner.NewClient(ctx, spannerURI)
 	if err != nil {
 		return nil, nil, err
@@ -36,10 +40,16 @@ func newSpannerPersistence(ctx context.Context, spannerURI string) (persistence.
 		sc.Close()
 		return nil
 	}
-	return &spannerPersistence{
+	ret := &spannerPersistence{
 		spannerURI: spannerURI,
 		spanner:    sc,
-	}, shutdown, nil
+	}
+	// Need to create tables here because omniGCP may try to update logs from the embedded config.
+	if err := ret.createTablesIfNotExist(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	return ret, shutdown, nil
 }
 
 type spannerPersistence struct {
@@ -48,6 +58,10 @@ type spannerPersistence struct {
 }
 
 func (p *spannerPersistence) Init(ctx context.Context) error {
+	return nil
+}
+
+func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 	adminClient, err := database.NewDatabaseAdminClient(ctx)
 	if err != nil {
 		return err
@@ -62,6 +76,7 @@ func (p *spannerPersistence) Init(ctx context.Context) error {
 		Database: p.spannerURI,
 		Statements: []string{
 			"CREATE TABLE IF NOT EXISTS checkpoints (logID STRING(MAX) NOT NULL, checkpoint BYTES(MAX) NOT NULL) PRIMARY KEY (logID)",
+			"CREATE TABLE IF NOT EXISTS logs (logID STRING(2048), origin STRING(2048) NOT NULL, vkey STRING(2048) NOT NULL, url STRING(2048), feeder STRING(32)) PRIMARY KEY(logID)",
 		},
 	})
 	if err != nil {
@@ -74,22 +89,107 @@ func (p *spannerPersistence) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *spannerPersistence) Logs(ctx context.Context) ([]string, error) {
-	var logs []string
-	err := p.spanner.Single().Read(ctx, "checkpoints", spanner.AllKeys(), []string{"logID"}).Do(
-		func(r *spanner.Row) error {
-			var logID string
-			err := r.Column(0, &logID)
+func (p *spannerPersistence) AddLogs(ctx context.Context, lc omniwitness.ConfigYAML) error {
+	_, err := p.spanner.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		m := []*spanner.Mutation{}
+		for _, l := range lc.Logs {
+			m = append(m, spanner.InsertOrUpdate(
+				"logs",
+				[]string{"logID", "origin", "vkey", "url", "feeder"},
+				[]any{logfmt.ID(l.Origin), l.Origin, l.PublicKey, l.URL, l.Feeder.String()},
+			))
+		}
+		return txn.BufferWrite(m)
+	})
+	return err
+}
+
+func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
+	return func(yield func(config.Log, error) bool) {
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url"})
+		for {
+			row, err := r.Next()
 			if err != nil {
-				return err
+				if !yield(config.Log{}, fmt.Errorf("failed to read row: %v", err)) {
+					return
+				}
 			}
-			logs = append(logs, logID)
-			return nil
-		})
-	if err != nil {
-		return nil, err
+			c := config.Log{}
+			vkey := ""
+			if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL); err != nil {
+				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
+					return
+				}
+			}
+			c.Verifier, err = note.NewVerifier(vkey)
+			if err != nil {
+				if !yield(config.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
+					return
+				}
+			}
+			if !yield(c, nil) {
+				return
+			}
+		}
 	}
-	return logs, nil
+}
+
+func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.FeederConfig, error] {
+	return func(yield func(omniwitness.FeederConfig, error) bool) {
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url", "feeder"})
+		for {
+			row, err := r.Next()
+			if err != nil {
+				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to read row: %v", err)) {
+					return
+				}
+			}
+			c := omniwitness.FeederConfig{}
+			vkey := ""
+			feeder := ""
+			if err := row.Columns(&c.Log.ID, &c.Log.Origin, &vkey, &c.Log.URL, &feeder); err != nil {
+				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to read columns: %v", err)) {
+					return
+				}
+			}
+			c.Log.Verifier, err = note.NewVerifier(vkey)
+			if err != nil {
+				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to create verifier: %v", err)) {
+					return
+				}
+			}
+			c.Feeder, err = omniwitness.ParseFeeder(feeder)
+			if err != nil {
+				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to create feeder: %v", err)) {
+					return
+				}
+			}
+			if !yield(c, nil) {
+				return
+			}
+		}
+	}
+
+}
+
+func (p *spannerPersistence) Log(ctx context.Context, id string) (config.Log, bool, error) {
+	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{id}, []string{"origin", "vkey", "url"})
+	if err != nil {
+		if errors.Is(err, spanner.ErrRowNotFound) {
+			return config.Log{}, false, nil
+		}
+		return config.Log{}, false, fmt.Errorf("failed to read row: %v", err)
+	}
+	c := config.Log{}
+	vkey := ""
+	if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL); err != nil {
+		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
+	}
+	c.Verifier, err = note.NewVerifier(vkey)
+	if err != nil {
+		return config.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
+	}
+	return c, true, nil
 }
 
 func (p *spannerPersistence) Latest(ctx context.Context, logID string) ([]byte, error) {

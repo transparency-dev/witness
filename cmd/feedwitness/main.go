@@ -85,13 +85,16 @@ func main() {
 			witness: w_http.NewWitness(u, httpClient),
 			url:     wu,
 		}
-		for f, lc := range cfg.Feeders() {
-			if r.Match([]byte(lc.Origin)) {
+		for f, err := range cfg.Feeders(ctx) {
+			if err != nil {
+				klog.Exitf("Failed to enumerate feedable logs: %v", err)
+			}
+			if r.Match([]byte(f.Log.Origin)) {
 				eg.Go(func() error {
 					if err := rl.Wait(ctx); err != nil {
 						return err
 					}
-					return f.FeedFunc()(ctx, lc, bc.Update, httpClient, *loopInterval)
+					return f.Feeder.FeedFunc()(ctx, f.Log, bc.Update, httpClient, *loopInterval)
 				})
 			}
 		}

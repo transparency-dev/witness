@@ -23,10 +23,6 @@ type LogStatePersistence interface {
 	// and will be called once per process startup.
 	Init(context.Context) error
 
-	// Logs returns the IDs of all logs that have checkpoints that can
-	// be read.
-	Logs(context.Context) ([]string, error)
-
 	// Latest returns the latest checkpoint.
 	// If no checkpoint exists, it must return nil.
 	Latest(ctx context.Context, logID string) ([]byte, error)

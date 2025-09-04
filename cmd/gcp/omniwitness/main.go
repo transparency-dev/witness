@@ -28,6 +28,7 @@ import (
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
+	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 )
 
@@ -71,29 +72,6 @@ func main() {
 		klog.Exitf("Failed to init signer v1: %v", err)
 	}
 
-	logs, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
-	if err != nil {
-		klog.Exitf("Failed to parse default logs config: %v", err)
-	}
-	if *additionalLogYaml != "" {
-		y, err := os.ReadFile(*additionalLogYaml)
-		if err != nil {
-			klog.Exitf("Failed to read additional log config from %q: %v", *additionalLogYaml, err)
-		}
-		additional, err := omniwitness.NewStaticLogConfig(y)
-		if err != nil {
-			klog.Exitf("Failed to parse additional log config from %q: %v", *additionalLogYaml, err)
-		}
-		logs.Merge(additional)
-	}
-
-	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:      []note.Signer{signer},
-		WitnessVerifier:  signer.Verifier(),
-		FeedInterval:     *pollInterval,
-		NumFeederWorkers: *feederConcurrency,
-		ServeMux:         mux,
-	}
 	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
 	if err != nil {
 		klog.Exitf("Failed to create spanner persistence: %v", err)
@@ -104,7 +82,34 @@ func main() {
 		}
 	}()
 
+	mustUpdateLogs(ctx, omniwitness.DefaultConfigLogs, p)
+	if *additionalLogYaml != "" {
+		y, err := os.ReadFile(*additionalLogYaml)
+		if err != nil {
+			klog.Exitf("Failed to read additional log config from %q: %v", *additionalLogYaml, err)
+		}
+		mustUpdateLogs(ctx, y, p)
+	}
+
+	opConfig := omniwitness.OperatorConfig{
+		WitnessKeys:      []note.Signer{signer},
+		WitnessVerifier:  signer.Verifier(),
+		FeedInterval:     *pollInterval,
+		NumFeederWorkers: *feederConcurrency,
+		ServeMux:         mux,
+		Logs:             p,
+	}
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)
+	}
+}
+
+func mustUpdateLogs(ctx context.Context, y []byte, p *spannerPersistence) {
+	yamlCfg := omniwitness.ConfigYAML{}
+	if err := yaml.Unmarshal(y, &yamlCfg); err != nil {
+		klog.Exitf("Failed to unmarshal yaml log config: %v", err)
+	}
+	if err := p.AddLogs(ctx, yamlCfg); err != nil {
+		klog.Exitf("Failed to add default logs to Spanner: %v", err)
 	}
 }

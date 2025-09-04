@@ -26,12 +26,6 @@ import (
 
 var nopClose = func() error { return nil }
 
-func TestLogs(t *testing.T) {
-	ptest.TestLogs(t, func() (persistence.LogStatePersistence, func() error) {
-		return NewPersistence(), nopClose
-	})
-}
-
 func TestUpdate(t *testing.T) {
 	ptest.TestUpdate(t, func() (persistence.LogStatePersistence, func() error) {
 		return NewPersistence(), nopClose
