@@ -26,9 +26,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
@@ -59,13 +61,6 @@ func main() {
 
 	ctx := context.Background()
 
-	httpClient := http.DefaultClient
-	if *httpsInsecure {
-		httpClient = &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-		}
-	}
 	cfg, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
 	if err != nil {
 		klog.Exitf("failed to instantiate default witness config: %v", err)
@@ -90,6 +85,9 @@ func main() {
 		klog.Infof("Prometheus configured to listen on %q", *metricsAddr)
 	}
 
+	httpClient := httpClientFromFlags()
+
+	witnesses := []w_http.Witness{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {
@@ -145,4 +143,25 @@ func (ms *multiStringFlag) String() string {
 func (ms *multiStringFlag) Set(w string) error {
 	*ms = append(*ms, w)
 	return nil
+}
+
+func httpClientFromFlags() *http.Client {
+	t := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          len(witnessURL) + 10,
+		MaxIdleConnsPerHost:   2,
+	}
+	if *httpsInsecure {
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	return &http.Client{
+		Transport: t,
+	}
 }
