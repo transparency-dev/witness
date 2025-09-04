@@ -173,7 +173,7 @@ func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.
 }
 
 func (p *spannerPersistence) Log(ctx context.Context, id string) (config.Log, bool, error) {
-	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{id}, []string{"origin", "vkey", "url"})
+	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{id}, []string{"logID", "origin", "vkey", "url"})
 	if err != nil {
 		if errors.Is(err, spanner.ErrRowNotFound) {
 			return config.Log{}, false, nil
