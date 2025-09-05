@@ -49,7 +49,7 @@ func TestFeedOnce(t *testing.T) {
 				fakeWitness: &fakeWitness{
 					latestCP: testdata.Checkpoint(t, 1),
 				},
-				times: 3,
+				times: 2,
 			}).Update,
 		}, {
 			desc:     "works - TOFU feed",
