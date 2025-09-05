@@ -34,6 +34,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
@@ -87,13 +88,17 @@ func main() {
 
 	httpClient := httpClientFromFlags()
 
-	witnesses := []w_http.Witness{}
+	witnesses := []feeder.UpdateFn{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {
 			klog.Exitf("Invalid witness URL %q: %v", wu, err)
 		}
-		witnesses = append(witnesses, w_http.NewWitness(u, httpClient))
+		lc := loggingClient{
+			witness: w_http.NewWitness(u, httpClient),
+			url:     wu,
+		}
+		witnesses = append(witnesses, lc.Update)
 	}
 
 	rOpts := omniwitness.RunFeedOpts{
@@ -129,7 +134,7 @@ func (lc *loggingClient) Update(ctx context.Context, oldSize uint64, newCP []byt
 		klog.Infof("❌ %s ← %s: %v", lc.url, name, err)
 	}
 
-	return nil, 0, nil
+	return rb, size, err
 }
 
 // multiStringFlag allows a flag to be specified multiple times on the command

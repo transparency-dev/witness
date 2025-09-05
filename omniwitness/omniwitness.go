@@ -157,11 +157,13 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	}
 
 	if operatorConfig.FeedInterval > 0 {
-		// Must have at least one worker if feeding is enabled.
-		if operatorConfig.NumFeederWorkers == 0 {
-			operatorConfig.NumFeederWorkers = 1
+		rOpts := RunFeedOpts{
+			Witnesses:     []feeder.UpdateFn{witness.Update},
+			HTTPClient:    httpClient,
+			MaxWitnessQPS: operatorConfig.RateLimit,
+			LogConfig:     operatorConfig.Logs,
 		}
-		runFeeders(ctx, g, httpClient, operatorConfig.NumFeederWorkers, operatorConfig.FeedInterval, operatorConfig.Logs, witness.Update)
+		g.Go(func() error { return RunFeeders(ctx, rOpts) })
 
 	}
 	operatorConfig.ServeMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))

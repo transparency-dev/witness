@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"regexp"
 
-	w_http "github.com/transparency-dev/witness/client/http"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -38,7 +38,7 @@ type RunFeedOpts struct {
 	// LogConfig provides access to log config. Required.
 	LogConfig LogConfig
 	// Witnesses is the set of witnesses to feed to. Required.
-	Witnesses []w_http.Witness
+	Witnesses []feeder.UpdateFn
 }
 
 func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
@@ -55,9 +55,9 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 
 	// We'll have a goroutine per witness, each fed by its own work channel
 	klog.Infof("Starting %d feeder worker(s)", len(opts.Witnesses))
-	wChans := make([]chan func(w_http.Witness) error, 0, len(opts.Witnesses))
+	wChans := make([]chan func(feeder.UpdateFn) error, 0, len(opts.Witnesses))
 	for _, wi := range opts.Witnesses {
-		wChan := make(chan func(w_http.Witness) error, maxPendingJobs)
+		wChan := make(chan func(feeder.UpdateFn) error, maxPendingJobs)
 		wChans = append(wChans, wChan)
 		eg.Go(func() error {
 			for {
@@ -103,8 +103,8 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				// Now send jobs to the witnesses.
 				for _, wc := range wChans {
 					klog.V(1).Infof("Request to feed %s", c.Log.Origin)
-					wc <- func(w w_http.Witness) error {
-						return c.Feeder.FeedFunc()(ctx, c.Log, w.Update, opts.HTTPClient, 0 /* zero interval == run once and return */)
+					wc <- func(w feeder.UpdateFn) error {
+						return c.Feeder.FeedFunc()(ctx, c.Log, w, opts.HTTPClient, 0 /* zero interval == run once and return */)
 					}
 				}
 			}

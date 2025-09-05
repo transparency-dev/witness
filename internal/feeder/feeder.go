@@ -120,7 +120,7 @@ func (f *feeder) feedOnce(ctx context.Context) ([]byte, error) {
 
 	wCP, err := f.submitToWitness(ctx, cp, *cpSubmit, f.opts)
 	if err != nil {
-		return nil, fmt.Errorf("witness submission failed: %v", err)
+		return nil, fmt.Errorf("witness submission failed: %w", err)
 	}
 	return wCP, nil
 }
@@ -142,8 +142,7 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 		// try to build one, even if the witness doesn't have a "latest" checkpoint for this log.
 		conP, err = opts.FetchProof(ctx, f.oldSize, cpSubmit)
 		if err != nil {
-			e := fmt.Errorf("failed to fetch consistency proof: %v", err)
-			klog.Warning(e.Error())
+			e := fmt.Errorf("failed to fetch consistency proof: %w", err)
 			return nil, backoff.Permanent(e)
 		}
 		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, f.oldSize, cpSubmit.Size, conP)
@@ -155,8 +154,7 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 			f.oldSize = actualSize
 			return nil, backoff.RetryAfter(1)
 		case err != nil:
-			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %v", cpSubmit.Origin, err)
-			klog.Warning(e.Error())
+			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %w", cpSubmit.Origin, err)
 			return nil, backoff.Permanent(e)
 		default:
 			if f.oldSize == cpSubmit.Size {
