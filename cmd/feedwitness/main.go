@@ -26,19 +26,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
-	"golang.org/x/sync/errgroup"
-	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 )
 
@@ -50,8 +50,7 @@ var (
 	witnessURL    multiStringFlag
 	httpsInsecure = flag.Bool("https_insecure", false, "Set to true to disable TLS verification of the witness service")
 	feed          = flag.String("feed", ".*", "RegEx matching log origins to feed checkpoints from")
-	loopInterval  = flag.Duration("loop_interval", 0, "If set to > 0, runs in looping mode sleeping this duration between feed attempts")
-	rateLimit     = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send")
+	rateLimit     = flag.Float64("max_qps", 2, "Defines maximum number of requests/s to send per witness")
 	metricsAddr   = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 )
 
@@ -61,21 +60,12 @@ func main() {
 	defer klog.Flush()
 
 	ctx := context.Background()
-	rl := rate.NewLimiter(rate.Limit(*rateLimit), 1)
 
-	httpClient := http.DefaultClient
-	if *httpsInsecure {
-		httpClient = &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-		}
-	}
 	cfg, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
 	if err != nil {
 		klog.Exitf("failed to instantiate default witness config: %v", err)
 	}
 
-	r := regexp.MustCompile(*feed)
 	if len(witnessURL) == 0 {
 		klog.Exitf("At least one --witness_url must be specifed")
 	}
@@ -95,31 +85,29 @@ func main() {
 		klog.Infof("Prometheus configured to listen on %q", *metricsAddr)
 	}
 
-	eg := errgroup.Group{}
+	httpClient := httpClientFromFlags()
+
+	witnesses := []feeder.UpdateFn{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {
 			klog.Exitf("Invalid witness URL %q: %v", wu, err)
 		}
-		bc := &loggingClient{
+		lc := loggingClient{
 			witness: w_http.NewWitness(u, httpClient),
 			url:     wu,
 		}
-		for f, err := range cfg.Feeders(ctx) {
-			if err != nil {
-				klog.Exitf("Failed to enumerate feedable logs: %v", err)
-			}
-			if r.Match([]byte(f.Log.Origin)) {
-				eg.Go(func() error {
-					if err := rl.Wait(ctx); err != nil {
-						return err
-					}
-					return f.Feeder.FeedFunc()(ctx, f.Log, bc.Update, httpClient, *loopInterval)
-				})
-			}
-		}
+		witnesses = append(witnesses, lc.Update)
 	}
-	if err := eg.Wait(); err != nil {
+
+	rOpts := omniwitness.RunFeedOpts{
+		Witnesses:     witnesses,
+		HTTPClient:    httpClient,
+		MaxWitnessQPS: *rateLimit,
+		MatchLogs:     *feed,
+		LogConfig:     cfg,
+	}
+	if err := omniwitness.RunFeeders(ctx, rOpts); err != nil {
 		klog.Errorf("%v", err)
 	}
 }
@@ -145,7 +133,7 @@ func (lc *loggingClient) Update(ctx context.Context, oldSize uint64, newCP []byt
 		klog.Infof("❌ %s ← %s: %v", lc.url, name, err)
 	}
 
-	return nil, 0, nil
+	return rb, size, err
 }
 
 // multiStringFlag allows a flag to be specified multiple times on the command
@@ -159,4 +147,25 @@ func (ms *multiStringFlag) String() string {
 func (ms *multiStringFlag) Set(w string) error {
 	*ms = append(*ms, w)
 	return nil
+}
+
+func httpClientFromFlags() *http.Client {
+	t := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          len(witnessURL) + 10,
+		MaxIdleConnsPerHost:   2,
+	}
+	if *httpsInsecure {
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	return &http.Client{
+		Transport: t,
+	}
 }

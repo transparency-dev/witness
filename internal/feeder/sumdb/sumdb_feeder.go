@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/client"
@@ -36,7 +35,7 @@ const (
 
 // FeedLog continually feeds checkpoints from the given log into the witness.
 // This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
 	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
@@ -79,11 +78,8 @@ func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.
 		Update:          update,
 	}
 
-	if interval > 0 {
-		return feeder.Run(ctx, interval, opts)
-	}
-	_, err := feeder.FeedOnce(ctx, opts)
-	return err
+	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
+	return newSize, err
 }
 
 type tileReader struct {

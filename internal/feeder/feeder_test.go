@@ -24,6 +24,7 @@ import (
 	"github.com/transparency-dev/merkle/rfc6962"
 	sclient "github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/serverless-log/testdata"
+	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -48,7 +49,7 @@ func TestFeedOnce(t *testing.T) {
 				fakeWitness: &fakeWitness{
 					latestCP: testdata.Checkpoint(t, 1),
 				},
-				times: 3,
+				times: 2,
 			}).Update,
 		}, {
 			desc:     "works - TOFU feed",
@@ -88,7 +89,7 @@ func TestFeedOnce(t *testing.T) {
 			Update:          test.update,
 		}
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := FeedOnce(ctx, opts)
+			_, err := FeedOnce(ctx, 0, opts)
 			gotErr := err != nil
 			if test.wantErr != gotErr {
 				t.Fatalf("Got err %v, want err %t", err, test.wantErr)
@@ -105,7 +106,7 @@ type slowWitness struct {
 func (sw *slowWitness) Update(_ context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
 	if sw.times > 0 {
 		sw.times = sw.times - 1
-		return nil, 0, fmt.Errorf("will fail for %d more calls", sw.times)
+		return nil, oldSize, fmt.Errorf("will fail for %d more calls (%w)", sw.times, witness.ErrCheckpointStale)
 	}
 	sw.latestCP = newCP
 

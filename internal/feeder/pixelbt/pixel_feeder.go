@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
@@ -39,10 +38,10 @@ const (
 
 // FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
 // This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -86,11 +85,8 @@ func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
 	}
-	if interval > 0 {
-		return feeder.Run(ctx, interval, opts)
-	}
-	_, err = feeder.FeedOnce(ctx, opts)
-	return err
+	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
+	return newSize, err
 }
 
 type tileReader struct {
