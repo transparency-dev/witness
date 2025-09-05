@@ -61,6 +61,10 @@ type FeedOpts struct {
 	Update UpdateFn
 }
 
+// FeedOnce completes one feeding operation for the log and witness in the provided configuration.
+// The provided sizeHint is size of the log that the caller believes is current on the target witness.
+//
+// Returns a new hint on what the current size of the log on the target witness.
 func FeedOnce(ctx context.Context, sizeHint uint64, opts FeedOpts) (uint64, error) {
 	cp, err := opts.FetchCheckpoint(ctx)
 	if err != nil {
