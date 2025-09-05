@@ -40,7 +40,6 @@ var (
 	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
 
 	pollInterval      = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
-	feederConcurrency = flag.Uint("feeder_concurrency", 1, "Maximum number of concurrent feeder tasks")
 	additionalLogYaml = flag.String("additional_logs", "", "The path to an optional addition logs YAML file. Entries in this file will be *added* to the logs configured by default")
 )
 
@@ -92,12 +91,11 @@ func main() {
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:      []note.Signer{signer},
-		WitnessVerifier:  signer.Verifier(),
-		FeedInterval:     *pollInterval,
-		NumFeederWorkers: *feederConcurrency,
-		ServeMux:         mux,
-		Logs:             p,
+		WitnessKeys:     []note.Signer{signer},
+		WitnessVerifier: signer.Verifier(),
+		FeedInterval:    *pollInterval,
+		ServeMux:        mux,
+		Logs:            p,
 	}
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)

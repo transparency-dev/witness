@@ -86,9 +86,6 @@ type OperatorConfig struct {
 	// Logs provides the witness with the log configuration.
 	// If unset, uses the embedded default config.
 	Logs LogConfig
-
-	// NumFeederWorkers specifies the number of concurrent workers doing feeder work to the witness.
-	NumFeederWorkers uint
 }
 
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.

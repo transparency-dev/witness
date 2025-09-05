@@ -55,8 +55,7 @@ var (
 	rateLimit              = flag.Float64("rate_limit", 0, "Maximum number of update requests per second to serve, or zero to disable")
 	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
 
-	pollInterval      = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
-	feederConcurrency = flag.Uint("feeder_concurrency", 1, "Maximum number of concurrent feeder tasks")
+	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
 
 func main() {
@@ -119,7 +118,6 @@ func main() {
 		BastionKey:             bastionKey,
 		RateLimit:              *rateLimit,
 		FeedInterval:           *pollInterval,
-		NumFeederWorkers:       *feederConcurrency,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {

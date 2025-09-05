@@ -61,7 +61,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 	// TODO: consider making this configuable if needed.
 	const maxPendingJobs = 1
 
-	// We'll have a goroutine per witness, each fed by its own work channel
+	// We'll have a goroutine per witness, each fed by its own work channel.
 	klog.Infof("Starting %d feeder worker(s)", len(opts.Witnesses))
 	wChans := make([]chan wJob, 0, len(opts.Witnesses))
 	for _, wi := range opts.Witnesses {
@@ -96,7 +96,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 
 	r := regexp.MustCompile(opts.MatchLogs)
 
-	// Send feeder work to workers
+	// Send feeder work to workers.
 	eg.Go(func() error {
 		klog.Infof("Starting feeder job creator")
 		rl := rate.NewLimiter(rate.Limit(opts.MaxWitnessQPS), 1)
@@ -112,7 +112,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					klog.Warningf("Failed to enumerate feeders: %v", err)
 					break
 				}
-				// Skip unfeedable or unwanted logs
+				// Skip unfeedable or unwanted logs.
 				if c.Feeder == None || !r.MatchString(c.Log.Origin) {
 					continue
 				}
