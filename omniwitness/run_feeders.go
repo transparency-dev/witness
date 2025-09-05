@@ -67,6 +67,10 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 		eg.Go(func() error {
 			// cache of size hints for logs we've submitted to.
 			// local to this goroutine only, so no need to lock.
+			//
+			// TODO(al): this can be limited in size or disabled if the number of logs we need to
+			// witness is too large for available RAM, we'll just degrade to going through the
+			// "stale view" path with the witnesses.
 			logSizes := make(map[string]uint64)
 			for {
 				select {
@@ -118,7 +122,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					wc <- wJob{
 						logID: c.Log.ID,
 						f: func(sizeHint uint64, w feeder.UpdateFn) (uint64, error) {
-							return c.Feeder.FeedFunc()(ctx, c.Log, sizeHint, w, opts.HTTPClient, 0 /* zero interval == run once and return */)
+							return c.Feeder.FeedFunc()(ctx, c.Log, sizeHint, w, opts.HTTPClient)
 						},
 					}
 				}

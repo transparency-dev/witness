@@ -107,7 +107,7 @@ type FeederConfig struct {
 }
 
 // logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, uint64, feeder.UpdateFn, *http.Client, time.Duration) (uint64, error)
+type logFeeder func(context.Context, config.Log, uint64, feeder.UpdateFn, *http.Client) (uint64, error)
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
@@ -207,53 +207,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	})
 
 	return g.Wait()
-}
-
-func runFeeders(ctx context.Context, g *errgroup.Group, httpClient *http.Client, numWorkers uint, interval time.Duration, logs LogConfig, update feeder.UpdateFn) {
-	feedWork := make(chan func() error, numWorkers)
-
-	klog.Infof("Starting %d feeder worker(s)", numWorkers)
-	for range numWorkers {
-		g.Go(func() error {
-			for {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case f := <-feedWork:
-					if err := f(); err != nil {
-						// Log this, but don't return the error as we want to continue
-						// executing feeder jobs until the context is done.
-						klog.Infof("Feed job failed: %v", err)
-					}
-				}
-			}
-		})
-	}
-
-	// Send feeder work to workers
-	g.Go(func() error {
-		klog.Infof("Starting feeder jobs")
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(interval):
-			}
-
-			for c, err := range logs.Feeders(ctx) {
-				if err != nil {
-					klog.Warningf("Feeders: %v", err)
-					break
-				}
-				if c.Feeder != None {
-					klog.Infof("Request to feed %s", c.Log.Origin)
-					feedWork <- func() error {
-						return c.Feeder.FeedFunc()(ctx, c.Log, update, httpClient, 0 /* zero interval == run once and return */)
-					}
-				}
-			}
-		}
-	})
 }
 
 func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
