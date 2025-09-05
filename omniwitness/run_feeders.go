@@ -46,6 +46,9 @@ type wJob struct {
 	f     func(sizeHint uint64, f feeder.UpdateFn) (uint64, error)
 }
 
+// RunFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
+//
+// This is a long-running function which will only return when the context is done.
 func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
@@ -56,7 +59,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 
 	eg := &errgroup.Group{}
 	// TODO: consider making this configuable if needed.
-	const maxPendingJobs = 10
+	const maxPendingJobs = 1
 
 	// We'll have a goroutine per witness, each fed by its own work channel
 	klog.Infof("Starting %d feeder worker(s)", len(opts.Witnesses))
@@ -118,12 +121,16 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				}
 				// Now send jobs to the witnesses.
 				for _, wc := range wChans {
-					klog.V(1).Infof("Request to feed %s", c.Log.Origin)
-					wc <- wJob{
+					select {
+					case wc <- wJob{
 						logID: c.Log.ID,
 						f: func(sizeHint uint64, w feeder.UpdateFn) (uint64, error) {
 							return c.Feeder.FeedFunc()(ctx, c.Log, sizeHint, w, opts.HTTPClient)
 						},
+					}:
+						klog.V(1).Infof("Request to feed %s", c.Log.Origin)
+					default:
+						klog.V(1).Infof("Skipping feed of %s, witness worker busy", c.Log.Origin)
 					}
 				}
 			}
