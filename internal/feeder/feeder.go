@@ -125,7 +125,7 @@ func (f *feeder) feedOnce(ctx context.Context) ([]byte, error) {
 	return wCP, nil
 }
 
-// submitToWitness will keep trying to submit the checkpoint to the witness until the context is done.
+// submitToWitness will submit the checkpoint to the witness, retrying up to 3 times if the local checkpoint is stale.
 func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log.Checkpoint, opts FeedOpts) ([]byte, error) {
 
 	// Since this func will be executed by the backoff mechanism below, we'll
@@ -144,7 +144,7 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 		if err != nil {
 			e := fmt.Errorf("failed to fetch consistency proof: %v", err)
 			klog.Warning(e.Error())
-			return nil, e
+			return nil, backoff.Permanent(e)
 		}
 		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, f.oldSize, cpSubmit.Size, conP)
 
@@ -157,7 +157,7 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 		case err != nil:
 			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %v", cpSubmit.Origin, err)
 			klog.Warning(e.Error())
-			return nil, e
+			return nil, backoff.Permanent(e)
 		default:
 			if f.oldSize == cpSubmit.Size {
 				klog.V(1).Infof("%q: Refreshed witness - @%d: %x", cpSubmit.Origin, cpSubmit.Size, cpSubmit.Hash)
@@ -170,5 +170,5 @@ func (f *feeder) submitToWitness(ctx context.Context, cpRaw []byte, cpSubmit log
 		return witnessCp, nil
 	}
 
-	return backoff.Retry(ctx, submitOp, backoff.WithBackOff(backoff.NewExponentialBackOff()))
+	return backoff.Retry(ctx, submitOp, backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
 }
