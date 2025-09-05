@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/trillian-tessera/client"
@@ -30,14 +29,14 @@ import (
 
 // FeedLog periodically feeds checkpoints from the log to the witness.
 // This function returns once the provided context is done.
-func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	f, err := client.NewHTTPFetcher(lURL, c)
 	if err != nil {
-		return fmt.Errorf("failed to create fetcher: %v", err)
+		return sizeHint, fmt.Errorf("failed to create fetcher: %v", err)
 	}
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
@@ -64,9 +63,6 @@ func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
 	}
-	if interval > 0 {
-		return feeder.Run(ctx, interval, opts)
-	}
-	_, err = feeder.FeedOnce(ctx, opts)
-	return err
+	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
+	return newSize, err
 }

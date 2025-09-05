@@ -41,6 +41,11 @@ type RunFeedOpts struct {
 	Witnesses []feeder.UpdateFn
 }
 
+type wJob struct {
+	logID string
+	f     func(sizeHint uint64, f feeder.UpdateFn) (uint64, error)
+}
+
 func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
@@ -55,20 +60,27 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 
 	// We'll have a goroutine per witness, each fed by its own work channel
 	klog.Infof("Starting %d feeder worker(s)", len(opts.Witnesses))
-	wChans := make([]chan func(feeder.UpdateFn) error, 0, len(opts.Witnesses))
+	wChans := make([]chan wJob, 0, len(opts.Witnesses))
 	for _, wi := range opts.Witnesses {
-		wChan := make(chan func(feeder.UpdateFn) error, maxPendingJobs)
+		wChan := make(chan wJob, maxPendingJobs)
 		wChans = append(wChans, wChan)
 		eg.Go(func() error {
+			// cache of size hints for logs we've submitted to.
+			// local to this goroutine only, so no need to lock.
+			logSizes := make(map[string]uint64)
 			for {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case f := <-wChan:
-					if err := f(wi); err != nil {
+				case job := <-wChan:
+					var err error
+					sizeHint := logSizes[job.logID]
+					if sizeHint, err = job.f(sizeHint, wi); err != nil {
 						// Log this, but don't return the error as we want to continue
 						// executing feeder jobs until the context is done.
 						klog.Infof("[FeederWorker] Feed job failed: %v", err)
+					} else {
+						logSizes[job.logID] = sizeHint
 					}
 				}
 			}
@@ -103,8 +115,11 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				// Now send jobs to the witnesses.
 				for _, wc := range wChans {
 					klog.V(1).Infof("Request to feed %s", c.Log.Origin)
-					wc <- func(w feeder.UpdateFn) error {
-						return c.Feeder.FeedFunc()(ctx, c.Log, w, opts.HTTPClient, 0 /* zero interval == run once and return */)
+					wc <- wJob{
+						logID: c.Log.ID,
+						f: func(sizeHint uint64, w feeder.UpdateFn) (uint64, error) {
+							return c.Feeder.FeedFunc()(ctx, c.Log, sizeHint, w, opts.HTTPClient, 0 /* zero interval == run once and return */)
+						},
 					}
 				}
 			}

@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
@@ -66,14 +65,14 @@ type proof struct {
 //
 // Note that this feeder expects the configured URL to contain a "treeID" query parameter which contains the
 // correct Rekor log tree ID.
-func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.Client, interval time.Duration) error {
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	treeID := lURL.Query().Get("treeID")
 	if treeID == "" {
-		return errors.New("configured LogURL does not contain the required treeID query parameter")
+		return sizeHint, errors.New("configured LogURL does not contain the required treeID query parameter")
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -122,11 +121,8 @@ func FeedLog(ctx context.Context, l config.Log, update feeder.UpdateFn, c *http.
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
 	}
-	if interval > 0 {
-		return feeder.Run(ctx, interval, opts)
-	}
-	_, err = feeder.FeedOnce(ctx, opts)
-	return err
+	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
+	return newSize, err
 }
 
 func getJSON(ctx context.Context, c *http.Client, base *url.URL, path string, s interface{}) error {

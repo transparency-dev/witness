@@ -107,7 +107,7 @@ type FeederConfig struct {
 }
 
 // logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, feeder.UpdateFn, *http.Client, time.Duration) error
+type logFeeder func(context.Context, config.Log, uint64, feeder.UpdateFn, *http.Client, time.Duration) (uint64, error)
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
