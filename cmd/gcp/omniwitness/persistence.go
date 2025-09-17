@@ -27,6 +27,7 @@ import (
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
+	"google.golang.org/api/iterator"
 	"k8s.io/klog/v2"
 )
 
@@ -76,7 +77,7 @@ func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 		Database: p.spannerURI,
 		Statements: []string{
 			"CREATE TABLE IF NOT EXISTS checkpoints (logID STRING(MAX) NOT NULL, checkpoint BYTES(MAX) NOT NULL) PRIMARY KEY (logID)",
-			"CREATE TABLE IF NOT EXISTS logs (logID STRING(2048), origin STRING(2048) NOT NULL, vkey STRING(2048) NOT NULL, url STRING(2048), feeder STRING(32)) PRIMARY KEY(logID)",
+			"CREATE TABLE IF NOT EXISTS logs (logID STRING(2048), origin STRING(2048) NOT NULL, vkey STRING(2048) NOT NULL, url STRING(2048), feeder STRING(32), disabled BOOL NOT NULL) PRIMARY KEY(logID)",
 		},
 	})
 	if err != nil {
@@ -106,20 +107,28 @@ func (p *spannerPersistence) AddLogs(ctx context.Context, lc omniwitness.ConfigY
 
 func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 	return func(yield func(config.Log, error) bool) {
-		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url"})
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url", "disabled"})
 		for {
 			row, err := r.Next()
 			if err != nil {
+				if err == iterator.Done {
+					return
+				}
 				if !yield(config.Log{}, fmt.Errorf("failed to read row: %v", err)) {
 					return
 				}
 			}
 			c := config.Log{}
+			var disabled spanner.NullBool
 			vkey := ""
-			if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL); err != nil {
+			if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL, &disabled); err != nil {
 				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
+			}
+			if disabled.Bool {
+				klog.V(1).Infof("Skipping disabled log %q", c.Origin)
+				continue
 			}
 			c.Verifier, err = note.NewVerifier(vkey)
 			if err != nil {
@@ -136,7 +145,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 
 func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.FeederConfig, error] {
 	return func(yield func(omniwitness.FeederConfig, error) bool) {
-		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url", "feeder"})
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url", "feeder", "disabled"})
 		for {
 			row, err := r.Next()
 			if err != nil {
@@ -147,10 +156,15 @@ func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.
 			c := omniwitness.FeederConfig{}
 			vkey := ""
 			feeder := ""
-			if err := row.Columns(&c.Log.ID, &c.Log.Origin, &vkey, &c.Log.URL, &feeder); err != nil {
+			var disabled spanner.NullBool
+			if err := row.Columns(&c.Log.ID, &c.Log.Origin, &vkey, &c.Log.URL, &feeder, &disabled); err != nil {
 				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
+			}
+			if disabled.Bool {
+				klog.V(1).Infof("Skipping disabled feeder for %q", c.Log.Origin)
+				continue
 			}
 			c.Log.Verifier, err = note.NewVerifier(vkey)
 			if err != nil {
@@ -173,7 +187,7 @@ func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.
 }
 
 func (p *spannerPersistence) Log(ctx context.Context, id string) (config.Log, bool, error) {
-	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{id}, []string{"logID", "origin", "vkey", "url"})
+	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{id}, []string{"logID", "origin", "vkey", "url", "disabled"})
 	if err != nil {
 		if errors.Is(err, spanner.ErrRowNotFound) {
 			return config.Log{}, false, nil
@@ -181,9 +195,14 @@ func (p *spannerPersistence) Log(ctx context.Context, id string) (config.Log, bo
 		return config.Log{}, false, fmt.Errorf("failed to read row: %v", err)
 	}
 	c := config.Log{}
+	var disabled spanner.NullBool
 	vkey := ""
-	if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL); err != nil {
+	if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL, &disabled); err != nil {
 		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
+	}
+	if disabled.Bool {
+		klog.V(1).Infof("Ignoring disabled log %q", c.Origin)
+		return c, false, nil
 	}
 	c.Verifier, err = note.NewVerifier(vkey)
 	if err != nil {
