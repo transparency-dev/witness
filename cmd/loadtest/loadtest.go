@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -65,7 +66,24 @@ func main() {
 	if err != nil {
 		klog.Exitf("--target not a URL: %v", err)
 	}
-	c := wit_client.NewWitness(u, http.DefaultClient)
+
+	hc := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConnsPerHost:   5,
+			MaxIdleConns:          5,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Timeout: *timeout,
+	}
+
+	c := wit_client.NewWitness(u, hc)
 
 	updateLatencyChan := make(chan time.Duration, *logCount)
 	thr := newThrottle(*startQPS)
