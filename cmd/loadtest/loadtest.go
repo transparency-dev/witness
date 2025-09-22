@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,6 +45,7 @@ var (
 	target       = flag.String("target", "", "Base URL of the witness to load test")
 	timeout      = flag.Duration("timeout", time.Second, "How much witness latency terminates the load test")
 	startQPS     = flag.Uint("start_qps", 5, "Starting QPS")
+	maxQPS       = flag.Uint("max_qps", 0, "Max QPS, set to zero for no maximum")
 	successQPS   = flag.Uint("success_qps", 32000, "If the witness can take this much QPS then the load test ends")
 )
 
@@ -65,10 +67,27 @@ func main() {
 	if err != nil {
 		klog.Exitf("--target not a URL: %v", err)
 	}
-	c := wit_client.NewWitness(u, http.DefaultClient)
+
+	hc := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConnsPerHost:   5,
+			MaxIdleConns:          5,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+		Timeout: *timeout,
+	}
+
+	c := wit_client.NewWitness(u, hc)
 
 	updateLatencyChan := make(chan time.Duration, *logCount)
-	thr := newThrottle(*startQPS)
+	thr := newThrottle(*startQPS, *maxQPS)
 	go thr.run(ctx)
 
 	for _, l := range logs.logs {
@@ -306,16 +325,18 @@ func (l *inMemoryLog) config() string {
 	return fmt.Sprintf(stanza, l.o, l.o, l.vkey)
 }
 
-func newThrottle(opsPerSecond uint) *throttle {
+func newThrottle(opsPerSecond, maxOpsPerSecond uint) *throttle {
 	return &throttle{
-		opsPerSecond: opsPerSecond,
-		tokenChan:    make(chan bool, opsPerSecond),
+		opsPerSecond:    opsPerSecond,
+		maxOpsPerSecond: maxOpsPerSecond,
+		tokenChan:       make(chan bool, opsPerSecond),
 	}
 }
 
 type throttle struct {
-	opsPerSecond uint
-	tokenChan    chan bool
+	opsPerSecond    uint
+	maxOpsPerSecond uint
+	tokenChan       chan bool
 
 	oversupply int
 }
@@ -326,7 +347,7 @@ func (t *throttle) increase() {
 	if delta < 1 {
 		delta = 1
 	}
-	t.opsPerSecond = tokenCount + uint(delta)
+	t.opsPerSecond = min(t.maxOpsPerSecond, tokenCount+uint(delta))
 }
 
 func (t *throttle) run(ctx context.Context) {
@@ -339,11 +360,17 @@ func (t *throttle) run(ctx context.Context) {
 		case <-ticker.C:
 			tokenCount := int(t.opsPerSecond)
 			timeout := time.After(interval)
+			dribble := time.Second / time.Duration(t.opsPerSecond)
 		Loop:
 			for i := uint(0); i < t.opsPerSecond; i++ {
 				select {
 				case t.tokenChan <- true:
 					tokenCount--
+					select {
+					case <-time.After(dribble):
+					case <-timeout:
+						break Loop
+					}
 				case <-timeout:
 					break Loop
 				}
