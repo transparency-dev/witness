@@ -119,21 +119,6 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 
 }
 
-// FeedLog feeds checkpoints from the source log to the witness.
-// If interval is non-zero, this function will return when the context is done, otherwise it will perform
-// one feed cycle and return.
-//
-// Note that this feeder expects the configured URL to contain a "treeID" query parameter which contains the
-// correct Rekor log tree ID.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
-	opts, err := NewFeedOpts(l, update, c)
-	if err != nil {
-		return sizeHint, err
-	}
-	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
-	return newSize, err
-}
-
 func getJSON(ctx context.Context, c *http.Client, base *url.URL, path string, s interface{}) error {
 	u, err := base.Parse(path)
 	if err != nil {

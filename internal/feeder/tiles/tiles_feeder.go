@@ -62,16 +62,4 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
 	}, nil
-
-}
-
-// FeedLog periodically feeds checkpoints from the log to the witness.
-// This function returns once the provided context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
-	opts, err := NewFeedOpts(l, update, c)
-	if err != nil {
-		return sizeHint, err
-	}
-	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
-	return newSize, err
 }

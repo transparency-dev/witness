@@ -86,18 +86,6 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 	}, nil
 }
 
-// FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
-// This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
-	opts, err := NewFeedOpts(l, update, c)
-	if err != nil {
-		return sizeHint, err
-	}
-
-	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
-	return newSize, err
-}
-
 type tileReader struct {
 	fetch func(p string) ([]byte, error)
 }

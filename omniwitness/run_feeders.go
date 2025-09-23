@@ -126,7 +126,11 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					case wc <- wJob{
 						logID: c.Log.ID,
 						f: func(sizeHint uint64, w feeder.UpdateFn) (uint64, error) {
-							return c.Feeder.FeedFunc()(ctx, c.Log, sizeHint, w, opts.HTTPClient)
+							opts, err := c.Feeder.NewOptsFunc()(c.Log, w, opts.HTTPClient)
+							if err != nil {
+								return sizeHint, err
+							}
+							return feeder.FeedOnce(ctx, sizeHint, opts)
 						},
 					}:
 						klog.V(1).Infof("Request to feed %s", c.Log.Origin)
