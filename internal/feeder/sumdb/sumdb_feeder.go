@@ -33,8 +33,8 @@ const (
 	leavesPerTile = 1 << tileHeight
 )
 
-// NewFeedOpts returns a populated feeder.NewFeedOpts configured for a sumdb log.
-func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
+// NewFeedSource returns a populated NewFeedSource configured for a sumdb log.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
@@ -68,13 +68,12 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 
 	}
 
-	return feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCheckpoint,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
 	}, nil
 }
 

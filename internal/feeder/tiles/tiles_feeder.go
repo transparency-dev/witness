@@ -27,15 +27,15 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder"
 )
 
-// NewFeedOpts returns a populated feeder.NewFeedOpts configured for a tlog-tiles log.
-func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
+// NewFeedSource returns a populated feeder.NewFeedSource configured for a tlog-tiles log.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	f, err := client.NewHTTPFetcher(lURL, c)
 	if err != nil {
-		return feeder.FeedOpts{}, fmt.Errorf("failed to create fetcher: %v", err)
+		return feeder.Source{}, fmt.Errorf("failed to create fetcher: %v", err)
 	}
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
@@ -54,12 +54,11 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 		return conP, nil
 	}
 
-	return feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: f.ReadCheckpoint,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
 	}, nil
 }

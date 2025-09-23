@@ -18,23 +18,19 @@ package feeder
 import (
 	"context"
 	"errors"
-	"fmt"
 
-	"github.com/cenkalti/backoff/v5"
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
-	"k8s.io/klog/v2"
 )
 
 // ErrNoSignaturesAdded is returned when the witness has already signed the presented checkpoint.
 var ErrNoSignaturesAdded = errors.New("no additional signatures added")
 
-// UpdateFn is the signature of a function which knows how to update a witness.
-type UpdateFn func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
+// FetchProofFn is the signature of a function which knows how to fetch a consistency proof.
+type FetchProofFn func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error)
 
-// FeedOpts holds parameters when calling the Feed function.
-type FeedOpts struct {
+// Source holds parameters when calling the Feed function.
+type Source struct {
 	// LogID is the ID for the log whose checkpoint is being fed.
 	//
 	// TODO(al/mhutchinson): should this be an impl detail of Witness
@@ -50,82 +46,10 @@ type FeedOpts struct {
 	// function will be called with a default `from` value - this allows compact-range
 	// type proofs to be supported.  Implementations for non-compact-range type proofs
 	// should return an empty proof and no error.
-	FetchProof func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error)
+	FetchProof FetchProofFn
 
 	// LogSigVerifier a verifier for log checkpoint signatures.
 	LogSigVerifier note.Verifier
 	// LogOrigin is the expected first line of checkpoints from the source log.
 	LogOrigin string
-
-	// Update knows how to update a witness
-	Update UpdateFn
-}
-
-// FeedOnce completes one feeding operation for the log and witness in the provided configuration.
-// The provided sizeHint is size of the log that the caller believes is current on the target witness.
-//
-// Returns a new hint on what the current size of the log on the target witness.
-func FeedOnce(ctx context.Context, sizeHint uint64, opts FeedOpts) (uint64, error) {
-	cp, err := opts.FetchCheckpoint(ctx)
-	if err != nil {
-		return sizeHint, fmt.Errorf("failed to read input checkpoint: %v", err)
-	}
-
-	klog.V(2).Infof("CP to feed:\n%s", string(cp))
-
-	cpSubmit, _, _, err := log.ParseCheckpoint(cp, opts.LogOrigin, opts.LogSigVerifier)
-	if err != nil {
-		return sizeHint, fmt.Errorf("failed to parse checkpoint: %v", err)
-	}
-
-	newSize, err := submitToWitness(ctx, sizeHint, cp, *cpSubmit, opts)
-	if err != nil {
-		return newSize, fmt.Errorf("witness submission failed: %w", err)
-	}
-	return newSize, nil
-}
-
-// submitToWitness will submit the checkpoint to the witness, retrying up to 3 times if the local checkpoint is stale.
-func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmit log.Checkpoint, opts FeedOpts) (uint64, error) {
-	// Since this func will be executed by the backoff mechanism below, we'll
-	// log any error messages directly in here before returning the error, as
-	// the backoff util doesn't seem to log them itself.
-	submitOp := func() (uint64, error) {
-		var err error
-		var conP [][]byte
-		if sizeHint > cpSubmit.Size {
-			return sizeHint, backoff.Permanent(fmt.Errorf("witness checkpoint size (%d) > submit checkpoint size (%d)", sizeHint, cpSubmit.Size))
-		}
-
-		// The witness may be configured to expect a compact-range type proof, so we need to always
-		// try to build one, even if the witness doesn't have a "latest" checkpoint for this log.
-		conP, err = opts.FetchProof(ctx, sizeHint, cpSubmit)
-		if err != nil {
-			e := fmt.Errorf("failed to fetch consistency proof: %w", err)
-			return sizeHint, backoff.Permanent(e)
-		}
-		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
-
-		_, actualSize, err := opts.Update(ctx, sizeHint, cpRaw, conP)
-		switch {
-		case errors.Is(err, witness.ErrCheckpointStale):
-			klog.V(2).Infof("%q: %d is stale, bumping to %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
-			sizeHint = actualSize
-			return sizeHint, backoff.RetryAfter(1)
-		case err != nil:
-			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %w", cpSubmit.Origin, err)
-			return sizeHint, backoff.Permanent(e)
-		default:
-			if sizeHint == cpSubmit.Size {
-				klog.V(1).Infof("%q: Refreshed witness - @%d: %x", cpSubmit.Origin, cpSubmit.Size, cpSubmit.Hash)
-
-			} else {
-				klog.V(1).Infof("%q: Updated witness - @%d → @%d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, cpSubmit.Hash)
-			}
-			sizeHint = cpSubmit.Size
-		}
-		return sizeHint, nil
-	}
-
-	return backoff.Retry(ctx, submitOp, backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
 }

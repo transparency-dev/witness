@@ -152,7 +152,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.FeedInterval > 0 {
 		rOpts := RunFeedOpts{
-			Witnesses:     []feeder.UpdateFn{witness.Update},
+			Witnesses:     []UpdateFn{witness.Update},
 			HTTPClient:    httpClient,
 			MaxWitnessQPS: operatorConfig.RateLimit,
 			LogConfig:     operatorConfig.Logs,
@@ -267,18 +267,18 @@ func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	return nil
 }
 
-func (f Feeder) NewOptsFunc() func(config.Log, feeder.UpdateFn, *http.Client) (feeder.FeedOpts, error) {
+func (f Feeder) NewSourceFunc() func(config.Log, *http.Client) (feeder.Source, error) {
 	switch f {
 	case Serverless:
-		return serverless.NewFeedOpts
+		return serverless.NewFeedSource
 	case SumDB:
-		return sumdb.NewFeedOpts
+		return sumdb.NewFeedSource
 	case Pixel:
-		return pixelbt.NewFeedOpts
+		return pixelbt.NewFeedSource
 	case Rekor:
-		return rekor_v1.NewFeedOpts
+		return rekor_v1.NewFeedSource
 	case Tiles:
-		return tiles.NewFeedOpts
+		return tiles.NewFeedSource
 	}
 	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }

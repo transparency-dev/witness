@@ -36,11 +36,11 @@ const (
 	tileHeight = 1
 )
 
-// NewFeedOpts returns a feeder.FeedOpts configured for PixelBT logs.
-func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
+// NewFeedSource returns a FeedSource configured for PixelBT logs.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -76,13 +76,12 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 		return r, nil
 	}
 
-	return feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
 	}, nil
 }
 

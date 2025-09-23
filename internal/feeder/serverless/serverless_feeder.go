@@ -31,10 +31,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
+// NewFeedSource returns a populated FeedSource configured for a serverless log.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	f := newFetcher(c, lURL)
 	h := rfc6962.DefaultHasher
@@ -55,13 +56,12 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 		return conP, nil
 	}
 
-	return feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
 	}, nil
 }
 

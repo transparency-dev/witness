@@ -59,15 +59,15 @@ type proof struct {
 	Hashes []string `json:"hashes"`
 }
 
-// NewFeedOpts returns a populated feeder.FeedOpts struct configured for Rekor v1 logs.
-func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
+// NewFeedSource returns a populated FeedSource struct configured for Rekor v1 logs.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	treeID := lURL.Query().Get("treeID")
 	if treeID == "" {
-		return feeder.FeedOpts{}, errors.New("configured LogURL does not contain the required treeID query parameter")
+		return feeder.Source{}, errors.New("configured LogURL does not contain the required treeID query parameter")
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -108,13 +108,12 @@ func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.F
 		return p, nil
 	}
 
-	return feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
 	}, nil
 
 }
