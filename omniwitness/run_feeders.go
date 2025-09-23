@@ -120,16 +120,30 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					return fmt.Errorf("rate limit failed: %v", err)
 				}
 
+				// Fetch a checkpoint from the log, this will be the one which we send to _all_ witnesses below.
+				opts, err := c.Feeder.NewOptsFunc()(c.Log, nil, opts.HTTPClient)
+				if err != nil {
+					klog.Warningf("Failed to create feeder opts for %s: %v", c.Feeder.String(), err)
+					continue
+				}
+				cp, err := opts.FetchCheckpoint(ctx)
+				if err != nil {
+					klog.Warningf("Failed to fetch checkpoint: %v", err)
+					continue
+				}
+
+				// Ensure all feeders use the checkpoint we just fetched.
+				opts.FetchCheckpoint = func(_ context.Context) ([]byte, error) {
+					return cp, nil
+				}
+
 				// Now send jobs to the witnesses.
 				for _, wc := range wChans {
 					select {
 					case wc <- wJob{
 						logID: c.Log.ID,
 						f: func(sizeHint uint64, w feeder.UpdateFn) (uint64, error) {
-							opts, err := c.Feeder.NewOptsFunc()(c.Log, w, opts.HTTPClient)
-							if err != nil {
-								return sizeHint, err
-							}
+							opts.Update = w
 							return feeder.FeedOnce(ctx, sizeHint, opts)
 						},
 					}:
