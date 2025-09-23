@@ -119,6 +119,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				if err := rl.Wait(ctx); err != nil {
 					return fmt.Errorf("rate limit failed: %v", err)
 				}
+
 				// Now send jobs to the witnesses.
 				for _, wc := range wChans {
 					select {

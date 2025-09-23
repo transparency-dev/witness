@@ -31,12 +31,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// FeedLog periodically feeds checkpoints from the log to the witness.
-// This function returns once the provided context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	f := newFetcher(c, lURL)
 	h := rfc6962.DefaultHasher
@@ -57,13 +55,22 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 		return conP, nil
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.FeedOpts{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
+	}, nil
+}
+
+// FeedLog periodically feeds checkpoints from the log to the witness.
+// This function returns once the provided context is done.
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+	opts, err := NewFeedOpts(l, update, c)
+	if err != nil {
+		return sizeHint, err
 	}
 	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
 	return newSize, err

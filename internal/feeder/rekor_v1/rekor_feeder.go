@@ -59,20 +59,15 @@ type proof struct {
 	Hashes []string `json:"hashes"`
 }
 
-// FeedLog feeds checkpoints from the source log to the witness.
-// If interval is non-zero, this function will return when the context is done, otherwise it will perform
-// one feed cycle and return.
-//
-// Note that this feeder expects the configured URL to contain a "treeID" query parameter which contains the
-// correct Rekor log tree ID.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+// NewFeedOpts returns a populated feeder.FeedOpts struct configured for Rekor v1 logs.
+func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	treeID := lURL.Query().Get("treeID")
 	if treeID == "" {
-		return sizeHint, errors.New("configured LogURL does not contain the required treeID query parameter")
+		return feeder.FeedOpts{}, errors.New("configured LogURL does not contain the required treeID query parameter")
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -113,13 +108,27 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 		return p, nil
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.FeedOpts{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
+	}, nil
+
+}
+
+// FeedLog feeds checkpoints from the source log to the witness.
+// If interval is non-zero, this function will return when the context is done, otherwise it will perform
+// one feed cycle and return.
+//
+// Note that this feeder expects the configured URL to contain a "treeID" query parameter which contains the
+// correct Rekor log tree ID.
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+	opts, err := NewFeedOpts(l, update, c)
+	if err != nil {
+		return sizeHint, err
 	}
 	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
 	return newSize, err

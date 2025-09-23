@@ -286,6 +286,22 @@ func (f Feeder) FeedFunc() logFeeder {
 	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }
 
+func (f Feeder) NewOptsFunc() func(config.Log, feeder.UpdateFn, *http.Client) (feeder.FeedOpts, error) {
+	switch f {
+	case Serverless:
+		return serverless.NewFeedOpts
+	case SumDB:
+		return sumdb.NewFeedOpts
+	case Pixel:
+		return pixelbt.NewFeedOpts
+	case Rekor:
+		return rekor_v1.NewFeedOpts
+	case Tiles:
+		return tiles.NewFeedOpts
+	}
+	panic(fmt.Sprintf("unknown feeder enum: %q", f))
+}
+
 func (f Feeder) String() string {
 	return feederNameByID[f]
 }

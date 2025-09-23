@@ -36,12 +36,11 @@ const (
 	tileHeight = 1
 )
 
-// FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
-// This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+// NewFeedOpts returns a feeder.FeedOpts configured for PixelBT logs.
+func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -77,14 +76,24 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 		return r, nil
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.FeedOpts{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
+	}, nil
+}
+
+// FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
+// This method blocks until the context is done.
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+	opts, err := NewFeedOpts(l, update, c)
+	if err != nil {
+		return sizeHint, err
 	}
+
 	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
 	return newSize, err
 }

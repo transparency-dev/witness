@@ -27,16 +27,15 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder"
 )
 
-// FeedLog periodically feeds checkpoints from the log to the witness.
-// This function returns once the provided context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+// NewFeedOpts returns a populated feeder.NewFeedOpts configured for a tlog-tiles log.
+func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.FeedOpts{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	f, err := client.NewHTTPFetcher(lURL, c)
 	if err != nil {
-		return sizeHint, fmt.Errorf("failed to create fetcher: %v", err)
+		return feeder.FeedOpts{}, fmt.Errorf("failed to create fetcher: %v", err)
 	}
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
@@ -55,13 +54,23 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 		return conP, nil
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.FeedOpts{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: f.ReadCheckpoint,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
+	}, nil
+
+}
+
+// FeedLog periodically feeds checkpoints from the log to the witness.
+// This function returns once the provided context is done.
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+	opts, err := NewFeedOpts(l, update, c)
+	if err != nil {
+		return sizeHint, err
 	}
 	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
 	return newSize, err

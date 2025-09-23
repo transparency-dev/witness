@@ -33,9 +33,8 @@ const (
 	leavesPerTile = 1 << tileHeight
 )
 
-// FeedLog continually feeds checkpoints from the given log into the witness.
-// This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+// NewFeedOpts returns a populated feeder.NewFeedOpts configured for a sumdb log.
+func NewFeedOpts(l config.Log, update feeder.UpdateFn, c *http.Client) (feeder.FeedOpts, error) {
 	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
@@ -69,15 +68,23 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.FeedOpts{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCheckpoint,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
 		Update:          update,
-	}
+	}, nil
+}
 
+// FeedLog continually feeds checkpoints from the given log into the witness.
+// This method blocks until the context is done.
+func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+	opts, err := NewFeedOpts(l, update, c)
+	if err != nil {
+		return sizeHint, err
+	}
 	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
 	return newSize, err
 }
