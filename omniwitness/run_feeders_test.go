@@ -26,10 +26,14 @@ import (
 	"github.com/transparency-dev/serverless-log/testdata"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
 func TestFeedOnce(t *testing.T) {
+	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
+	initFeederMetrics()
+
 	ctx := context.Background()
 	for _, test := range []struct {
 		desc     string
@@ -85,7 +89,7 @@ func TestFeedOnce(t *testing.T) {
 			LogSigVerifier: testdata.LogSigVerifier(t),
 		}
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := feedOnce(ctx, 0, test.update, test.submitCP, src)
+			_, err := feedOnce(ctx, 0, Witness{Update: test.update}, test.submitCP, src)
 			gotErr := err != nil
 			if test.wantErr != gotErr {
 				t.Fatalf("Got err %v, want err %t", err, test.wantErr)

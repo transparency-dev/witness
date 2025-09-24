@@ -35,14 +35,14 @@ import (
 )
 
 var (
-	doOnce                      sync.Once
+	httpDoOnce                  sync.Once
 	counterHTTPIncomingRequest  monitoring.Counter
 	counterHTTPIncomingResponse monitoring.Counter
 	counterHTTPIncomingPushback monitoring.Counter
 )
 
-func initMetrics() {
-	doOnce.Do(func() {
+func initHTTPMetrics() {
+	httpDoOnce.Do(func() {
 		mf := monitoring.GetMetricFactory()
 		const (
 			origin = "origin"
