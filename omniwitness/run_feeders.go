@@ -46,11 +46,12 @@ func initFeederMetrics() {
 		mf := monitoring.GetMetricFactory()
 		const (
 			witness = "witness"
+			log     = "log"
 			status  = "status"
 		)
 
-		counterFeedRequest = mf.NewCounter("feed_request", "Number of Feed requests sent to witnesses", witness)
-		counterFeedResponse = mf.NewCounter("feed_response", "Witness responses", witness, status)
+		counterFeedRequest = mf.NewCounter("feed_request", "Number of Feed requests sent to witnesses", witness, log)
+		counterFeedResponse = mf.NewCounter("feed_response", "Witness responses", witness, log, status)
 	})
 }
 
@@ -79,8 +80,8 @@ type RunFeedOpts struct {
 }
 
 type wJob struct {
-	logID string
-	f     func(sizeHint uint64, w Witness) (uint64, error)
+	logOrigin string
+	f         func(sizeHint uint64, w Witness) (uint64, error)
 }
 
 // RunFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
@@ -120,15 +121,15 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					return ctx.Err()
 				case job := <-wChan:
 					var err error
-					sizeHint := logSizes[job.logID]
-					counterFeedRequest.Inc(wi.Name)
+					sizeHint := logSizes[job.logOrigin]
+					counterFeedRequest.Inc(wi.Name, job.logOrigin)
 					sizeHint, err = job.f(sizeHint, wi)
 					if err != nil {
 						// Log this, but don't return the error as we want to continue
 						// executing feeder jobs until the context is done.
 						klog.Infof("[FeederWorker] Feed job failed: %v", err)
 					} else {
-						logSizes[job.logID] = sizeHint
+						logSizes[job.logOrigin] = sizeHint
 					}
 				}
 			}
@@ -180,7 +181,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				for _, wc := range wChans {
 					select {
 					case wc <- wJob{
-						logID: c.Log.ID,
+						logOrigin: c.Log.Origin,
 						f: func(sizeHint uint64, w Witness) (uint64, error) {
 							return feedOnce(ctx, sizeHint, w, cp, src)
 						},
@@ -238,12 +239,12 @@ func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmi
 		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
 
 		_, actualSize, err := w.Update(ctx, sizeHint, cpRaw, conP)
-		counterFeedResponse.Inc(w.Name, statusForError(err))
+		counterFeedResponse.Inc(w.Name, cpSubmit.Origin, statusForError(err))
 		switch {
 		case errors.Is(err, witness.ErrCheckpointStale):
 			klog.V(2).Infof("%q: %d is stale, bumping to %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
 			sizeHint = actualSize
-			counterFeedResponse.Inc(w.Name, "stale")
+			counterFeedResponse.Inc(w.Name, cpSubmit.Origin, "stale")
 			return sizeHint, backoff.RetryAfter(1)
 		case err != nil:
 			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %w", cpSubmit.Origin, err)
