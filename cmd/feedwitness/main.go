@@ -34,7 +34,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
@@ -87,7 +86,7 @@ func main() {
 
 	httpClient := httpClientFromFlags()
 
-	witnesses := []feeder.UpdateFn{}
+	witnesses := []omniwitness.UpdateFn{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {

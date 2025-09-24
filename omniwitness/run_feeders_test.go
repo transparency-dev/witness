@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package feeder
+package omniwitness
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"github.com/transparency-dev/merkle/rfc6962"
 	sclient "github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/serverless-log/testdata"
+	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -65,9 +66,6 @@ func TestFeedOnce(t *testing.T) {
 	} {
 		sCP := mustOpenCheckpoint(t, test.submitCP, testdata.TestLogOrigin, testdata.LogSigVerifier(t))
 		f := testdata.HistoryFetcher(sCP.Size)
-		fetchCheckpoint := func(_ context.Context) ([]byte, error) {
-			return test.submitCP, nil
-		}
 		fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
 			if from == 0 {
 				return [][]byte{}, nil
@@ -81,15 +79,13 @@ func TestFeedOnce(t *testing.T) {
 			return conP, nil
 		}
 
-		opts := FeedOpts{
-			FetchCheckpoint: fetchCheckpoint,
-			FetchProof:      fetchProof,
-			LogOrigin:       testdata.TestLogOrigin,
-			LogSigVerifier:  testdata.LogSigVerifier(t),
-			Update:          test.update,
+		src := feeder.Source{
+			FetchProof:     fetchProof,
+			LogOrigin:      testdata.TestLogOrigin,
+			LogSigVerifier: testdata.LogSigVerifier(t),
 		}
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := FeedOnce(ctx, 0, opts)
+			_, err := feedOnce(ctx, 0, test.update, test.submitCP, src)
 			gotErr := err != nil
 			if test.wantErr != gotErr {
 				t.Fatalf("Got err %v, want err %t", err, test.wantErr)

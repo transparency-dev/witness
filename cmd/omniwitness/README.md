@@ -1,4 +1,4 @@
-# The OmniWitness
+# The GCP OmniWitness
 
 The OmniWitness is a witness that will monitor all [known](../../omniwitness/logs.yaml) logs that use
 the [generic checkpoint format](https://github.com/transparency-dev/formats/tree/main/log).

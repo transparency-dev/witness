@@ -103,9 +103,6 @@ type FeederConfig struct {
 	Feeder Feeder
 }
 
-// logFeeder is the de-facto interface that feeders implement.
-type logFeeder func(context.Context, config.Log, uint64, feeder.UpdateFn, *http.Client) (uint64, error)
-
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
@@ -155,7 +152,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.FeedInterval > 0 {
 		rOpts := RunFeedOpts{
-			Witnesses:     []feeder.UpdateFn{witness.Update},
+			Witnesses:     []UpdateFn{witness.Update},
 			HTTPClient:    httpClient,
 			MaxWitnessQPS: operatorConfig.RateLimit,
 			LogConfig:     operatorConfig.Logs,
@@ -270,18 +267,18 @@ func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	return nil
 }
 
-func (f Feeder) FeedFunc() logFeeder {
+func (f Feeder) NewSourceFunc() func(config.Log, *http.Client) (feeder.Source, error) {
 	switch f {
 	case Serverless:
-		return serverless.FeedLog
+		return serverless.NewFeedSource
 	case SumDB:
-		return sumdb.FeedLog
+		return sumdb.NewFeedSource
 	case Pixel:
-		return pixelbt.FeedLog
+		return pixelbt.NewFeedSource
 	case Rekor:
-		return rekor_v1.FeedLog
+		return rekor_v1.NewFeedSource
 	case Tiles:
-		return tiles.FeedLog
+		return tiles.NewFeedSource
 	}
 	panic(fmt.Sprintf("unknown feeder enum: %q", f))
 }

@@ -36,12 +36,11 @@ const (
 	tileHeight = 1
 )
 
-// FeedLog retrieves checkpoints and proofs from the source Pixel BT log, and sends them to the witness.
-// This method blocks until the context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+// NewFeedSource returns a FeedSource configured for PixelBT logs.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -77,16 +76,13 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 		return r, nil
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
-	}
-	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
-	return newSize, err
+	}, nil
 }
 
 type tileReader struct {

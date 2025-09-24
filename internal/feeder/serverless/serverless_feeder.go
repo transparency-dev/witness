@@ -31,12 +31,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// FeedLog periodically feeds checkpoints from the log to the witness.
-// This function returns once the provided context is done.
-func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.UpdateFn, c *http.Client) (uint64, error) {
+// NewFeedSource returns a populated FeedSource configured for a serverless log.
+func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	lURL, err := url.Parse(l.URL)
 	if err != nil {
-		return sizeHint, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
 	}
 	f := newFetcher(c, lURL)
 	h := rfc6962.DefaultHasher
@@ -57,16 +56,13 @@ func FeedLog(ctx context.Context, l config.Log, sizeHint uint64, update feeder.U
 		return conP, nil
 	}
 
-	opts := feeder.FeedOpts{
+	return feeder.Source{
 		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
 		LogSigVerifier:  l.Verifier,
-		Update:          update,
-	}
-	newSize, err := feeder.FeedOnce(ctx, sizeHint, opts)
-	return newSize, err
+	}, nil
 }
 
 // TODO(al): factor this stuff out and share between tools:
