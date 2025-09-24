@@ -86,7 +86,7 @@ func main() {
 
 	httpClient := httpClientFromFlags()
 
-	witnesses := []omniwitness.UpdateFn{}
+	witnesses := []omniwitness.Witness{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {
@@ -96,7 +96,11 @@ func main() {
 			witness: w_http.NewWitness(u, httpClient),
 			url:     wu,
 		}
-		witnesses = append(witnesses, lc.Update)
+		witness := omniwitness.Witness{
+			Name:   wu,
+			Update: lc.Update,
+		}
+		witnesses = append(witnesses, witness)
 	}
 
 	rOpts := omniwitness.RunFeedOpts{

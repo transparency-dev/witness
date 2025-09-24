@@ -23,18 +23,45 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sync"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 )
 
+var (
+	feederDoOnce        sync.Once
+	counterFeedRequest  monitoring.Counter
+	counterFeedResponse monitoring.Counter
+)
+
+func initFeederMetrics() {
+	feederDoOnce.Do(func() {
+		mf := monitoring.GetMetricFactory()
+		const (
+			witness = "witness"
+			status  = "status"
+		)
+
+		counterFeedRequest = mf.NewCounter("feed_request", "Number of Feed requests sent to witnesses", witness)
+		counterFeedResponse = mf.NewCounter("feed_response", "Witness responses", witness, status)
+	})
+}
+
 // UpdateFn is the signature of a function which knows how to update a witness.
 type UpdateFn func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
+
+// Witness represents a target witness to be fed.
+type Witness struct {
+	Update UpdateFn
+	Name   string
+}
 
 // RunFeedOpts is the configuration to use for RunFeeders.
 type RunFeedOpts struct {
@@ -48,18 +75,20 @@ type RunFeedOpts struct {
 	// LogConfig provides access to log config. Required.
 	LogConfig LogConfig
 	// Witnesses is the set of witnesses to feed to. Required.
-	Witnesses []UpdateFn
+	Witnesses []Witness
 }
 
 type wJob struct {
 	logID string
-	f     func(sizeHint uint64, f UpdateFn) (uint64, error)
+	f     func(sizeHint uint64, w Witness) (uint64, error)
 }
 
 // RunFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
 //
 // This is a long-running function which will only return when the context is done.
 func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
+	initFeederMetrics()
+
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}
@@ -92,7 +121,9 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				case job := <-wChan:
 					var err error
 					sizeHint := logSizes[job.logID]
-					if sizeHint, err = job.f(sizeHint, wi); err != nil {
+					counterFeedRequest.Inc(wi.Name)
+					sizeHint, err = job.f(sizeHint, wi)
+					if err != nil {
 						// Log this, but don't return the error as we want to continue
 						// executing feeder jobs until the context is done.
 						klog.Infof("[FeederWorker] Feed job failed: %v", err)
@@ -150,7 +181,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					select {
 					case wc <- wJob{
 						logID: c.Log.ID,
-						f: func(sizeHint uint64, w UpdateFn) (uint64, error) {
+						f: func(sizeHint uint64, w Witness) (uint64, error) {
 							return feedOnce(ctx, sizeHint, w, cp, src)
 						},
 					}:
@@ -170,7 +201,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 // The provided sizeHint is size of the log that the caller believes is current on the target witness.
 //
 // Returns a new hint on what the current size of the log on the target witness.
-func feedOnce(ctx context.Context, sizeHint uint64, update UpdateFn, cp []byte, src feeder.Source) (uint64, error) {
+func feedOnce(ctx context.Context, sizeHint uint64, w Witness, cp []byte, src feeder.Source) (uint64, error) {
 	klog.V(2).Infof("CP to feed:\n%s", string(cp))
 
 	cpSubmit, _, _, err := log.ParseCheckpoint(cp, src.LogOrigin, src.LogSigVerifier)
@@ -178,7 +209,7 @@ func feedOnce(ctx context.Context, sizeHint uint64, update UpdateFn, cp []byte, 
 		return sizeHint, fmt.Errorf("failed to parse checkpoint: %v", err)
 	}
 
-	newSize, err := submitToWitness(ctx, sizeHint, cp, *cpSubmit, src.FetchProof, update)
+	newSize, err := submitToWitness(ctx, sizeHint, cp, *cpSubmit, src.FetchProof, w)
 	if err != nil {
 		return newSize, fmt.Errorf("witness submission failed: %w", err)
 	}
@@ -186,7 +217,7 @@ func feedOnce(ctx context.Context, sizeHint uint64, update UpdateFn, cp []byte, 
 }
 
 // submitToWitness will submit the checkpoint to the witness, retrying up to 3 times if the local checkpoint is stale.
-func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmit log.Checkpoint, fetchProof feeder.FetchProofFn, update UpdateFn) (uint64, error) {
+func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmit log.Checkpoint, fetchProof feeder.FetchProofFn, w Witness) (uint64, error) {
 	// Since this func will be executed by the backoff mechanism below, we'll
 	// log any error messages directly in here before returning the error, as
 	// the backoff util doesn't seem to log them itself.
@@ -206,11 +237,13 @@ func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmi
 		}
 		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
 
-		_, actualSize, err := update(ctx, sizeHint, cpRaw, conP)
+		_, actualSize, err := w.Update(ctx, sizeHint, cpRaw, conP)
+		counterFeedResponse.Inc(w.Name, statusForError(err))
 		switch {
 		case errors.Is(err, witness.ErrCheckpointStale):
 			klog.V(2).Infof("%q: %d is stale, bumping to %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
 			sizeHint = actualSize
+			counterFeedResponse.Inc(w.Name, "stale")
 			return sizeHint, backoff.RetryAfter(1)
 		case err != nil:
 			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %w", cpSubmit.Origin, err)
@@ -228,4 +261,26 @@ func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmi
 	}
 
 	return backoff.Retry(ctx, submitOp, backoff.WithBackOff(backoff.NewExponentialBackOff()), backoff.WithMaxTries(3))
+}
+
+// statusForError returns a string to be used as the status label for feeder metrics given the error returned.
+func statusForError(e error) string {
+	switch {
+	case errors.Is(e, witness.ErrCheckpointStale):
+		return "stale"
+	case errors.Is(e, witness.ErrNoValidSignature):
+		return "no_valid_signature"
+	case errors.Is(e, witness.ErrUnknownLog):
+		return "unknown_log"
+	case errors.Is(e, witness.ErrOldSizeInvalid):
+		return "old_size_invalid"
+	case errors.Is(e, witness.ErrInvalidProof):
+		return "invalid_proof"
+	case errors.Is(e, witness.ErrRootMismatch):
+		return "root_mismatch"
+	case e == nil:
+		return "ok"
+	default:
+		return "unknown_error"
+	}
 }
