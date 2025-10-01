@@ -156,7 +156,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		rOpts := RunFeedOpts{
 			Witnesses:     []Witness{{Name: operatorConfig.WitnessVerifier.Name(), Update: witness.Update}},
 			HTTPClient:    httpClient,
-			MaxWitnessQPS: operatorConfig.RateLimit,
+			MaxWitnessQPS: float64(time.Second) / float64(operatorConfig.FeedInterval),
 			LogConfig:     operatorConfig.Logs,
 		}
 		g.Go(func() error { return RunFeeders(ctx, rOpts) })
