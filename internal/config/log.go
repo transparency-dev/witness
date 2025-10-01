@@ -23,10 +23,16 @@ import (
 
 // Log describes a verifiable log.
 type Log struct {
+	// VKey is the serialised note-compliant vkey for the log.
+	VKey string
 	// Verifier is a signature verifier for log checkpoints.
 	Verifier note.Verifier
 	// Origin is the expected first line of checkpoints from the log.
 	Origin string
+	// QPD is the expected number of witness requests per day from the log.
+	QPD float64
+	// Contact is an arbitrary string with contact information for the log operator.
+	Contact string
 	// URL is the URL of the root of the log.
 	URL string
 }
