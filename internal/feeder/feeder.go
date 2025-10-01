@@ -31,12 +31,6 @@ type FetchProofFn func(ctx context.Context, from uint64, to log.Checkpoint) ([][
 
 // Source holds parameters when calling the Feed function.
 type Source struct {
-	// LogID is the ID for the log whose checkpoint is being fed.
-	//
-	// TODO(al/mhutchinson): should this be an impl detail of Witness
-	// rather than present here just to be passed back in to Witness calls?
-	LogID string
-
 	// FetchCheckpoint should return a recent checkpoint from the source log.
 	FetchCheckpoint func(ctx context.Context) ([]byte, error)
 

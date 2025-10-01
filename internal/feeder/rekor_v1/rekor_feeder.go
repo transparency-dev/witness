@@ -87,7 +87,7 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 				return []byte(shard.SignedTreeHead), nil
 			}
 		}
-		return nil, fmt.Errorf("failed to find shard that matched log ID %s from config", l.ID)
+		return nil, fmt.Errorf("failed to find shard that matched log ID %s from config", treeID)
 	}
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
 		if from == 0 {
@@ -109,7 +109,6 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	}
 
 	return feeder.Source{
-		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,

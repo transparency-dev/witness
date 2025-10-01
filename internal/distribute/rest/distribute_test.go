@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	f_log "github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/distribute/rest"
@@ -49,7 +50,6 @@ func TestDistributeOnce(t *testing.T) {
 
 	lc := &logConfig{
 		lc: config.Log{
-			ID:       "monkeys",
 			Origin:   "Log Checkpoint v0",
 			Verifier: mustVerifier(t, lPK),
 			URL:      "http://example.com/log62",
@@ -86,7 +86,7 @@ func TestDistributeOnce(t *testing.T) {
 	if got, want := fd.lastCheckpoint, wit.result; !bytes.Equal(got, want) {
 		t.Errorf("got %v != want %v", got, want)
 	}
-	if got, want := fd.lastLogID, lc.lc.ID; got != want {
+	if got, want := fd.lastLogID, f_log.ID(lc.lc.Origin); got != want {
 		t.Errorf("got %q != want %q", got, want)
 	}
 	if got, want := fd.lastWitID, "witness"; got != want {
