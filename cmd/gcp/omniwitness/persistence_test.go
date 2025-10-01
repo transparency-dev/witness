@@ -24,6 +24,7 @@ import (
 
 	"cloud.google.com/go/spanner"
 	"cloud.google.com/go/spanner/spannertest"
+	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
@@ -140,11 +141,11 @@ func TestDisableLog(t *testing.T) {
 
 	if _, err := sp.spanner.ReadWriteTransaction(t.Context(), func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.NewStatement("UPDATE logs SET disabled = true WHERE logID = @logID")
-		stmt.Params["logID"] = logsBefore[0].ID
+		stmt.Params["logID"] = log.ID(logsBefore[0].Origin)
 		_, err := txn.Update(ctx, stmt)
 		return err
 	}); err != nil {
-		t.Fatalf("Failed to disable log with ID %q: %v", logsBefore[0].ID, err)
+		t.Fatalf("Failed to disable log with ID %q: %v", log.ID(logsBefore[0].Origin), err)
 	}
 
 	logsAfter := toSlice(t, sp.Logs(t.Context()))
@@ -152,7 +153,7 @@ func TestDisableLog(t *testing.T) {
 		t.Fatalf("Got %d logs, want %d: %+v", got, want, logsAfter)
 	}
 
-	if got, want := logsAfter[0].ID, logsBefore[1].ID; got != want {
+	if got, want := log.ID(logsAfter[0].Origin), log.ID(logsBefore[1].Origin); got != want {
 		t.Fatalf("Got unexpected log ID %q, want %q", got, want)
 	}
 }
@@ -191,11 +192,11 @@ func TestDisabledLogStaysDisabled(t *testing.T) {
 	// Now disable the log:
 	if _, err := sp.spanner.ReadWriteTransaction(t.Context(), func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.NewStatement("UPDATE logs SET disabled = true WHERE logID = @logID")
-		stmt.Params["logID"] = logsBefore[0].ID
+		stmt.Params["logID"] = log.ID(logsBefore[0].Origin)
 		_, err := txn.Update(ctx, stmt)
 		return err
 	}); err != nil {
-		t.Fatalf("Failed to disable log with ID %q: %v", logsBefore[0].ID, err)
+		t.Fatalf("Failed to disable log with ID %q: %v", log.ID(logsBefore[0].Origin), err)
 	}
 
 	// There should be zero visible logs now:

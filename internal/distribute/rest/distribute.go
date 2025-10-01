@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"sync"
 
+	f_log "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -110,7 +111,7 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 }
 
 func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error {
-	logID := l.ID
+	logID := f_log.ID(l.Origin)
 	counterDistRestAttempt.Inc(logID)
 
 	wRaw, err := d.getLatest(ctx, logID)

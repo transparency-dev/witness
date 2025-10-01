@@ -107,7 +107,7 @@ func (p *spannerPersistence) AddLogs(ctx context.Context, lc omniwitness.ConfigY
 
 func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 	return func(yield func(config.Log, error) bool) {
-		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url", "disabled"})
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "url", "disabled"})
 		for {
 			row, err := r.Next()
 			if err != nil {
@@ -121,7 +121,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 			c := config.Log{}
 			var disabled spanner.NullBool
 			vkey := ""
-			if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL, &disabled); err != nil {
+			if err := row.Columns(&c.Origin, &vkey, &c.URL, &disabled); err != nil {
 				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
@@ -145,7 +145,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 
 func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.FeederConfig, error] {
 	return func(yield func(omniwitness.FeederConfig, error) bool) {
-		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"logID", "origin", "vkey", "url", "feeder", "disabled"})
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "url", "feeder", "disabled"})
 		for {
 			row, err := r.Next()
 			if err != nil {
@@ -157,7 +157,7 @@ func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.
 			vkey := ""
 			feeder := ""
 			var disabled spanner.NullBool
-			if err := row.Columns(&c.Log.ID, &c.Log.Origin, &vkey, &c.Log.URL, &feeder, &disabled); err != nil {
+			if err := row.Columns(&c.Log.Origin, &vkey, &c.Log.URL, &feeder, &disabled); err != nil {
 				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
@@ -186,8 +186,8 @@ func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.
 
 }
 
-func (p *spannerPersistence) Log(ctx context.Context, id string) (config.Log, bool, error) {
-	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{id}, []string{"logID", "origin", "vkey", "url", "disabled"})
+func (p *spannerPersistence) Log(ctx context.Context, logID string) (config.Log, bool, error) {
+	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "url", "disabled"})
 	if err != nil {
 		if errors.Is(err, spanner.ErrRowNotFound) {
 			return config.Log{}, false, nil
@@ -197,7 +197,7 @@ func (p *spannerPersistence) Log(ctx context.Context, id string) (config.Log, bo
 	c := config.Log{}
 	var disabled spanner.NullBool
 	vkey := ""
-	if err := row.Columns(&c.ID, &c.Origin, &vkey, &c.URL, &disabled); err != nil {
+	if err := row.Columns(&c.Origin, &vkey, &c.URL, &disabled); err != nil {
 		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
 	}
 	if disabled.Bool {

@@ -77,7 +77,6 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	}
 
 	return feeder.Source{
-		LogID:           l.ID,
 		LogOrigin:       l.Origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,

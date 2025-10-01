@@ -64,7 +64,6 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 		logID := logfmt.ID(log.Origin)
 		logInfo := parsedLog{
 			Config: config.Log{
-				ID:       logID,
 				Verifier: logV,
 				Origin:   log.Origin,
 				URL:      log.URL,

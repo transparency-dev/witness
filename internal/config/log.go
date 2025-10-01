@@ -23,8 +23,6 @@ import (
 
 // Log describes a verifiable log.
 type Log struct {
-	// ID is the canonical ID for the log.
-	ID string
 	// Verifier is a signature verifier for log checkpoints.
 	Verifier note.Verifier
 	// Origin is the expected first line of checkpoints from the log.
