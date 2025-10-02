@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"iter"
 	"os"
@@ -28,8 +29,9 @@ import (
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
-	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func newSpannerServer(t *testing.T) (string, func()) {
@@ -62,6 +64,7 @@ func mustNewPersistence(t *testing.T) func() (persistence.LogStatePersistence, f
 			return nil
 		}
 
+		p.batchWrite = testBatchWrite
 		return p, shutdown
 	}
 }
@@ -118,17 +121,16 @@ func TestDisableLog(t *testing.T) {
 	}
 
 	sp := p.(*spannerPersistence)
+	sp.batchWrite = testBatchWrite
 
 	if err := sp.AddLogs(t.Context(),
-		omniwitness.ConfigYAML{
-			Logs: []omniwitness.LogYAML{
-				{
-					Origin:    "log1",
-					PublicKey: "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
-				}, {
-					Origin:    "log2",
-					PublicKey: "armory-drive-log+16541b8f+AYDPmG5pQp4Bgu0a1mr5uDZ196+t8lIVIfWQSPWmP+Jv",
-				},
+		[]config.Log{
+			{
+				Origin: "log1",
+				VKey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
+			}, {
+				Origin: "log2",
+				VKey:   "armory-drive-log+16541b8f+AYDPmG5pQp4Bgu0a1mr5uDZ196+t8lIVIfWQSPWmP+Jv",
 			},
 		}); err != nil {
 		t.Fatalf("Failed to AddLogs: %v", err)
@@ -169,12 +171,10 @@ func TestDisabledLogStaysDisabled(t *testing.T) {
 		t.Fatalf("Init(): %v", err)
 	}
 
-	logs := omniwitness.ConfigYAML{
-		Logs: []omniwitness.LogYAML{
-			{
-				Origin:    "log1",
-				PublicKey: "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
-			},
+	logs := []config.Log{
+		{
+			Origin: "log1",
+			VKey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
 		},
 	}
 
@@ -228,4 +228,17 @@ func toSlice(t *testing.T, i iter.Seq2[config.Log, error]) []config.Log {
 	}
 
 	return logs
+}
+
+func testBatchWrite(ctx context.Context, sc *spanner.Client, ms []*spanner.MutationGroup) error {
+	errs := []error{}
+	for _, m := range ms {
+		if _, err := sc.Apply(ctx, m.Mutations); err != nil {
+			if s, ok := status.FromError(err); ok && s.Code() == codes.AlreadyExists {
+				continue
+			}
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
