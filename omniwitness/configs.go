@@ -54,44 +54,47 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 		return nil, fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}
 	r := &staticLogConfig{
-		logs: make(map[string]parsedLog),
+		logs:    make(map[string]config.Log),
+		feeders: make(map[string]FeederConfig),
 	}
 	for _, log := range cfg.Logs {
 		logV, err := f_note.NewVerifier(log.PublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
 		}
+		logCfg := config.Log{
+			Verifier: logV,
+			Origin:   log.Origin,
+			URL:      log.URL,
+		}
+		if log.Feeder != None {
+			f := FeederConfig{
+				Feeder: log.Feeder,
+				Log:    logCfg,
+			}
+			if oldFeeder, found := r.feeders[f.Log.Origin]; found {
+				return nil, fmt.Errorf("colliding feeder configs found for key %x: %+v and %+v", f.Log.Origin, oldFeeder, f)
+
+			}
+		}
 		logID := logfmt.ID(log.Origin)
-		logInfo := parsedLog{
-			Config: config.Log{
-				Verifier: logV,
-				Origin:   log.Origin,
-				URL:      log.URL,
-			},
-			Feeder: log.Feeder,
-		}
 		if oldLog, found := r.logs[logID]; found {
-			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logInfo)
+			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logCfg)
 		}
-		r.logs[logID] = logInfo
+		r.logs[logID] = logCfg
 	}
 	return r, nil
 }
 
-type parsedLog struct {
-	Config config.Log
-	// Feeder is the feeder to use for this log, if any.
-	Feeder Feeder
-}
-
 type staticLogConfig struct {
-	logs map[string]parsedLog
+	logs    map[string]config.Log
+	feeders map[string]FeederConfig
 }
 
 func (s *staticLogConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
 	return func(yield func(config.Log, error) bool) {
 		for _, v := range s.logs {
-			if !yield(v.Config, nil) {
+			if !yield(v, nil) {
 				return
 			}
 		}
@@ -100,14 +103,9 @@ func (s *staticLogConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
 
 func (s *staticLogConfig) Feeders(_ context.Context) iter.Seq2[FeederConfig, error] {
 	return func(yield func(FeederConfig, error) bool) {
-		for _, v := range s.logs {
-			if v.Feeder != None {
-				if !yield(FeederConfig{
-					Feeder: v.Feeder,
-					Log:    v.Config,
-				}, nil) {
-					return
-				}
+		for _, v := range s.feeders {
+			if !yield(v, nil) {
+				return
 			}
 		}
 	}
@@ -115,7 +113,7 @@ func (s *staticLogConfig) Feeders(_ context.Context) iter.Seq2[FeederConfig, err
 
 func (s *staticLogConfig) Log(_ context.Context, id string) (config.Log, bool, error) {
 	l, ok := s.logs[id]
-	return l.Config, ok, nil
+	return l, ok, nil
 }
 
 // Merge adds all logs configured in other to this config.
