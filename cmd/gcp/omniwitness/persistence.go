@@ -24,7 +24,6 @@ import (
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	"cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/transparency-dev/formats/log"
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
@@ -161,7 +160,6 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 					return
 				}
 			}
-			klog.Infof("Y: %s @  %+v", log.ID(c.Origin), c)
 			if !yield(c, nil) {
 				return
 			}
