@@ -56,3 +56,7 @@ Logs:
     URL: https://tlog.andxor.it/
     PublicKey: tlog.andxor.it+d5e6b3d0+AU6uJ3h8tb+RRMdGjHV4KCrrHoKfIYGbhL2A46thEhKQ
     Feeder: tiles
+  - Origin: log2025-1.rekor.sigstore.dev
+    URL: https://log2025-1.rekor.sigstore.dev/api/v2/
+    PublicKey: log2025-1.rekor.sigstore.dev+cf119915+AbfK5adZJxsI323FwGD2AJJ9F4i89cfDuLdGJBIYntuO
+    Feeder: tiles
