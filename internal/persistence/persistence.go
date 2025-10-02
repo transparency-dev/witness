@@ -25,18 +25,14 @@ type LogStatePersistence interface {
 
 	// Latest returns the latest checkpoint.
 	// If no checkpoint exists, it must return nil.
-	Latest(ctx context.Context, logID string) ([]byte, error)
+	Latest(ctx context.Context, origin string) ([]byte, error)
 
 	// Update allows for atomically updating the currently stored (if any)
-	// checkpoint for the given logID.
+	// checkpoint for the given origin.
 	//
 	// The provided function will be passed the currently stored checkpoint
-	// for the provided log ID (or nil if no such checkpoint exists), and
+	// for the provided log origin (or nil if no such checkpoint exists), and
 	// should return the serialised form of the updated checkpoint, or an
 	// error.
-	//
-	// There is no requirement that the provided ID is present in Logs(); if
-	// the ID is not there, and this operation succeeds in committing
-	// a checkpoint, then Logs() will return the new ID afterwards.
-	Update(ctx context.Context, logID string, f func([]byte) ([]byte, error)) error
+	Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error
 }
