@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
 )
 
@@ -120,7 +121,7 @@ func TestParsePublicWitnessConfig(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		config  string
-		want    []omniwitness.PublicWitnessConfigLog
+		want    []config.Log
 		wantErr bool
 	}{
 		{
@@ -151,7 +152,7 @@ func TestParsePublicWitnessConfig(t *testing.T) {
 					
 					# Some trailing comments
 					`,
-			want: []omniwitness.PublicWitnessConfigLog{
+			want: []config.Log{
 				{
 					VKey:    "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
 					Origin:  "sum.golang.org",
@@ -171,7 +172,7 @@ func TestParsePublicWitnessConfig(t *testing.T) {
 		}, {
 			name:   "empty config",
 			config: "logs/v0",
-			want:   []omniwitness.PublicWitnessConfigLog{},
+			want:   []config.Log{},
 		}, {
 			name: "broken: no header",
 			config: `

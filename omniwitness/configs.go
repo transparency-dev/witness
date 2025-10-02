@@ -133,20 +133,6 @@ func (s *staticLogConfig) Merge(other *staticLogConfig) {
 	maps.Copy(s.logs, other.logs)
 }
 
-// PublicWitnessConfigLog represents an entry from one of the the public witness config files.
-type PublicWitnessConfigLog struct {
-	//VKey is the log's verifier key in note vkey format.
-	VKey string
-	// Verifier is the note Verifier corresponding to VKey.
-	Verifier note.Verifier
-	// Origin is the log's origin, if unset the origin is the Name from the vkey.
-	Origin string
-	// QPD is the maximum permitted number of witness requests the log may make each day.
-	QPD float64
-	// Contact is an optional string containing free-form contact information for the log operator.
-	Contact string
-}
-
 // PublicFetchOpts holds options to be used when fetching the public witness network config.
 type PublicFetchOpts struct {
 	// Client is the HTTP client to be used, if unset uses http.DefaultClient.
@@ -155,7 +141,7 @@ type PublicFetchOpts struct {
 	URL string
 }
 
-func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]PublicWitnessConfigLog, error) {
+func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]config.Log, error) {
 	if opts.Client == nil {
 		opts.Client = http.DefaultClient
 	}
@@ -180,10 +166,10 @@ func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]PublicWitne
 // ParsePublicWitnessConfig implements a parser for the public witness config format.
 //
 // The format is described here: https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md
-func ParsePublicWitnessConfig(r io.Reader) ([]PublicWitnessConfigLog, error) {
-	ret := []PublicWitnessConfigLog{}
+func ParsePublicWitnessConfig(r io.Reader) ([]config.Log, error) {
+	ret := []config.Log{}
 	foundHeader := false
-	var candidate *PublicWitnessConfigLog
+	var candidate *config.Log
 	scanner := bufio.NewScanner(r)
 	for l := range filteringScan(scanner) {
 		bits := strings.SplitN(l, " ", 2)
@@ -203,7 +189,7 @@ func ParsePublicWitnessConfig(r io.Reader) ([]PublicWitnessConfigLog, error) {
 			if candidate != nil {
 				ret = append(ret, *candidate)
 			}
-			candidate = &PublicWitnessConfigLog{}
+			candidate = &config.Log{}
 			if len(bits) != 2 {
 				return nil, fmt.Errorf("invalid vkey line %q", l)
 			}
