@@ -53,14 +53,14 @@ var (
 )
 
 type logOpts struct {
-	ID     string
 	origin string
 	PK     string
 }
 
 type cfg map[string]config.Log
 
-func (c *cfg) Log(_ context.Context, id string) (config.Log, bool, error) {
+func (c *cfg) Log(_ context.Context, origin string) (config.Log, bool, error) {
+	id := log.ID(origin)
 	v, ok := (*c)[id]
 	return v, ok, nil
 }
@@ -72,21 +72,21 @@ func newWitness(t *testing.T, logs []logOpts) *Witness {
 		t.Fatalf("couldn't create a witness signer: %v", err)
 	}
 	logMap := make(cfg)
-	for _, log := range logs {
-		logV, err := note.NewVerifier(log.PK)
+	for _, l := range logs {
+		logV, err := note.NewVerifier(l.PK)
 		if err != nil {
 			t.Fatalf("couldn't create a log verifier: %v", err)
 		}
 		logInfo := config.Log{
-			Origin:   log.origin,
+			Origin:   l.origin,
 			Verifier: logV,
 		}
-		logMap[log.ID] = logInfo
+		logMap[log.ID(l.origin)] = logInfo
 	}
 	opts := Opts{
-		Persistence:    inmemory.NewPersistence(),
-		Signers:        []note.Signer{ns},
-		ConfigForLogID: logMap.Log,
+		Persistence:  inmemory.NewPersistence(),
+		Signers:      []note.Signer{ns},
+		ConfigForLog: logMap.Log,
 	}
 	// Create the witness
 	w, err := New(t.Context(), opts)
@@ -149,7 +149,6 @@ func TestGetChkpt(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:     log.ID(test.setOrigin),
 				origin: test.setOrigin,
 				PK:     test.setPK,
 			}})
@@ -160,7 +159,7 @@ func TestGetChkpt(t *testing.T) {
 				}
 			}
 			// Try to get the latest checkpoint.
-			cosigned, err := w.GetCheckpoint(ctx, log.ID(test.queryOrigin))
+			cosigned, err := w.GetCheckpoint(ctx, test.queryOrigin)
 			if !test.wantThere && err == nil && cosigned != nil {
 				t.Fatalf("returned a checkpoint but shouldn't have: %v", cosigned)
 			}
@@ -300,7 +299,6 @@ func TestUpdate(t *testing.T) {
 			ctx := context.Background()
 			// Set up witness.
 			w := newWitness(t, []logOpts{{
-				ID:     log.ID("monkeys"),
 				origin: "monkeys",
 				PK:     mPK,
 			}})

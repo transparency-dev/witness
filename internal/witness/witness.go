@@ -79,17 +79,17 @@ func initMetrics() {
 
 // Opts is the options passed to a witness.
 type Opts struct {
-	Persistence    persistence.LogStatePersistence
-	Signers        []note.Signer
-	ConfigForLogID func(context.Context, string) (config.Log, bool, error)
+	Persistence  persistence.LogStatePersistence
+	Signers      []note.Signer
+	ConfigForLog func(ctx context.Context, origin string) (config.Log, bool, error)
 }
 
 // Witness consists of a database for storing checkpoints, a signer, and a list
 // of logs for which it stores and verifies checkpoints.
 type Witness struct {
-	lsp            persistence.LogStatePersistence
-	Signers        []note.Signer
-	ConfigForLogID func(context.Context, string) (config.Log, bool, error)
+	lsp          persistence.LogStatePersistence
+	Signers      []note.Signer
+	ConfigForLog func(ctx context.Context, origin string) (config.Log, bool, error)
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -101,9 +101,9 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
 	}
 	return &Witness{
-		lsp:            wo.Persistence,
-		Signers:        wo.Signers,
-		ConfigForLogID: wo.ConfigForLogID,
+		lsp:          wo.Persistence,
+		Signers:      wo.Signers,
+		ConfigForLog: wo.ConfigForLog,
 	}, nil
 }
 
@@ -114,8 +114,7 @@ func (w *Witness) parse(ctx context.Context, chkptRaw []byte) (*log.Checkpoint, 
 	if !found {
 		return nil, nil, "", errors.New("invalid checkpoint")
 	}
-	logID := log.ID(origin)
-	logInfo, ok, err := w.ConfigForLogID(ctx, logID)
+	logInfo, ok, err := w.ConfigForLog(ctx, origin)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -130,8 +129,8 @@ func (w *Witness) parse(ctx context.Context, chkptRaw []byte) (*log.Checkpoint, 
 // other checkpoints for the same log signed by this witness.
 //
 // Returns a nil checkpoint if no checkpoint is stored for the given logID.
-func (w *Witness) GetCheckpoint(ctx context.Context, logID string) ([]byte, error) {
-	return w.lsp.Latest(ctx, logID)
+func (w *Witness) GetCheckpoint(ctx context.Context, origin string) ([]byte, error) {
+	return w.lsp.Latest(ctx, origin)
 }
 
 // Update updates the latest checkpoint if nextRaw is consistent with the current
@@ -162,7 +161,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	// Get the latest checkpoint for the log because we don't want consistency proofs
 	// with respect to older checkpoints.  Bind this all in a transaction to
 	// avoid race conditions when updating the database.
-	err = w.lsp.Update(ctx, log.ID(origin), func(prevRaw []byte) ([]byte, error) {
+	err = w.lsp.Update(ctx, origin, func(prevRaw []byte) ([]byte, error) {
 		// If there was nothing stored already then treat this new
 		// checkpoint as trust-on-first-use (TOFU).
 		if prevRaw == nil {

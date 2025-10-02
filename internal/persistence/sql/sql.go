@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/persistence"
 )
 
@@ -42,11 +43,13 @@ func (p *sqlLogPersistence) Init(_ context.Context) error {
 	return err
 }
 
-func (p *sqlLogPersistence) Latest(_ context.Context, logID string) ([]byte, error) {
+func (p *sqlLogPersistence) Latest(_ context.Context, origin string) ([]byte, error) {
+	logID := log.ID(origin)
 	return getLatestCheckpoint(p.db.QueryRow, logID)
 }
 
-func (p *sqlLogPersistence) Update(_ context.Context, logID string, f func([]byte) ([]byte, error)) error {
+func (p *sqlLogPersistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
+	logID := log.ID(origin)
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err

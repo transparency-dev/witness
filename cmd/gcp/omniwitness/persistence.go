@@ -211,11 +211,13 @@ func (p *spannerPersistence) Log(ctx context.Context, logID string) (config.Log,
 	return c, true, nil
 }
 
-func (p *spannerPersistence) Latest(ctx context.Context, logID string) ([]byte, error) {
+func (p *spannerPersistence) Latest(ctx context.Context, origin string) ([]byte, error) {
+	logID := logfmt.ID(origin)
 	return getLatestCheckpoint(ctx, p.spanner.Single().ReadRow, logID)
 }
 
-func (p *spannerPersistence) Update(ctx context.Context, logID string, f func([]byte) ([]byte, error)) error {
+func (p *spannerPersistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
+	logID := logfmt.ID(origin)
 	_, err := p.spanner.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		current, err := getLatestCheckpoint(ctx, txn.ReadRow, logID)
 		if err != nil {

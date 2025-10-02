@@ -16,9 +16,13 @@
 package inmemory
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
+	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/persistence"
 )
 
@@ -40,18 +44,28 @@ func (p *inMemoryPersistence) Init(_ context.Context) error {
 	return nil
 }
 
-func (p *inMemoryPersistence) Latest(_ context.Context, logID string) ([]byte, error) {
+func (p *inMemoryPersistence) Latest(_ context.Context, origin string) ([]byte, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	logID := log.ID(origin)
 	return p.checkpoints[logID], nil
 }
 
-func (p *inMemoryPersistence) Update(_ context.Context, logID string, f func([]byte) ([]byte, error)) error {
+func (p *inMemoryPersistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	logID := log.ID(origin)
 	u, err := f(p.checkpoints[logID])
 	if err != nil {
 		return err
+	}
+
+	bits := bytes.Split(u, []byte{'\n'})
+	if len(bits) == 0 {
+		return errors.New("invalid checkpoint")
+	}
+	if co := string(bits[0]); origin != co {
+		return fmt.Errorf("origin mismatch, %q != %q", origin, co)
 	}
 
 	p.checkpoints[logID] = u

@@ -36,13 +36,13 @@ func TestUpdateConcurrent(t *testing.T) {
 	p := NewPersistence()
 
 	g := errgroup.Group{}
-	logID := "foo"
+	origin := "foo"
 
 	for i := 0; i < 25; i++ {
 		i := i
 		g.Go(func() error {
-			return p.Update(t.Context(), logID, func(current []byte) (next []byte, err error) {
-				return []byte(fmt.Sprintf("success %d", i)), nil
+			return p.Update(t.Context(), origin, func(current []byte) (next []byte, err error) {
+				return []byte(fmt.Sprintf("%s\nsuccess %d", origin, i)), nil
 			})
 		})
 	}
@@ -51,11 +51,11 @@ func TestUpdateConcurrent(t *testing.T) {
 		t.Error(err)
 	}
 
-	cp, err := p.Latest(t.Context(), logID)
+	cp, err := p.Latest(t.Context(), origin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(cp), "success") {
+	if !strings.HasPrefix(string(cp), fmt.Sprintf("%s\nsuccess", origin)) {
 		t.Errorf("expected at least one success but got %s", string(cp))
 	}
 }

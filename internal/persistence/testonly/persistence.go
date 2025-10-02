@@ -28,6 +28,7 @@ import (
 // TestUpdate exposes a test that can be invoked by tests for specific implementations of persistence.
 func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
 	t.Helper()
+	origin := "foo"
 
 	lsp, close := lspFactory()
 	defer func() {
@@ -41,17 +42,17 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 
 	// Test that a successful update is visible.
 	{
-		newCP := []byte("foo cp")
-		if err := checkAndSet(t.Context(), lsp, "foo", nil, newCP); err != nil {
+		newCP := []byte("foo\ncp")
+		if err := checkAndSet(t.Context(), lsp, origin, nil, newCP); err != nil {
 			t.Fatalf("checkAndSet(nil, %s): %v", newCP, err)
 
 		}
 
-		cpRaw, err := lsp.Latest(t.Context(), "foo")
+		cpRaw, err := lsp.Latest(t.Context(), origin)
 		if err != nil {
 			t.Fatalf("Latest(): %v", err)
 		}
-		if got, want := cpRaw, []byte("foo cp"); !bytes.Equal(got, want) {
+		if got, want := cpRaw, []byte("foo\ncp"); !bytes.Equal(got, want) {
 			t.Errorf("got != want (%s != %s)", got, want)
 		}
 	}
@@ -59,7 +60,7 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 	// Test that underlying witness errors are properly wrapped by the persistence implementation.
 	{
 		wantErr := witness.ErrCheckpointStale
-		err := lsp.Update(t.Context(), "foo", func(_ []byte) ([]byte, error) {
+		err := lsp.Update(t.Context(), origin, func(_ []byte) ([]byte, error) {
 			return nil, wantErr
 		})
 		if !errors.Is(err, wantErr) {
@@ -68,14 +69,14 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 	}
 }
 
-func checkAndSet(ctx context.Context, lsp persistence.LogStatePersistence, id string, expect []byte, write []byte) error {
-	if err := lsp.Update(ctx, id, func(current []byte) ([]byte, error) {
+func checkAndSet(ctx context.Context, lsp persistence.LogStatePersistence, origin string, expect []byte, write []byte) error {
+	if err := lsp.Update(ctx, origin, func(current []byte) ([]byte, error) {
 		if !bytes.Equal(current, expect) {
 			return nil, fmt.Errorf("got current %x, want %x", current, expect)
 		}
 		return write, nil
 	}); err != nil {
-		return fmt.Errorf("Update(%s): %w", id, err)
+		return fmt.Errorf("Update(%s): %w", origin, err)
 	}
 	return nil
 }
