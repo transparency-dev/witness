@@ -151,7 +151,7 @@ func TestHandler(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewRequest: %v", err)
 			}
-			sc, body, ct, err := a.handleUpdate(context.Background(), testCPOrigin, 0, []byte(testCP), [][]byte{})
+			sc, body, ct, err := a.handleUpdate(context.Background(), 0, []byte(testCP), [][]byte{})
 			if err != nil {
 				t.Fatalf("handleUpdate: %v", err)
 			}

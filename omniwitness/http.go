@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -92,26 +91,12 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logID := log.ID(s[0])
-	logCfg, ok, err := a.logs.Log(r.Context(), logID)
-	if err != nil {
-		klog.Warningf("Log: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		counterHTTPIncomingResponse.Inc("unknown", strconv.Itoa(http.StatusInternalServerError))
-		return
-	}
-	if !ok {
-		klog.V(1).Infof("unknown log: %v", logID)
-		w.WriteHeader(http.StatusNotFound)
-		counterHTTPIncomingResponse.Inc("unknown", strconv.Itoa(http.StatusNotFound))
-		return
-	}
-
-	sc, body, contentType, err := a.handleUpdate(r.Context(), logCfg.Origin, oldSize, cp, proof)
+	origin := s[0]
+	sc, body, contentType, err := a.handleUpdate(r.Context(), oldSize, cp, proof)
 	if err != nil {
 		klog.Errorf("handleUpdate: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		counterHTTPIncomingResponse.Inc(logCfg.Origin, strconv.Itoa(http.StatusInternalServerError))
+		counterHTTPIncomingResponse.Inc(origin, strconv.Itoa(http.StatusInternalServerError))
 		return
 	}
 
@@ -124,13 +109,13 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			klog.Infof("Failed to write response body: %v", err)
 		}
 	}
-	counterHTTPIncomingResponse.Inc(logCfg.Origin, strconv.Itoa(sc))
+	counterHTTPIncomingResponse.Inc(origin, strconv.Itoa(sc))
 }
 
 // handleUpdate submits the provided checkpoint to the witness and interprets any errors which may result.
 //
 // Returns an appropriate HTTP status code, response body, and Content Type representing the outcome.
-func (a *httpHandler) handleUpdate(ctx context.Context, origin string, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
+func (a *httpHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
 	sigs, trustedSize, updateErr := a.update(ctx, oldSize, newCP, proof)
 	// Finally, handle any "soft" error from the update:
 	if updateErr != nil {
