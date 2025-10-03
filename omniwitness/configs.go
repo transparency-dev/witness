@@ -84,8 +84,8 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 			}
 			if oldFeeder, found := r.feeders[f.Log.Origin]; found {
 				return nil, fmt.Errorf("colliding feeder configs found for key %x: %+v and %+v", f.Log.Origin, oldFeeder, f)
-
 			}
+			r.feeders[f.Log.Origin] = f
 		}
 		logID := logfmt.ID(log.Origin)
 		if oldLog, found := r.logs[logID]; found {
