@@ -16,8 +16,11 @@ package omniwitness_test
 
 import (
 	_ "embed"
+	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
 )
 
@@ -111,5 +114,117 @@ Logs:
 	}
 	if l := len(want); l != 0 {
 		t.Fatalf("Found %d unexpected extra logs in merged config", l)
+	}
+}
+
+func TestParsePublicWitnessConfig(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		config  string
+		want    []config.Log
+		wantErr bool
+	}{
+		{
+			name: "working example",
+			config: `
+					#
+					# List:      10qps-100klogs
+					# Revision:  123
+					# Generated: YYYY-MM-DD HH:MM:SS UTC
+					# Other undefined debug information.
+					#
+					logs/v0
+
+					# 1st list item -- foo's log
+					vkey sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
+					qpd 86400
+					contact https://tlog.foo.org/contact
+
+					# 2nd list item -- log with custom origin
+					vkey sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1+682b49db+AQ7H4WhDEZsSA3enOROsasvC0D2CQy4sNrhBsJqVhB8l
+					origin something-not-equal-to-vkey-keyname
+					qpd 24
+					contact sysadmin (at) bar.org
+					
+					# 3rd list item - minimal log config
+					vkey tlog.andxor.it+d5e6b3d0+AU6uJ3h8tb+RRMdGjHV4KCrrHoKfIYGbhL2A46thEhKQ
+					qpd 1
+					
+					# Some trailing comments
+					`,
+			want: []config.Log{
+				{
+					VKey:    "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
+					Origin:  "sum.golang.org",
+					QPD:     86400,
+					Contact: "https://tlog.foo.org/contact",
+				}, {
+					VKey:    "sigsum.org/v1/tree/44ad38f8226ff9bd27629a41e55df727308d0a1cd8a2c31d3170048ac1dd22a1+682b49db+AQ7H4WhDEZsSA3enOROsasvC0D2CQy4sNrhBsJqVhB8l",
+					Origin:  "something-not-equal-to-vkey-keyname",
+					QPD:     24,
+					Contact: "sysadmin (at) bar.org",
+				}, {
+					VKey:   "tlog.andxor.it+d5e6b3d0+AU6uJ3h8tb+RRMdGjHV4KCrrHoKfIYGbhL2A46thEhKQ",
+					Origin: "tlog.andxor.it",
+					QPD:    1,
+				},
+			},
+		}, {
+			name:   "empty config",
+			config: "logs/v0",
+			want:   []config.Log{},
+		}, {
+			name: "broken: no header",
+			config: `
+					# 1st list item -- foo's log
+					vkey sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
+					qpd 86400
+					contact https://tlog.foo.org/contact
+					`,
+			wantErr: true,
+		}, {
+			name: "broken: bad ordering, vkey not first",
+			config: `
+					logs/v0
+					# 1st list item -- foo's log
+					qpd 86400
+					vkey sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
+					contact https://tlog.foo.org/contact
+					`,
+			wantErr: true,
+		}, {
+			name: "broken: not a vkey",
+			config: `
+					logs/v0
+					vkey BANANAS
+					# 1st list item -- foo's log
+					qpd 86400
+					contact https://tlog.foo.org/contact
+					`,
+			wantErr: true,
+		}, {
+			name: "broken: qpd not numeric",
+			config: `
+					logs/v0
+					vkey sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
+					# 1st list item -- foo's log
+					qpd toast
+					contact https://tlog.foo.org/contact
+					`,
+			wantErr: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := omniwitness.ParsePublicWitnessConfig(strings.NewReader(test.config))
+			if gotErr := err != nil; gotErr != test.wantErr {
+				t.Fatalf("Got %v, want error %t", err, test.wantErr)
+			}
+			for i := range got {
+				got[i].Verifier = nil
+			}
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("Got unexpected difference: %v", diff)
+			}
+		})
 	}
 }

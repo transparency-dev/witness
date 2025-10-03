@@ -23,11 +23,14 @@ import (
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
+	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/omniwitness"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 )
 
@@ -44,6 +47,7 @@ func newSpannerPersistence(ctx context.Context, spannerURI string) (*spannerPers
 	ret := &spannerPersistence{
 		spannerURI: spannerURI,
 		spanner:    sc,
+		batchWrite: batchWrite,
 	}
 	// Need to create tables here because omniGCP may try to update logs from the embedded config.
 	if err := ret.createTablesIfNotExist(ctx); err != nil {
@@ -56,6 +60,11 @@ func newSpannerPersistence(ctx context.Context, spannerURI string) (*spannerPers
 type spannerPersistence struct {
 	spannerURI string
 	spanner    *spanner.Client
+
+	// batchWrite is a function to use for doing spanner batch writes.
+	// This only exists as an escape hatch for testing; the spanner inmemory test code doesn't
+	// support BatchWrite, so tests need to be able to replace this with _something else_.
+	batchWrite func(context.Context, *spanner.Client, []*spanner.MutationGroup) error
 }
 
 func (p *spannerPersistence) Init(ctx context.Context) error {
@@ -77,7 +86,7 @@ func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 		Database: p.spannerURI,
 		Statements: []string{
 			"CREATE TABLE IF NOT EXISTS checkpoints (logID STRING(MAX) NOT NULL, checkpoint BYTES(MAX) NOT NULL) PRIMARY KEY (logID)",
-			"CREATE TABLE IF NOT EXISTS logs (logID STRING(2048), origin STRING(2048) NOT NULL, vkey STRING(2048) NOT NULL, url STRING(2048), feeder STRING(32), disabled BOOL NOT NULL) PRIMARY KEY(logID)",
+			"CREATE TABLE IF NOT EXISTS logs (logID STRING(2048), origin STRING(2048) NOT NULL, vkey STRING(2048) NOT NULL, contact STRING(2048), qpd FLOAT64, disabled BOOL) PRIMARY KEY(logID)",
 		},
 	})
 	if err != nil {
@@ -90,24 +99,45 @@ func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 	return nil
 }
 
-func (p *spannerPersistence) AddLogs(ctx context.Context, lc omniwitness.ConfigYAML) error {
-	_, err := p.spanner.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		m := []*spanner.Mutation{}
-		for _, l := range lc.Logs {
-			m = append(m, spanner.InsertOrUpdate(
-				"logs",
-				[]string{"logID", "origin", "vkey", "url", "feeder"},
-				[]any{logfmt.ID(l.Origin), l.Origin, l.PublicKey, l.URL, l.Feeder.String()},
-			))
+func (p *spannerPersistence) AddLogs(ctx context.Context, lc []config.Log) error {
+	m := []*spanner.MutationGroup{}
+	for _, l := range lc {
+		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
+		// update the stored config for a given log. There may be reasons to revisit this in the future,
+		// and the spec isn't [yet] clear. One thing we certainly will _not_ want, though, is that an
+		// automated update from the public witness network configs can re-enable an administratively
+		// disabled log.
+		m = append(m, &spanner.MutationGroup{Mutations: []*spanner.Mutation{spanner.Insert(
+			"logs",
+			[]string{"logID", "origin", "vkey", "contact"},
+			[]any{logfmt.ID(l.Origin), l.Origin, l.VKey, l.Contact},
+		)}})
+	}
+	return p.batchWrite(ctx, p.spanner, m)
+}
+
+func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGroup) error {
+	errs := []error{}
+	err := s.BatchWrite(ctx, m).Do(func(r *spannerpb.BatchWriteResponse) error {
+		switch c := codes.Code(r.Status.Code); c {
+		case codes.OK:
+		case codes.AlreadyExists:
+		default:
+			errs = append(errs, status.Error(codes.Code(r.Status.Code), r.Status.Message))
 		}
-		return txn.BufferWrite(m)
+		return nil
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to inspect batch write responses: %v", err)
+
+	}
+
+	return errors.Join(errs...)
 }
 
 func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 	return func(yield func(config.Log, error) bool) {
-		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "url", "disabled"})
+		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "contact", "disabled"})
 		for {
 			row, err := r.Next()
 			if err != nil {
@@ -120,8 +150,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 			}
 			c := config.Log{}
 			var disabled spanner.NullBool
-			vkey := ""
-			if err := row.Columns(&c.Origin, &vkey, &c.URL, &disabled); err != nil {
+			if err := row.Columns(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
 				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
@@ -130,7 +159,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 				klog.V(1).Infof("Skipping disabled log %q", c.Origin)
 				continue
 			}
-			c.Verifier, err = note.NewVerifier(vkey)
+			c.Verifier, err = note.NewVerifier(c.VKey)
 			if err != nil {
 				if !yield(config.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
 					return
@@ -186,8 +215,9 @@ func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.
 
 }
 
-func (p *spannerPersistence) Log(ctx context.Context, logID string) (config.Log, bool, error) {
-	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "url", "disabled"})
+func (p *spannerPersistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
+	logID := logfmt.ID(origin)
+	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "contact", "disabled"})
 	if err != nil {
 		if errors.Is(err, spanner.ErrRowNotFound) {
 			return config.Log{}, false, nil
@@ -197,7 +227,7 @@ func (p *spannerPersistence) Log(ctx context.Context, logID string) (config.Log,
 	c := config.Log{}
 	var disabled spanner.NullBool
 	vkey := ""
-	if err := row.Columns(&c.Origin, &vkey, &c.URL, &disabled); err != nil {
+	if err := row.Columns(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
 		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
 	}
 	if disabled.Bool {
