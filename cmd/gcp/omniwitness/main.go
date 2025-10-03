@@ -150,8 +150,8 @@ func mustUpdateLogs(ctx context.Context, y []byte, p *spannerPersistence) {
 	for log, err := range l.Logs(ctx) {
 		if err != nil {
 			klog.Exitf("Error iterating over logs: %v", err)
-			logs = append(logs, log)
 		}
+		logs = append(logs, log)
 	}
 	if err := p.AddLogs(ctx, logs); err != nil {
 		klog.Exitf("Failed to add default logs to Spanner: %v", err)
