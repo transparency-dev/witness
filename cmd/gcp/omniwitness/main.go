@@ -44,8 +44,6 @@ var (
 	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
 	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
 
-	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
-
 	additionalLogYaml           = flag.String("additional_logs", "", "The path to an optional addition logs YAML file. Entries in this file will be *added* to the logs configured by default")
 	publicWitnessConfigs        multiStringFlag
 	publicWitnessConfigInterval = flag.Duration("public_witness_config_poll_interval", 1*time.Minute, "Interval between checking the public witness config for new logs to add.")
@@ -105,7 +103,6 @@ func main() {
 	opConfig := omniwitness.OperatorConfig{
 		WitnessKeys:     []note.Signer{signer},
 		WitnessVerifier: signer.Verifier(),
-		FeedInterval:    *pollInterval,
 		ServeMux:        mux,
 		Logs:            p,
 	}
