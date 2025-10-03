@@ -174,45 +174,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 
 func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.FeederConfig, error] {
 	return func(yield func(omniwitness.FeederConfig, error) bool) {
-		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "url", "feeder", "disabled"})
-		for {
-			row, err := r.Next()
-			if err != nil {
-				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to read row: %v", err)) {
-					return
-				}
-			}
-			c := omniwitness.FeederConfig{}
-			vkey := ""
-			feeder := ""
-			var disabled spanner.NullBool
-			if err := row.Columns(&c.Log.Origin, &vkey, &c.Log.URL, &feeder, &disabled); err != nil {
-				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to read columns: %v", err)) {
-					return
-				}
-			}
-			if disabled.Bool {
-				klog.V(1).Infof("Skipping disabled feeder for %q", c.Log.Origin)
-				continue
-			}
-			c.Log.Verifier, err = note.NewVerifier(vkey)
-			if err != nil {
-				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to create verifier: %v", err)) {
-					return
-				}
-			}
-			c.Feeder, err = omniwitness.ParseFeeder(feeder)
-			if err != nil {
-				if !yield(omniwitness.FeederConfig{}, fmt.Errorf("failed to create feeder: %v", err)) {
-					return
-				}
-			}
-			if !yield(c, nil) {
-				return
-			}
-		}
 	}
-
 }
 
 func (p *spannerPersistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
