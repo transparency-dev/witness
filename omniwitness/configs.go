@@ -185,7 +185,7 @@ func ParsePublicWitnessConfig(r io.Reader) ([]config.Log, error) {
 			// The argument is a note-compliant vkey string.
 			//
 			// Since vkey is always the first keyword in a new log, we can use this as a trigger to "flush" the
-			// previous log config (if any, and start a new one.
+			// previous log config, if any, and start a new one.
 			if candidate != nil {
 				ret = append(ret, *candidate)
 			}

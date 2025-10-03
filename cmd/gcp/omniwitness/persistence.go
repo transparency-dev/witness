@@ -102,6 +102,11 @@ func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 func (p *spannerPersistence) AddLogs(ctx context.Context, lc []config.Log) error {
 	m := []*spanner.MutationGroup{}
 	for _, l := range lc {
+		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
+		// update the stored config for a given log. There may be reasons to revisit this in the future,
+		// and the spec isn't [yet] clear. One thing we certainly will _not_ want, though, is that an
+		// automated update from the public witness network configs can re-enable an administratively
+		// disabled log.
 		m = append(m, &spanner.MutationGroup{Mutations: []*spanner.Mutation{spanner.Insert(
 			"logs",
 			[]string{"logID", "origin", "vkey", "contact"},
@@ -115,8 +120,8 @@ func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGro
 	errs := []error{}
 	err := s.BatchWrite(ctx, m).Do(func(r *spannerpb.BatchWriteResponse) error {
 		switch c := codes.Code(r.Status.Code); c {
-		case codes.OK, codes.AlreadyExists:
-		// yay.
+		case codes.OK:
+		case codes.AlreadyExists:
 		default:
 			errs = append(errs, status.Error(codes.Code(r.Status.Code), r.Status.Message))
 		}
