@@ -150,7 +150,8 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 			}
 			c := config.Log{}
 			var disabled spanner.NullBool
-			if err := row.Columns(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
+			var contact spanner.NullString
+			if err := row.Columns(&c.Origin, &c.VKey, &contact, &disabled); err != nil {
 				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
@@ -159,6 +160,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 				klog.V(1).Infof("Skipping disabled log %q", c.Origin)
 				continue
 			}
+			c.Contact = contact.StringVal
 			c.Verifier, err = note.NewVerifier(c.VKey)
 			if err != nil {
 				if !yield(config.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
@@ -188,15 +190,16 @@ func (p *spannerPersistence) Log(ctx context.Context, origin string) (config.Log
 	}
 	c := config.Log{}
 	var disabled spanner.NullBool
-	vkey := ""
-	if err := row.Columns(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
+	var contact spanner.NullString
+	if err := row.Columns(&c.Origin, &c.VKey, &contact, &disabled); err != nil {
 		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
 	}
 	if disabled.Bool {
 		klog.V(1).Infof("Ignoring disabled log %q", c.Origin)
 		return c, false, nil
 	}
-	c.Verifier, err = note.NewVerifier(vkey)
+	c.Contact = contact.StringVal
+	c.Verifier, err = note.NewVerifier(c.VKey)
 	if err != nil {
 		return config.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
 	}

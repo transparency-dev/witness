@@ -107,9 +107,9 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 	}, nil
 }
 
-// parse verifies the checkpoint under the appropriate key for the origin and returns
+// verifyCheckpoint verifies the checkpoint under the appropriate key for the origin and returns
 // the parsed checkpoint and the note itself.
-func (w *Witness) parse(ctx context.Context, chkptRaw []byte) (*log.Checkpoint, *note.Note, string, error) {
+func (w *Witness) verifyCheckpoint(ctx context.Context, chkptRaw []byte) (*log.Checkpoint, *note.Note, string, error) {
 	origin, _, found := strings.Cut(string(chkptRaw), "\n")
 	if !found {
 		return nil, nil, "", errors.New("invalid checkpoint")
@@ -148,7 +148,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	//
 	// SPEC: The witness MUST verify the checkpoint signature against the public key(s) it trusts for the
 	//       checkpoint origin, and it MUST ignore signatures from unknown keys.
-	next, nextNote, origin, err := w.parse(ctx, nextRaw)
+	next, nextNote, origin, err := w.verifyCheckpoint(ctx, nextRaw)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -175,7 +175,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 			return signed, nil
 		}
 
-		prev, _, _, err := w.parse(ctx, prevRaw)
+		prev, _, _, err := w.verifyCheckpoint(ctx, prevRaw)
 		if err != nil {
 			retSize, retSigs = 0, nil
 			return nil, fmt.Errorf("couldn't parse stored checkpoint: %v", err)

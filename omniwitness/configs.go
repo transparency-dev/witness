@@ -77,17 +77,17 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 		if log.Origin == "" {
 			log.Origin = logV.Name()
 		}
+		logID := logfmt.ID(log.Origin)
 		if log.Feeder != None {
 			f := FeederConfig{
 				Feeder: log.Feeder,
 				Log:    logCfg,
 			}
-			if oldFeeder, found := r.feeders[f.Log.Origin]; found {
-				return nil, fmt.Errorf("colliding feeder configs found for key %x: %+v and %+v", f.Log.Origin, oldFeeder, f)
+			if oldFeeder, found := r.feeders[logID]; found {
+				return nil, fmt.Errorf("colliding feeder configs found for key %x: %+v and %+v", logID, oldFeeder, f)
 			}
-			r.feeders[f.Log.Origin] = f
+			r.feeders[logID] = f
 		}
-		logID := logfmt.ID(log.Origin)
 		if oldLog, found := r.logs[logID]; found {
 			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logCfg)
 		}
@@ -121,8 +121,9 @@ func (s *staticLogConfig) Feeders(_ context.Context) iter.Seq2[FeederConfig, err
 	}
 }
 
-func (s *staticLogConfig) Log(_ context.Context, id string) (config.Log, bool, error) {
-	l, ok := s.logs[id]
+func (s *staticLogConfig) Log(_ context.Context, origin string) (config.Log, bool, error) {
+	logID := logfmt.ID(origin)
+	l, ok := s.logs[logID]
 	return l, ok, nil
 }
 
