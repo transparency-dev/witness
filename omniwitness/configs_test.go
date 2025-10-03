@@ -55,6 +55,7 @@ func testConfig(t *testing.T, cfg []byte) {
 	}
 
 	{
+		c := 0
 		for f, err := range logCfg.Feeders(t.Context()) {
 			if err != nil {
 				t.Fatalf("Failed to iterate over feeders: %v", err)
@@ -62,6 +63,10 @@ func testConfig(t *testing.T, cfg []byte) {
 			if f.Feeder == omniwitness.None {
 				t.Errorf("log %q has unknown feeder", f.Log.Origin)
 			}
+			c++
+		}
+		if c == 0 {
+			t.Fatal("no feeders defined in config")
 		}
 	}
 }
