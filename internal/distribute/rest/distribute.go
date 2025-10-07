@@ -112,11 +112,11 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 
 func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error {
 	logID := f_log.ID(l.Origin)
-	counterDistRestAttempt.Inc(logID)
+	counterDistRestAttempt.Inc(l.Origin)
 
-	wRaw, err := d.getLatest(ctx, logID)
+	wRaw, err := d.getLatest(ctx, l.Origin)
 	if err != nil {
-		return fmt.Errorf("GetLatestFn(%s): %v", logID, err)
+		return fmt.Errorf("GetLatestFn(%s): %v", l.Origin, err)
 	}
 
 	u, err := url.Parse(d.baseURL + fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witnessName)))
@@ -146,7 +146,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad status response (%s): %q", resp.Status, body)
 	}
-	klog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), logID)
-	counterDistRestSuccess.Inc(logID)
+	klog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), l.Origin)
+	counterDistRestSuccess.Inc(l.Origin)
 	return nil
 }
