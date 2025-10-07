@@ -80,6 +80,8 @@ type OperatorConfig struct {
 
 	FeedInterval       time.Duration
 	DistributeInterval time.Duration
+	// DistributeRateLimit is the maximum number of calls per second to the configured distributor.
+	DistributeRateLimit float64
 
 	ServeMux *http.ServeMux
 
@@ -178,7 +180,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier)
+		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier, operatorConfig.DistributeRateLimit)
 	}
 
 	srv := http.Server{
@@ -203,9 +205,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier, rateLimit float64) {
 	g.Go(func() error {
-		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest)
+		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest, rateLimit)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}

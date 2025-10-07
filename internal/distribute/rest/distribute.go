@@ -30,6 +30,7 @@ import (
 	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
+	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 )
 
@@ -69,7 +70,7 @@ type LogConfig interface {
 }
 
 // NewDistributor creates a new Distributor from the given configuration.
-func NewDistributor(baseURL string, client *http.Client, lc LogConfig, witSigV note.Verifier, getLatest GetLatestCheckpointFn) (*Distributor, error) {
+func NewDistributor(baseURL string, client *http.Client, lc LogConfig, witSigV note.Verifier, getLatest GetLatestCheckpointFn, rateLimit float64) (*Distributor, error) {
 	initMetrics()
 	return &Distributor{
 		baseURL:     baseURL,
@@ -77,6 +78,7 @@ func NewDistributor(baseURL string, client *http.Client, lc LogConfig, witSigV n
 		logConfig:   lc,
 		getLatest:   getLatest,
 		witnessName: witSigV.Name(),
+		rateLimiter: rate.NewLimiter(rate.Limit(rateLimit), max(1, int(rateLimit))),
 	}, nil
 }
 
@@ -87,6 +89,7 @@ type Distributor struct {
 	logConfig   LogConfig
 	getLatest   GetLatestCheckpointFn
 	witnessName string
+	rateLimiter *rate.Limiter
 }
 
 // DistributeOnce polls the witness for all logs and pushes the latest checkpoint to the
@@ -97,6 +100,9 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	for log, err := range d.logConfig.Logs(ctx) {
 		if err != nil {
 			return fmt.Errorf("failed to enumerate logs: %v", err)
+		}
+		if err := d.rateLimiter.Wait(ctx); err != nil {
+			return err
 		}
 		numLogs++
 		if err := d.distributeForLog(ctx, log); err != nil {
@@ -112,11 +118,11 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 
 func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error {
 	logID := f_log.ID(l.Origin)
-	counterDistRestAttempt.Inc(logID)
+	counterDistRestAttempt.Inc(l.Origin)
 
-	wRaw, err := d.getLatest(ctx, logID)
+	wRaw, err := d.getLatest(ctx, l.Origin)
 	if err != nil {
-		return fmt.Errorf("GetLatestFn(%s): %v", logID, err)
+		return fmt.Errorf("GetLatestFn(%s): %v", l.Origin, err)
 	}
 
 	u, err := url.Parse(d.baseURL + fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witnessName)))
@@ -146,7 +152,7 @@ func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad status response (%s): %q", resp.Status, body)
 	}
-	klog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), logID)
-	counterDistRestSuccess.Inc(logID)
+	klog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), l.Origin)
+	counterDistRestSuccess.Inc(l.Origin)
 	return nil
 }
