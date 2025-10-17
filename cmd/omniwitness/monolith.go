@@ -55,6 +55,7 @@ var (
 	rateLimit              = flag.Float64("rate_limit", 0, "Maximum number of update requests per second to serve, or zero to disable")
 	distributeRateLimit    = flag.Float64("distribute_rate_limit", 0, "Maximum number of distribute requests per second, or zero to disable")
 	httpTimeout            = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests")
+	additionalLogYaml      = flag.String("additional_logs", "", "The path to an optional addition logs YAML file. Entries in this file will be *added* to the logs configured by default")
 
 	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
@@ -111,6 +112,22 @@ func main() {
 		klog.Exitf("Failed to init signer v1: %v", err)
 	}
 
+	l, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
+	if err != nil {
+		klog.Exitf("Failed to initialize default logs: %v", err)
+	}
+	if *additionalLogYaml != "" {
+		y, err := os.ReadFile(*additionalLogYaml)
+		if err != nil {
+			klog.Exitf("Failed to read additional log config from %q: %v", *additionalLogYaml, err)
+		}
+		al, err := omniwitness.NewStaticLogConfig(y)
+		if err != nil {
+			klog.Exitf("Failed to initialize additional logs: %v", err)
+		}
+		l.Merge(al)
+	}
+
 	opConfig := omniwitness.OperatorConfig{
 		WitnessKeys:            []note.Signer{signerCosigV1},
 		WitnessVerifier:        signerCosigV1.Verifier(),
@@ -120,6 +137,7 @@ func main() {
 		RateLimit:              *rateLimit,
 		DistributeRateLimit:    *distributeRateLimit,
 		FeedInterval:           *pollInterval,
+		Logs:                   l,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {
