@@ -27,7 +27,6 @@ import (
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
-	"github.com/transparency-dev/witness/omniwitness"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -171,11 +170,6 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 				return
 			}
 		}
-	}
-}
-
-func (p *spannerPersistence) Feeders(ctx context.Context) iter.Seq2[omniwitness.FeederConfig, error] {
-	return func(yield func(omniwitness.FeederConfig, error) bool) {
 	}
 }
 
