@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	_ "embed" // embed is needed to embed files as constants
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -27,9 +28,9 @@ import (
 	"strings"
 
 	logfmt "github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/formats/note"
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
-	"golang.org/x/mod/sumdb/note"
 	"gopkg.in/yaml.v3"
 )
 
@@ -132,6 +133,10 @@ func (s *staticLogConfig) Log(_ context.Context, origin string) (config.Log, boo
 // Logs in the base config with the same LogID in the config to be merged will be overridden.
 func (s *staticLogConfig) Merge(other *staticLogConfig) {
 	maps.Copy(s.logs, other.logs)
+}
+
+func (s *staticLogConfig) AddLogs(_ context.Context, _ []config.Log) error {
+	return errors.New("staticLogConfig doesn't support adding logs")
 }
 
 // PublicFetchOpts holds options to be used when fetching the public witness network config.

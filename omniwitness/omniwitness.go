@@ -91,6 +91,15 @@ type OperatorConfig struct {
 
 	// Feeders provides the witness with the config for self-feeding from logs.
 	Feeders func(context.Context) iter.Seq2[FeederConfig, error]
+
+	// WitnessNetworkConfigURLs is optional, and may be set to one or more URLs pointing to resources
+	// in the public witness network config format.
+	// These resources will be periodically retrieved and incorporated into the LogConfig provided above.
+	WitnessNetworkConfigURLs []string
+
+	// WitnessNetworkConfigInterval is the time between attempts to fetch and merge configs from the
+	// URLs provided above.
+	WitnessNetworkConfigInterval time.Duration
 }
 
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
@@ -99,6 +108,9 @@ type LogConfig interface {
 	Logs(ctx context.Context) iter.Seq2[config.Log, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
 	Log(ctx context.Context, id string) (config.Log, bool, error)
+	// AddLogs should attempt to merge the provided logs into the current config.
+	// The merge must be additive only with respect to the logs.
+	AddLogs(ctx context.Context, cfg []config.Log) error
 }
 
 type FeederConfig struct {
