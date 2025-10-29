@@ -52,6 +52,7 @@ var (
 	addr        = flag.String("listen", ":8080", "Address to listen on")
 	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 	dbFile      = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
+	dbMaxConns  = flag.Int("db_max_conns", 1000, "Maximum number of connections to sqlite3 database")
 
 	signingKey                  = flag.String("private_key", "", "The note-compatible signing key to use")
 	restDistributorBaseURL      = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
@@ -139,12 +140,14 @@ func main() {
 	if len(*dbFile) > 0 {
 		// Start up local database.
 		klog.Infof("Connecting to local DB at %q", *dbFile)
-		db, err := sql.Open("sqlite3", *dbFile)
+		// Open database with some flags:
+		// - use WAL mode as this allows for read concurrency while writes are happening.
+		// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
+		db, err := sql.Open("sqlite3", fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=1000", *dbFile))
 		if err != nil {
 			klog.Exitf("Failed to connect to DB: %v", err)
 		}
-		// Avoid "database locked" issues with multiple concurrent updates.
-		db.SetMaxOpenConns(1)
+		db.SetMaxOpenConns(*dbMaxConns)
 		p = psql.NewPersistence(db)
 		if err := p.Init(ctx); err != nil {
 			klog.Exitf("Failed to init SQL persistence: %v", err)

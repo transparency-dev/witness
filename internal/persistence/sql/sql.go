@@ -60,7 +60,7 @@ func (p *sqlLogPersistence) AddLogs(ctx context.Context, lc []config.Log) error 
 		if _, err := p.db.ExecContext(ctx, "INSERT OR IGNORE INTO logs (logID, origin, vkey, contact, qpd, disabled) VALUES (?, ?, ?, ?, ?,  False)", log.ID(l.Origin), l.Origin, l.VKey, l.Contact, l.QPD); err != nil {
 			return fmt.Errorf("failed to insert config for log %q: %v", l.Origin, err)
 		}
-		klog.V(1).Infof("Provisiong log %q into config", l.Origin)
+		klog.V(1).Infof("Provisioned log %q into config", l.Origin)
 	}
 	return nil
 }
@@ -73,6 +73,9 @@ func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, erro
 				return
 			}
 		}
+		defer func() {
+			_ = rows.Close()
+		}()
 		for rows.Next() {
 			c := config.Log{}
 			disabled := false
@@ -121,14 +124,14 @@ func (p *sqlLogPersistence) Log(ctx context.Context, origin string) (config.Log,
 	return c, true, nil
 }
 
-func (p *sqlLogPersistence) Latest(_ context.Context, origin string) ([]byte, error) {
+func (p *sqlLogPersistence) Latest(ctx context.Context, origin string) ([]byte, error) {
 	logID := log.ID(origin)
-	return getLatestCheckpoint(p.db.QueryRow, logID)
+	return getLatestCheckpoint(ctx, p.db.QueryRowContext, logID)
 }
 
-func (p *sqlLogPersistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
+func (p *sqlLogPersistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	logID := log.ID(origin)
-	tx, err := p.db.Begin()
+	tx, err := p.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return err
 	}
@@ -138,7 +141,7 @@ func (p *sqlLogPersistence) Update(_ context.Context, origin string, f func([]by
 		}
 	}()
 
-	current, err := getLatestCheckpoint(tx.QueryRow, logID)
+	current, err := getLatestCheckpoint(ctx, tx.QueryRowContext, logID)
 	if err != nil {
 		return err
 	}
@@ -147,7 +150,7 @@ func (p *sqlLogPersistence) Update(_ context.Context, origin string, f func([]by
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, logID, updated); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, logID, updated); err != nil {
 		return fmt.Errorf("Exec(): %v", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -158,8 +161,8 @@ func (p *sqlLogPersistence) Update(_ context.Context, origin string, f func([]by
 	return nil
 }
 
-func getLatestCheckpoint(queryRow func(query string, args ...interface{}) *sql.Row, logID string) ([]byte, error) {
-	row := queryRow("SELECT chkpt FROM chkpts WHERE logID = ?", logID)
+func getLatestCheckpoint(ctx context.Context, queryRow func(ctx context.Context, query string, args ...interface{}) *sql.Row, logID string) ([]byte, error) {
+	row := queryRow(ctx, "SELECT chkpt FROM chkpts WHERE logID = ?", logID)
 	if err := row.Err(); err != nil {
 		return nil, err
 	}
