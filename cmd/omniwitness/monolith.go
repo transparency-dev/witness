@@ -146,6 +146,9 @@ func main() {
 		// Avoid "database locked" issues with multiple concurrent updates.
 		db.SetMaxOpenConns(1)
 		p = psql.NewPersistence(db)
+		if err := p.Init(ctx); err != nil {
+			klog.Exitf("Failed to init SQL persistence: %v", err)
+		}
 	} else {
 		klog.Warning("No persistence configured for witness. Reboots will lose guarantees of witness correctness. Use --db_file for production deployments.")
 		p = inmemory.NewPersistence()
