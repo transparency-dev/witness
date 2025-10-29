@@ -29,7 +29,6 @@ import (
 
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
 	"gopkg.in/yaml.v3"
 )
@@ -65,7 +64,7 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 		feeders: make(map[string]FeederConfig),
 	}
 	for _, log := range cfg.Logs {
-		logV, err := f_note.NewVerifier(log.PublicKey)
+		logV, err := note.NewVerifier(log.PublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
 		}

@@ -48,11 +48,15 @@ import (
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
-// in order to persist its view of log state.
-type LogStatePersistence = persistence.LogStatePersistence
+// in order to persist its view of log state and log configs
+type Persistence interface {
+	persistence.LogStatePersistence
+	LogConfig
+}
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
+	defaultProvisionInterval  = 10 * time.Minute
 )
 
 // OperatorConfig allows the bare minimum operator-specific configuration.
@@ -120,7 +124,7 @@ type FeederConfig struct {
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
-func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
+func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, httpListener net.Listener, httpClient *http.Client) error {
 	initHTTPMetrics()
 	initFeederMetrics()
 
@@ -164,7 +168,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if operatorConfig.DistributeInterval == 0 {
 		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
-
+	if operatorConfig.WitnessNetworkConfigInterval == 0 && len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
+		operatorConfig.WitnessNetworkConfigInterval = defaultProvisionInterval
+	}
 	if operatorConfig.FeedInterval > 0 && operatorConfig.Feeders != nil {
 		rOpts := RunFeedOpts{
 			Witnesses:     []Witness{{Name: operatorConfig.WitnessVerifier.Name(), Update: witness.Update}},
@@ -194,6 +200,11 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
 		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier, operatorConfig.DistributeRateLimit)
+	}
+	if len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
+		g.Go(func() error {
+			return provisionFromPublicConfig(ctx, httpClient, operatorConfig.WitnessNetworkConfigURLs, operatorConfig.Logs, operatorConfig.WitnessNetworkConfigInterval)
+		})
 	}
 
 	srv := http.Server{
