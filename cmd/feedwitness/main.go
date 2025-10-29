@@ -108,7 +108,7 @@ func main() {
 		HTTPClient:    httpClient,
 		MaxWitnessQPS: *rateLimit,
 		MatchLogs:     *feed,
-		LogConfig:     cfg,
+		FeederConfigs: cfg.Feeders,
 	}
 	if err := omniwitness.RunFeeders(ctx, rOpts); err != nil {
 		klog.Errorf("%v", err)

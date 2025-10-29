@@ -138,6 +138,7 @@ func main() {
 		DistributeRateLimit:    *distributeRateLimit,
 		FeedInterval:           *pollInterval,
 		Logs:                   l,
+		Feeders:                l.Feeders,
 	}
 	var p persistence.LogStatePersistence
 	if len(*dbFile) > 0 {

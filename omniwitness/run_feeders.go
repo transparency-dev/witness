@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"net/http"
 	"regexp"
 	"sync"
@@ -73,8 +74,8 @@ type RunFeedOpts struct {
 	HTTPClient *http.Client
 	// MatchLogs is an optional regex to select a submet of logs to feed.
 	MatchLogs string
-	// LogConfig provides access to log config. Required.
-	LogConfig LogConfig
+	// FeederConfigs provides access to feeder configs. Required.
+	FeederConfigs func(context.Context) iter.Seq2[FeederConfig, error]
 	// Witnesses is the set of witnesses to feed to. Required.
 	Witnesses []Witness
 }
@@ -149,7 +150,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 			default:
 			}
 
-			for c, err := range opts.LogConfig.Feeders(ctx) {
+			for c, err := range opts.FeederConfigs(ctx) {
 				if err != nil {
 					klog.Warningf("Failed to enumerate feeders: %v", err)
 					break

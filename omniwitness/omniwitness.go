@@ -88,14 +88,15 @@ type OperatorConfig struct {
 	// Logs provides the witness with the log configuration.
 	// If unset, uses the embedded default config.
 	Logs LogConfig
+
+	// Feeders provides the witness with the config for self-feeding from logs.
+	Feeders func(context.Context) iter.Seq2[FeederConfig, error]
 }
 
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
 type LogConfig interface {
 	// Logs returns an iterator of all known logs.
 	Logs(ctx context.Context) iter.Seq2[config.Log, error]
-	// Feeders returns an iterator of all feedable logs.
-	Feeders(ctx context.Context) iter.Seq2[FeederConfig, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
 	Log(ctx context.Context, id string) (config.Log, bool, error)
 }
@@ -152,12 +153,12 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
 
-	if operatorConfig.FeedInterval > 0 {
+	if operatorConfig.FeedInterval > 0 && operatorConfig.Feeders != nil {
 		rOpts := RunFeedOpts{
 			Witnesses:     []Witness{{Name: operatorConfig.WitnessVerifier.Name(), Update: witness.Update}},
 			HTTPClient:    httpClient,
 			MaxWitnessQPS: float64(time.Second) / float64(operatorConfig.FeedInterval),
-			LogConfig:     operatorConfig.Logs,
+			FeederConfigs: operatorConfig.Feeders,
 		}
 		g.Go(func() error { return RunFeeders(ctx, rOpts) })
 
