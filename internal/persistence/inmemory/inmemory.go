@@ -20,16 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"sync"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/persistence"
+	"github.com/transparency-dev/witness/internal/config"
 )
 
 // NewPersistence returns a persistence object that lives only in memory.
-func NewPersistence() persistence.LogStatePersistence {
+func NewPersistence() *inMemoryPersistence {
 	return &inMemoryPersistence{
 		checkpoints: make(map[string][]byte),
+		logs:        make(map[string]config.Log),
 	}
 }
 
@@ -38,10 +40,44 @@ type inMemoryPersistence struct {
 	// exclusively locked for writing.
 	mu          sync.RWMutex
 	checkpoints map[string][]byte
+	logs        map[string]config.Log
 }
 
 func (p *inMemoryPersistence) Init(_ context.Context) error {
 	return nil
+}
+
+func (p *inMemoryPersistence) AddLogs(ctx context.Context, lc []config.Log) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, l := range lc {
+		logID := log.ID(l.Origin)
+		p.logs[logID] = l
+	}
+	return nil
+}
+
+func (p *inMemoryPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return func(yield func(config.Log, error) bool) {
+		for _, lc := range p.logs {
+			if !yield(lc, nil) {
+				return
+			}
+		}
+	}
+}
+
+func (p *inMemoryPersistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	logID := log.ID(origin)
+	lc, ok := p.logs[logID]
+	if !ok {
+		return lc, false, nil
+	}
+	return lc, true, nil
 }
 
 func (p *inMemoryPersistence) Latest(_ context.Context, origin string) ([]byte, error) {
