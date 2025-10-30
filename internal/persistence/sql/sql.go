@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"iter"
 
+	"github.com/mattn/go-sqlite3"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/internal/witness"
 	"k8s.io/klog/v2"
 )
 
@@ -129,11 +131,20 @@ func (p *sqlLogPersistence) Latest(ctx context.Context, origin string) ([]byte, 
 	return getLatestCheckpoint(ctx, p.db.QueryRowContext, logID)
 }
 
+// handleBusyErr will return a witness.ErrPushback if the provided error is an sqlite ErrBusy,
+// or return the provided error otherwise.
+func handleBusyErr(err error) error {
+	if sqliteErr, ok := err.(sqlite3.Error); ok && sqliteErr.Code == sqlite3.ErrBusy {
+		return witness.ErrPushback
+	}
+	return err
+}
+
 func (p *sqlLogPersistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	logID := log.ID(origin)
 	tx, err := p.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return err
+		return fmt.Errorf("BeginTx(): %w", handleBusyErr(err))
 	}
 	defer func() {
 		if tx != nil {
@@ -143,7 +154,7 @@ func (p *sqlLogPersistence) Update(ctx context.Context, origin string, f func([]
 
 	current, err := getLatestCheckpoint(ctx, tx.QueryRowContext, logID)
 	if err != nil {
-		return err
+		return fmt.Errorf("getLatestCheckpoint(): %w", handleBusyErr(err))
 	}
 
 	updated, err := f(current)
@@ -151,10 +162,10 @@ func (p *sqlLogPersistence) Update(ctx context.Context, origin string, f func([]
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, logID, updated); err != nil {
-		return fmt.Errorf("Exec(): %v", err)
+		return fmt.Errorf("Exec(): %w", handleBusyErr(err))
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return fmt.Errorf("Commit(): %w", handleBusyErr(err))
 	}
 
 	tx = nil
