@@ -94,9 +94,13 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	origin := s[0]
 	sc, body, contentType, err := a.handleUpdate(r.Context(), oldSize, cp, proof)
 	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, witness.ErrPushback) {
+			status = http.StatusTooManyRequests
+		}
 		klog.Errorf("handleUpdate: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		counterHTTPIncomingResponse.Inc(origin, strconv.Itoa(http.StatusInternalServerError))
+		w.WriteHeader(status)
+		counterHTTPIncomingResponse.Inc(origin, strconv.Itoa(status))
 		return
 	}
 

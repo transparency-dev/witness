@@ -48,11 +48,15 @@ import (
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
-// in order to persist its view of log state.
-type LogStatePersistence = persistence.LogStatePersistence
+// in order to persist its view of log state and log configs
+type Persistence interface {
+	persistence.LogStatePersistence
+	LogConfig
+}
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
+	defaultProvisionInterval  = 10 * time.Minute
 )
 
 // OperatorConfig allows the bare minimum operator-specific configuration.
@@ -91,6 +95,15 @@ type OperatorConfig struct {
 
 	// Feeders provides the witness with the config for self-feeding from logs.
 	Feeders func(context.Context) iter.Seq2[FeederConfig, error]
+
+	// WitnessNetworkConfigURLs is optional, and may be set to one or more URLs pointing to resources
+	// in the public witness network config format.
+	// These resources will be periodically retrieved and incorporated into the LogConfig provided above.
+	WitnessNetworkConfigURLs []string
+
+	// WitnessNetworkConfigInterval is the time between attempts to fetch and merge configs from the
+	// URLs provided above.
+	WitnessNetworkConfigInterval time.Duration
 }
 
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
@@ -99,6 +112,9 @@ type LogConfig interface {
 	Logs(ctx context.Context) iter.Seq2[config.Log, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
 	Log(ctx context.Context, id string) (config.Log, bool, error)
+	// AddLogs should attempt to merge the provided logs into the current config.
+	// The merge must be additive only with respect to the logs.
+	AddLogs(ctx context.Context, cfg []config.Log) error
 }
 
 type FeederConfig struct {
@@ -108,7 +124,7 @@ type FeederConfig struct {
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
-func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersistence, httpListener net.Listener, httpClient *http.Client) error {
+func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, httpListener net.Listener, httpClient *http.Client) error {
 	initHTTPMetrics()
 	initFeederMetrics()
 
@@ -152,7 +168,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if operatorConfig.DistributeInterval == 0 {
 		operatorConfig.DistributeInterval = defaultDistributeInterval
 	}
-
+	if operatorConfig.WitnessNetworkConfigInterval == 0 && len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
+		operatorConfig.WitnessNetworkConfigInterval = defaultProvisionInterval
+	}
 	if operatorConfig.FeedInterval > 0 && operatorConfig.Feeders != nil {
 		rOpts := RunFeedOpts{
 			Witnesses:     []Witness{{Name: operatorConfig.WitnessVerifier.Name(), Update: witness.Update}},
@@ -182,6 +200,11 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p LogStatePersiste
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
 		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier, operatorConfig.DistributeRateLimit)
+	}
+	if len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
+		g.Go(func() error {
+			return provisionFromPublicConfig(ctx, httpClient, operatorConfig.WitnessNetworkConfigURLs, operatorConfig.Logs, operatorConfig.WitnessNetworkConfigInterval)
+		})
 	}
 
 	srv := http.Server{

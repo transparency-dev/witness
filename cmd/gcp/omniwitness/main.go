@@ -96,45 +96,16 @@ func main() {
 		mustUpdateLogs(ctx, y, p)
 	}
 
-	if len(publicWitnessConfigs) > 0 {
-		go updatePublicWitnessNetworkLogs(ctx, httpClient, p)
-	}
-
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:     []note.Signer{signer},
-		WitnessVerifier: signer.Verifier(),
-		ServeMux:        mux,
-		Logs:            p,
+		WitnessKeys:                  []note.Signer{signer},
+		WitnessVerifier:              signer.Verifier(),
+		ServeMux:                     mux,
+		Logs:                         p,
+		WitnessNetworkConfigURLs:     publicWitnessConfigs,
+		WitnessNetworkConfigInterval: *publicWitnessConfigInterval,
 	}
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)
-	}
-}
-
-func updatePublicWitnessNetworkLogs(ctx context.Context, httpClient *http.Client, p *spannerPersistence) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(*publicWitnessConfigInterval):
-		}
-		for _, u := range publicWitnessConfigs {
-			opts := omniwitness.PublicFetchOpts{
-				Client: httpClient,
-				URL:    u,
-			}
-			logs, err := omniwitness.FetchPublicConfig(ctx, opts)
-			if err != nil {
-				klog.Warningf("Failed to fetch public witness network config from %q: %v", u, err)
-				continue
-			}
-
-			if err := p.AddLogs(ctx, logs); err != nil {
-				klog.Warningf("Failed to update list of logs: %v", err)
-				continue
-			}
-			klog.Infof("Successfully updated public witness config from %q...", u)
-		}
 	}
 }
 

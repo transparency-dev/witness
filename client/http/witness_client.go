@@ -108,6 +108,8 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 		return nil, 0, witness.ErrOldSizeInvalid
 	case http.StatusUnprocessableEntity:
 		return nil, 0, witness.ErrInvalidProof
+	case http.StatusTooManyRequests:
+		return nil, 0, witness.ErrPushback
 	default:
 		return nil, 0, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}

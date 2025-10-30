@@ -64,6 +64,8 @@ var (
 	// ErrRootMismatch is returned by calls to Update if the provided checkpoint is for the same size tree as the currently
 	// stored one, but their root hashes differ.
 	ErrRootMismatch = errors.New("roots do not match")
+	// ErrPushback is returned if the witness is overloaded.
+	ErrPushback = errors.New("pushback")
 )
 
 func initMetrics() {
