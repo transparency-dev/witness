@@ -47,6 +47,7 @@ var (
 	startQPS     = flag.Uint("start_qps", 5, "Starting QPS")
 	maxQPS       = flag.Uint("max_qps", 0, "Max QPS, set to zero for no maximum")
 	successQPS   = flag.Uint("success_qps", 32000, "If the witness can take this much QPS then the load test ends")
+	ignorePushback = flag.Bool("ignore_pushback", false, "Whether to ignore 429 errors from the witness")
 )
 
 func main() {
@@ -102,7 +103,13 @@ func main() {
 					oldSize := l.witnessedSize
 					if _, curSize, err := c.Update(ctx, oldSize, nextCP, proof); err != nil {
 						if !errors.Is(err, witness.ErrCheckpointStale) {
-							klog.Exitf("Failed to update to checkpoint: %v\n%s", err, nextCP)
+							switch {
+							case errors.Is(err, witness.ErrPushback) && *ignorePushback:
+								klog.V(1).Infof("Got pushback, ignoring.")
+								continue
+							default:
+								klog.Exitf("Failed to update to checkpoint: %v\n%s", err, nextCP)
+							}
 						}
 						l.syncToSize(curSize)
 						continue
@@ -304,7 +311,7 @@ func (l *inMemoryLog) next() (cpSigned []byte, cpSize uint64, consProof [][]byte
 		klog.Exitf("Failed to sign checkpoint: %v", err)
 	}
 
-	nodes, err := proof.Consistency(l.size-1, l.size)
+	nodes, err := proof.Consistency(l.witnessedSize, l.size)
 	if err != nil {
 		klog.Exitf("Failed to determine consistency proof: %v", err)
 	}
