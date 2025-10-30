@@ -33,11 +33,13 @@ func provisionFromPublicConfig(ctx context.Context, httpClient *http.Client, url
 	}
 	klog.Infof("Started public witness network auto-provision process updating every %v from urls:\n%s", interval, strings.Join(urls, "\n"))
 
+	i := time.Duration(1)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(interval):
+		case <-time.After(i):
+			i = interval
 		}
 		klog.V(1).Infof("Provisioning from public witness network...")
 		for _, u := range urls {
