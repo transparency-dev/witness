@@ -19,7 +19,7 @@ a single executable that bundles all of the components. Instructions for deployi
 The `.env` file required for the Docker service is a key-value format with this template:
 
 ```
-WITNESS_PRIVATE_KEY=PRIVATE+KEY+witness.example.com/mirador+67890abc+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+WITNESS_PRIVATE_KEY_PATH=./path/to/private_key_in_vkey_format
 
 WITNESS_VERSION=latest
 ```
@@ -39,7 +39,7 @@ You will need to have followed the steps in [Witness Key Generation](#witness-ke
 
 ```
 go run github.com/transparency-dev/witness/cmd/omniwitness@main --alsologtostderr --v=1 \
-  --private_key PRIVATE+KEY+witness.example.com/mirador+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  --private_key_path ./path/to/private_key_in_vkey_format \
   --db_file ~/witness.db
 ```
 
