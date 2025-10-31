@@ -54,7 +54,8 @@ var (
 	dbFile      = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
 	dbMaxConns  = flag.Int("db_max_conns", 1000, "Maximum number of connections to sqlite3 database")
 
-	signingKey                  = flag.String("private_key", "", "The note-compatible signing key to use")
+	signingKey                  = flag.String("private_key", "", "The note-compatible signing key to use. DEPRECATED: please use --private_key_path")
+	signingKeyPath              = flag.String("private_key_path", "", "Path to a file containing a note-compatible Ed25519 signing key to use")
 	restDistributorBaseURL      = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
 	bastionAddr                 = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
 	bastionKeyPath              = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
@@ -115,10 +116,7 @@ func main() {
 		}
 	}
 
-	signerCosigV1, err := f_note.NewSignerForCosignatureV1(*signingKey)
-	if err != nil {
-		klog.Exitf("Failed to init signer v1: %v", err)
-	}
+	signerCosigV1 := signerFromFlags()
 
 	l, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
 	if err != nil {
@@ -188,6 +186,28 @@ func main() {
 	if err := omniwitness.Main(ctx, opConfig, p, httpListener, httpClient); err != nil {
 		klog.Exitf("Main failed: %v", err)
 	}
+}
+
+func signerFromFlags() *f_note.Signer {
+	var k string
+	switch {
+	case *signingKey != "":
+		klog.Warningf("The --private_key flag is deprecated, please use --private_key_path flag instead. This will become a fatal error shortly.")
+		k = *signingKey
+	case *signingKeyPath != "":
+		r, err := os.ReadFile(*signingKeyPath)
+		if err != nil {
+			klog.Exitf("Failed to read private key from %q: %v", *signingKeyPath, err)
+		}
+		k = string(r)
+	default:
+		klog.Exitf("Please provide a --private_key_path flag.")
+	}
+	signerCosigV1, err := f_note.NewSignerForCosignatureV1(k)
+	if err != nil {
+		klog.Exitf("Failed to init signer v1: %v", err)
+	}
+	return signerCosigV1
 }
 
 func readPrivateKey(f string) (ed25519.PrivateKey, error) {
