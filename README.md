@@ -7,10 +7,15 @@
 
 ## Overview
 
-This repository contains libraries and binaries for running witnesses.
-A witness verifies that logs are evolving in an append-only manner and counter-signs checkpoints that represent an append-only evolution from any previously witnessed checkpoints.
-These witnessed checkpoints can be consumed by clients that want protection against split-views.
-The signature format used is [`cosignature/v1`](https://C2SP.org/tlog-cosignature@v1.0.0-rc.1).
+A witness is an entity which helps to prevent split-view attacks by transprarency logs (tlogs).
+It does this by verifying that tlogs are evolving in an append-only manner, and counter-signs checkpoints that represent
+an append-only evolution from any previously witnessed checkpoints.
+
+Clients of tlogs can use these countersignatures to ensure that they are not being targeted by a log wanting to present a
+different view of the entries it contains to that seen by others. See below for a more detailed explanation.
+
+This repository contains libraries and binaries for running witnesses which comply with the [`tlog-witness` spec](https://C2SP.org/tlog-witness) and
+can integrate with the [public witness network](https://witness-network.org).
 
 Users wishing to run this should start with the [OmniWitness](./cmd/omniwitness/).
 
@@ -65,7 +70,9 @@ The witness is an HTTP service that stores checkpoints it has seen from
 different verifiable logs in a sqlite database.  This is a very lightweight way
 to help detect or even prevent split-view attacks.
 
-The HTTP service implements the https://c2sp.org/tlog-witness API.
+The HTTP service implements the https://c2sp.org/tlog-witness API, and returns 
+[`cosignature/v1`](https://C2SP.org/tlog-cosignature@v1.0.0-rc.1) signatures.
+
 
 ## Running the witness
 

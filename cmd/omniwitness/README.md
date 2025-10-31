@@ -14,6 +14,36 @@ a single executable that bundles all of the components. Instructions for deployi
 1. Create a `.env` file in this new directory, populated as described in [configuration](#configuration)
 1. From that directory, run `docker compose up -d`
 
+### .env File
+
+The `.env` file required for the Docker service is a key-value format with this template:
+
+```
+WITNESS_PRIVATE_KEY=PRIVATE+KEY+witness.example.com/mirador+67890abc+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+WITNESS_VERSION=latest
+```
+
+`WITNESS_PRIVATE_KEY` should be generated as documented in [Witness Key Generation](#witness-key-generation).
+
+## Running without Docker
+
+If you prefer to run the OmniWitness outside of Docker, you can run the binary directly and pass in the configuration via flags.
+
+### Simple
+
+The simplest possible configuration brings up the OmniWitness to follow all of the logs,
+but the witnessed checkpoints will not be distributed and can only be discovered via the
+witness HTTP endpoints.
+You will need to have followed the steps in [Witness Key Generation](#witness-key-generation).
+
+```
+go run github.com/transparency-dev/witness/cmd/omniwitness@main --alsologtostderr --v=1 \
+  --private_key PRIVATE+KEY+witness.example.com/mirador+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  --db_file ~/witness.db
+```
+
+
 ## Configuration
 
 All deployments will need a keypair for signing/verifying witnessed checkpoints.
@@ -29,14 +59,32 @@ material should only be used to sign checkpoints that have been verified to be
 an append-only evolution of any previously signed version (or TOFU in the case
 of a brand new witness).
 
+You'll need an ID/name for your witness. This should be a schemaless-URL which
+uniquely identifies the witness, and be under a domain you control.
+
 A keypair can be generated using `note.GenerateKey`; example code is provided
 at https://play.golang.org/p/uWUKLNK6h9v. It is recommended to copy this code
 to your local machine and run from there in order to minimize the risk to the
 private key material.
 
+### Public witness network support
+
+The omniwitness supports automatic provisioning of logs via the public witness network.
+More information about this network is available at https://witness-network.org.
+
+The `--public_witness_config_url` flag may be provided multiple times to configure
+one or more lists from the public witness network site/repo. The omniwitness will
+periodically fetch these lists and provision any newly added logs to the local
+configuration.
+
+The interval between auto-provisioning attempts can be controlled with the 
+`--public_witness_config_poll_interval` flag.
+
 ### Bastion Support
 
-This witness implementation supports synchronous witnessing via the [HTTPS bastion](https://github.com/C2SP/C2SP/blob/main/https-bastion.md) protocol.
+For operators who do not want to directly expose the witness API to the internet,
+ths witness implementation supports the [bastion](https://github.com/C2SP/C2SP/blob/main/https-bastion.md)
+protocol, allowing the witness to be reached via a compatible bastion proxy.
 
 To enable this, two flags must be passed to `omniwitness`:
 
@@ -65,35 +113,6 @@ Alternatively, the hash can be obtained with the following command:
 ```bash
 $ openssl pkey -in ./my_bastion_private_key.pem -pubout -outform der | tail -c32 | sha256sum
 02b2442688cd1728f5c25c8425d69a915daddcfa4eb28a809a6b144b0ba889f3  -
-```
-
-### .env File
-
-The `.env` file required for the Docker service is a key-value format with this template:
-
-```
-WITNESS_PRIVATE_KEY=PRIVATE+KEY+YourTokenHere+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-WITNESS_VERSION=latest
-```
-
-`WITNESS_PRIVATE_KEY` should be generated as documented in [Witness Key Generation](#witness-key-generation).
-
-## Running without Docker
-
-If you have some reason to run the OmniWitness outside of Docker, then you can run the binary directly and pass in the configuration via flags.
-
-### Simple
-
-The simplest possible configuration brings up the OmniWitness to follow all of the logs,
-but the witnessed checkpoints will not be distributed and can only be discovered via the
-witness HTTP endpoints.
-You will need to have followed the steps in [Witness Key Generation](#witness-key-generation).
-
-```
-go run github.com/transparency-dev/witness/cmd/omniwitness@main --alsologtostderr --v=1 \
-  --private_key PRIVATE+KEY+my.witness+67890abc+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  --db_file ~/witness.db
 ```
 
 ## Testing
