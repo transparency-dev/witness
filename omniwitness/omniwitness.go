@@ -307,7 +307,7 @@ func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	return nil
 }
 
-func (f Feeder) NewSourceFunc() func(Log, *http.Client) (feeder.Source, error) {
+func (f Feeder) NewSourceFunc() func(origin string, v note.Verifier, url string, c *http.Client) (feeder.Source, error) {
 	switch f {
 	case Serverless:
 		return serverless.NewFeedSource

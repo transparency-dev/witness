@@ -26,16 +26,16 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/serverless-log/client"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
 
 // NewFeedSource returns a populated FeedSource configured for a serverless log.
-func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
-	lURL, err := url.Parse(l.URL)
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 	f := newFetcher(c, lURL)
 	h := rfc6962.DefaultHasher
@@ -51,16 +51,16 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 
 		conP, err := pb.ConsistencyProof(ctx, from, to.Size)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", l.Origin, from, to.Size, err)
+			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", origin, from, to.Size, err)
 		}
 		return conP, nil
 	}
 
 	return feeder.Source{
-		LogOrigin:       l.Origin,
+		LogOrigin:       origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  l.Verifier,
+		LogSigVerifier:  verifier,
 	}, nil
 }
 

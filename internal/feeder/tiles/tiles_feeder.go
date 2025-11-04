@@ -23,15 +23,15 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/trillian-tessera/client"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"golang.org/x/mod/sumdb/note"
 )
 
 // NewFeedSource returns a populated feeder.NewFeedSource configured for a tlog-tiles log.
-func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
-	lURL, err := url.Parse(l.URL)
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 	f, err := client.NewHTTPFetcher(lURL, c)
 	if err != nil {
@@ -44,20 +44,20 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 		}
 		pb, err := client.NewProofBuilder(ctx, to.Size, f.ReadTile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create proof builder for %q: %v", l.Origin, err)
+			return nil, fmt.Errorf("failed to create proof builder for %q: %v", origin, err)
 		}
 
 		conP, err := pb.ConsistencyProof(ctx, from, to.Size)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", l.Origin, from, to.Size, err)
+			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", origin, from, to.Size, err)
 		}
 		return conP, nil
 	}
 
 	return feeder.Source{
-		LogOrigin:       l.Origin,
+		LogOrigin:       origin,
 		FetchCheckpoint: f.ReadCheckpoint,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  l.Verifier,
+		LogSigVerifier:  verifier,
 	}, nil
 }

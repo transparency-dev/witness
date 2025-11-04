@@ -27,8 +27,8 @@ import (
 	"os"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
 
@@ -60,10 +60,10 @@ type proof struct {
 }
 
 // NewFeedSource returns a populated FeedSource struct configured for Rekor v1 logs.
-func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
-	lURL, err := url.Parse(l.URL)
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 	treeID := lURL.Query().Get("treeID")
 	if treeID == "" {
@@ -109,10 +109,10 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	}
 
 	return feeder.Source{
-		LogOrigin:       l.Origin,
+		LogOrigin:       origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  l.Verifier,
+		LogSigVerifier:  verifier,
 	}, nil
 
 }

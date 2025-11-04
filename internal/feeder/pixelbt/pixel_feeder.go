@@ -24,8 +24,8 @@ import (
 	"os"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
 	"k8s.io/klog/v2"
 )
@@ -37,10 +37,10 @@ const (
 )
 
 // NewFeedSource returns a FeedSource configured for PixelBT logs.
-func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
-	lURL, err := url.Parse(l.URL)
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", l.URL, err)
+		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 
 	fetchCP := func(ctx context.Context) ([]byte, error) {
@@ -77,10 +77,10 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	}
 
 	return feeder.Source{
-		LogOrigin:       l.Origin,
+		LogOrigin:       origin,
 		FetchCheckpoint: fetchCP,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  l.Verifier,
+		LogSigVerifier:  verifier,
 	}, nil
 }
 
