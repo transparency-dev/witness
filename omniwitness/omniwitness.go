@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/transparency-dev/witness/api"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
@@ -58,6 +57,22 @@ const (
 	defaultDistributeInterval = 1 * time.Minute
 	defaultProvisionInterval  = 10 * time.Minute
 )
+
+// Log describes a verifiable log.
+type Log struct {
+	// VKey is the serialised note-compliant vkey for the log.
+	VKey string
+	// Verifier is a signature verifier for log checkpoints.
+	Verifier note.Verifier
+	// Origin is the expected first line of checkpoints from the log.
+	Origin string
+	// QPD is the expected number of witness requests per day from the log.
+	QPD float64
+	// Contact is an arbitrary string with contact information for the log operator.
+	Contact string
+	// URL is the URL of the root of the log.
+	URL string
+}
 
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
@@ -109,16 +124,16 @@ type OperatorConfig struct {
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
 type LogConfig interface {
 	// Logs returns an iterator of all known logs.
-	Logs(ctx context.Context) iter.Seq2[config.Log, error]
+	Logs(ctx context.Context) iter.Seq2[Log, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
-	Log(ctx context.Context, id string) (config.Log, bool, error)
+	Log(ctx context.Context, id string) (Log, bool, error)
 	// AddLogs should attempt to merge the provided logs into the current config.
 	// The merge must be additive only with respect to the logs.
-	AddLogs(ctx context.Context, cfg []config.Log) error
+	AddLogs(ctx context.Context, cfg []Log) error
 }
 
 type FeederConfig struct {
-	Log    config.Log
+	Log    Log
 	Feeder Feeder
 }
 
@@ -293,7 +308,7 @@ func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	return nil
 }
 
-func (f Feeder) NewSourceFunc() func(config.Log, *http.Client) (feeder.Source, error) {
+func (f Feeder) NewSourceFunc() func(Log, *http.Client) (feeder.Source, error) {
 	switch f {
 	case Serverless:
 		return serverless.NewFeedSource

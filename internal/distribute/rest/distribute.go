@@ -27,8 +27,8 @@ import (
 	"sync"
 
 	f_log "github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
+	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -66,7 +66,7 @@ func initMetrics() {
 type LogConfig interface {
 	// Logs should return the _current_ set of logs whose checkpoints should be distributed.
 	// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
-	Logs(context.Context) iter.Seq2[config.Log, error]
+	Logs(context.Context) iter.Seq2[omniwitness.Log, error]
 }
 
 // NewDistributor creates a new Distributor from the given configuration.
@@ -116,7 +116,7 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	return nil
 }
 
-func (d *Distributor) distributeForLog(ctx context.Context, l config.Log) error {
+func (d *Distributor) distributeForLog(ctx context.Context, l omniwitness.Log) error {
 	logID := f_log.ID(l.Origin)
 	counterDistRestAttempt.Inc(l.Origin)
 
