@@ -245,7 +245,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 
 func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest getLatestCheckpointFn, witnessV note.Verifier, rateLimit float64) {
 	g.Go(func() error {
-		d, err := newDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest, rateLimit)
+		d, err := newDistributor(distributorBaseURL, httpClient, logs.Logs, witnessV, getLatest, rateLimit)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}

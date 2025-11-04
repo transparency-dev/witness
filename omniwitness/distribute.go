@@ -59,20 +59,17 @@ func initMetrics() {
 	})
 }
 
-// LogConfig describes the API contract of a source of logs to be distributed.
-type logConfig interface {
-	// Logs should return the _current_ set of logs whose checkpoints should be distributed.
-	// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
-	Logs(context.Context) iter.Seq2[Log, error]
-}
+// logsFn should return the _current_ set of logs whose checkpoints should be distributed.
+// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
+type logsFn func(context.Context) iter.Seq2[Log, error]
 
 // newDistributor creates a new Distributor from the given configuration.
-func newDistributor(baseURL string, client *http.Client, lc logConfig, witSigV note.Verifier, getLatest getLatestCheckpointFn, rateLimit float64) (*distributor, error) {
+func newDistributor(baseURL string, client *http.Client, logs logsFn, witSigV note.Verifier, getLatest getLatestCheckpointFn, rateLimit float64) (*distributor, error) {
 	initMetrics()
-	return &Distributor{
+	return &distributor{
 		baseURL:     baseURL,
 		client:      client,
-		logConfig:   lc,
+		logs:        logs,
 		getLatest:   getLatest,
 		witnessName: witSigV.Name(),
 		rateLimiter: rate.NewLimiter(rate.Limit(rateLimit), max(1, int(rateLimit))),
@@ -83,8 +80,8 @@ func newDistributor(baseURL string, client *http.Client, lc logConfig, witSigV n
 type distributor struct {
 	baseURL     string
 	client      *http.Client
-	logConfig   LogConfig
-	getLatest   GetLatestCheckpointFn
+	logs        logsFn
+	getLatest   getLatestCheckpointFn
 	witnessName string
 	rateLimiter *rate.Limiter
 }
@@ -94,7 +91,7 @@ type distributor struct {
 func (d *distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
 	numLogs := 0
-	for log, err := range d.logConfig.Logs(ctx) {
+	for log, err := range d.logs(ctx) {
 		if err != nil {
 			return fmt.Errorf("failed to enumerate logs: %v", err)
 		}
@@ -122,7 +119,7 @@ func (d *distributor) distributeForLog(ctx context.Context, l Log) error {
 		return fmt.Errorf("GetLatestFn(%s): %v", l.Origin, err)
 	}
 
-	u, err := url.Parse(d.baseURL + fmt.Sprintf(HTTPCheckpointByWitness, logID, url.PathEscape(d.witnessName)))
+	u, err := url.Parse(d.baseURL + fmt.Sprintf(httpCheckpointByWitness, logID, url.PathEscape(d.witnessName)))
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %v", err)
 	}

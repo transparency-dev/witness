@@ -42,11 +42,11 @@ func TestDistributeOnce(t *testing.T) {
 	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	fd := &fakeDistributor{}
 	r := mux.NewRouter()
-	r.HandleFunc(fmt.Sprintf(rest.HTTPCheckpointByWitness, "{logid:[a-zA-Z0-9-]+}", "{witid:[^ +]+}"), fd.update).Methods(http.MethodPut)
+	r.HandleFunc(fmt.Sprintf(httpCheckpointByWitness, "{logid:[a-zA-Z0-9-]+}", "{witid:[^ +]+}"), fd.update).Methods(http.MethodPut)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	lc := &logConfig{
+	lc := &singleLogConfig{
 		lc: Log{
 			Origin:   "Log Checkpoint v0",
 			Verifier: mustVerifier(t, lPK),
@@ -74,7 +74,7 @@ func TestDistributeOnce(t *testing.T) {
 
 	wit := &silentWitness{}
 	wit.result = msg
-	d, err := newDistributor(ts.URL, http.DefaultClient, lc, wV, wit.GetLatestCheckpoint, 10.0)
+	d, err := newDistributor(ts.URL, http.DefaultClient, lc.Logs, wV, wit.GetLatestCheckpoint, 10.0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,13 +129,11 @@ func mustVerifier(t *testing.T, v string) note.Verifier {
 	return ver
 }
 
-type logConfig struct {
-	lc config.Log
+type singleLogConfig struct {
+	lc Log
 }
 
-var _ rest.LogConfig = &logConfig{}
-
-func (l *logConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
+func (l *singleLogConfig) Logs(_ context.Context) iter.Seq2[Log, error] {
 	return func(yield func(Log, error) bool) {
 		yield(l.lc, nil)
 	}
