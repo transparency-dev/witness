@@ -46,11 +46,8 @@ import (
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
-// in order to persist its view of log state and log configs
-type Persistence interface {
-	persistence.LogStatePersistence
-	LogConfig
-}
+// in order to persist its view of log state
+type Persistence = persistence.LogStatePersistence
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
