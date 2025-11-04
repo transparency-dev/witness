@@ -32,7 +32,6 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
@@ -81,17 +80,17 @@ func initMetrics() {
 
 // Opts is the options passed to a witness.
 type Opts struct {
-	Persistence  persistence.LogStatePersistence
-	Signers      []note.Signer
-	ConfigForLog func(ctx context.Context, origin string) (config.Log, bool, error)
+	Persistence    persistence.LogStatePersistence
+	Signers        []note.Signer
+	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
 }
 
 // Witness consists of a database for storing checkpoints, a signer, and a list
 // of logs for which it stores and verifies checkpoints.
 type Witness struct {
-	lsp          persistence.LogStatePersistence
-	Signers      []note.Signer
-	ConfigForLog func(ctx context.Context, origin string) (config.Log, bool, error)
+	lsp            persistence.LogStatePersistence
+	Signers        []note.Signer
+	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -103,9 +102,9 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
 	}
 	return &Witness{
-		lsp:          wo.Persistence,
-		Signers:      wo.Signers,
-		ConfigForLog: wo.ConfigForLog,
+		lsp:            wo.Persistence,
+		Signers:        wo.Signers,
+		VerifierForLog: wo.VerifierForLog,
 	}, nil
 }
 
@@ -116,14 +115,14 @@ func (w *Witness) verifyCheckpoint(ctx context.Context, chkptRaw []byte) (*log.C
 	if !found {
 		return nil, nil, "", errors.New("invalid checkpoint")
 	}
-	logInfo, ok, err := w.ConfigForLog(ctx, origin)
+	v, ok, err := w.VerifierForLog(ctx, origin)
 	if err != nil {
 		return nil, nil, "", err
 	}
 	if !ok {
 		return nil, nil, "", ErrUnknownLog
 	}
-	cp, _, n, err := log.ParseCheckpoint(chkptRaw, origin, logInfo.Verifier)
+	cp, _, n, err := log.ParseCheckpoint(chkptRaw, origin, v)
 	return cp, n, origin, err
 }
 

@@ -160,9 +160,15 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	}
 
 	witness, err := witness.New(ctx, witness.Opts{
-		Persistence:  p,
-		Signers:      operatorConfig.WitnessKeys,
-		ConfigForLog: operatorConfig.Logs.Log,
+		Persistence: p,
+		Signers:     operatorConfig.WitnessKeys,
+		VerifierForLog: func(ctx context.Context, origin string) (note.Verifier, bool, error) {
+			c, ok, err := operatorConfig.Logs.Log(ctx, origin)
+			if err != nil || !ok {
+				return nil, false, err
+			}
+			return c.Verifier, true, nil
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create witness: %v", err)

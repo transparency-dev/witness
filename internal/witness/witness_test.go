@@ -15,18 +15,18 @@
 package witness
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 	"github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/witness/internal/config"
-	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -57,9 +57,9 @@ type logOpts struct {
 	PK     string
 }
 
-type cfg map[string]config.Log
+type cfg map[string]note.Verifier
 
-func (c *cfg) Log(_ context.Context, origin string) (config.Log, bool, error) {
+func (c *cfg) Log(_ context.Context, origin string) (note.Verifier, bool, error) {
 	id := log.ID(origin)
 	v, ok := (*c)[id]
 	return v, ok, nil
@@ -77,16 +77,12 @@ func newWitness(t *testing.T, logs []logOpts) *Witness {
 		if err != nil {
 			t.Fatalf("couldn't create a log verifier: %v", err)
 		}
-		logInfo := config.Log{
-			Origin:   l.origin,
-			Verifier: logV,
-		}
-		logMap[log.ID(l.origin)] = logInfo
+		logMap[log.ID(l.origin)] = logV
 	}
 	opts := Opts{
-		Persistence:  inmemory.NewPersistence(),
-		Signers:      []note.Signer{ns},
-		ConfigForLog: logMap.Log,
+		Persistence:    newPersistence(),
+		Signers:        []note.Signer{ns},
+		VerifierForLog: logMap.Log,
 	}
 	// Create the witness
 	w, err := New(t.Context(), opts)
@@ -325,4 +321,47 @@ func TestUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newPersistence() *testPersistence {
+	return &testPersistence{
+		checkpoints: make(map[string][]byte),
+	}
+}
+
+type testPersistence struct {
+	mu          sync.RWMutex
+	checkpoints map[string][]byte
+}
+
+func (p *testPersistence) Init(_ context.Context) error {
+	return nil
+}
+
+func (p *testPersistence) Latest(_ context.Context, origin string) ([]byte, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	logID := log.ID(origin)
+	return p.checkpoints[logID], nil
+}
+
+func (p *testPersistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	logID := log.ID(origin)
+	u, err := f(p.checkpoints[logID])
+	if err != nil {
+		return err
+	}
+
+	bits := bytes.Split(u, []byte{'\n'})
+	if len(bits) == 0 {
+		return errors.New("invalid checkpoint")
+	}
+	if co := string(bits[0]); origin != co {
+		return fmt.Errorf("origin mismatch, %q != %q", origin, co)
+	}
+
+	p.checkpoints[logID] = u
+	return nil
 }
