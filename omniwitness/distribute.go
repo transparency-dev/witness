@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package rest provides support for pushing witnessed checkpoints to a
-// RESTful API.
-package rest
+package omniwitness
 
 import (
 	"bytes"
@@ -28,24 +26,23 @@ import (
 
 	f_log "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/monitoring"
-	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 )
 
 const (
-	// HTTPCheckpointByWitness is the path of the URL to the latest checkpoint
+	// httpCheckpointByWitness is the path of the URL to the latest checkpoint
 	// for a given log by a given witness. This can take PUT requests to update
 	// the latest checkpoint.
 	//  * first position is for the logID (an alphanumeric string)
 	//  * second position is the witness short name (alpha string)
-	HTTPCheckpointByWitness = "/distributor/v0/logs/%s/byWitness/%s/checkpoint"
+	httpCheckpointByWitness = "/distributor/v0/logs/%s/byWitness/%s/checkpoint"
 )
 
 // GetLatestCheckpointFn is the signature of a function which returns the latest checkpoint the witness holds for the given logID.
 // Implementations must return os.ErrNotExists if the logID is known, but it has no checkpoint for that log.
-type GetLatestCheckpointFn func(ctx context.Context, logID string) ([]byte, error)
+type getLatestCheckpointFn func(ctx context.Context, logID string) ([]byte, error)
 
 var (
 	doOnce                 sync.Once
@@ -63,14 +60,14 @@ func initMetrics() {
 }
 
 // LogConfig describes the API contract of a source of logs to be distributed.
-type LogConfig interface {
+type logConfig interface {
 	// Logs should return the _current_ set of logs whose checkpoints should be distributed.
 	// This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
-	Logs(context.Context) iter.Seq2[omniwitness.Log, error]
+	Logs(context.Context) iter.Seq2[Log, error]
 }
 
-// NewDistributor creates a new Distributor from the given configuration.
-func NewDistributor(baseURL string, client *http.Client, lc LogConfig, witSigV note.Verifier, getLatest GetLatestCheckpointFn, rateLimit float64) (*Distributor, error) {
+// newDistributor creates a new Distributor from the given configuration.
+func newDistributor(baseURL string, client *http.Client, lc logConfig, witSigV note.Verifier, getLatest getLatestCheckpointFn, rateLimit float64) (*distributor, error) {
 	initMetrics()
 	return &Distributor{
 		baseURL:     baseURL,
@@ -82,8 +79,8 @@ func NewDistributor(baseURL string, client *http.Client, lc LogConfig, witSigV n
 	}, nil
 }
 
-// Distributor distributes checkpoints to a REST API.
-type Distributor struct {
+// distributor distributes checkpoints to a REST API.
+type distributor struct {
 	baseURL     string
 	client      *http.Client
 	logConfig   LogConfig
@@ -94,7 +91,7 @@ type Distributor struct {
 
 // DistributeOnce polls the witness for all logs and pushes the latest checkpoint to the
 // RESTful distributor.
-func (d *Distributor) DistributeOnce(ctx context.Context) error {
+func (d *distributor) DistributeOnce(ctx context.Context) error {
 	numErrs := 0
 	numLogs := 0
 	for log, err := range d.logConfig.Logs(ctx) {
@@ -116,7 +113,7 @@ func (d *Distributor) DistributeOnce(ctx context.Context) error {
 	return nil
 }
 
-func (d *Distributor) distributeForLog(ctx context.Context, l omniwitness.Log) error {
+func (d *distributor) distributeForLog(ctx context.Context, l Log) error {
 	logID := f_log.ID(l.Origin)
 	counterDistRestAttempt.Inc(l.Origin)
 

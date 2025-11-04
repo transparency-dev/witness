@@ -38,7 +38,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/transparency-dev/witness/internal/bastion"
-	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor_v1"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -244,9 +243,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier, rateLimit float64) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest getLatestCheckpointFn, witnessV note.Verifier, rateLimit float64) {
 	g.Go(func() error {
-		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest, rateLimit)
+		d, err := newDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest, rateLimit)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}

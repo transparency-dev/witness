@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package rest_test
+package omniwitness
 
 import (
 	"bytes"
@@ -26,8 +26,6 @@ import (
 	"github.com/gorilla/mux"
 	f_log "github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/config"
-	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -49,7 +47,7 @@ func TestDistributeOnce(t *testing.T) {
 	defer ts.Close()
 
 	lc := &logConfig{
-		lc: config.Log{
+		lc: Log{
 			Origin:   "Log Checkpoint v0",
 			Verifier: mustVerifier(t, lPK),
 			URL:      "http://example.com/log62",
@@ -76,7 +74,7 @@ func TestDistributeOnce(t *testing.T) {
 
 	wit := &silentWitness{}
 	wit.result = msg
-	d, err := rest.NewDistributor(ts.URL, http.DefaultClient, lc, wV, wit.GetLatestCheckpoint, 10.0)
+	d, err := newDistributor(ts.URL, http.DefaultClient, lc, wV, wit.GetLatestCheckpoint, 10.0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +136,7 @@ type logConfig struct {
 var _ rest.LogConfig = &logConfig{}
 
 func (l *logConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
-	return func(yield func(config.Log, error) bool) {
+	return func(yield func(Log, error) bool) {
 		yield(l.lc, nil)
 	}
 }
