@@ -24,8 +24,8 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/omniwitness"
 	"k8s.io/klog/v2"
 )
 
@@ -52,7 +52,7 @@ func (p *sqlLogPersistence) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *sqlLogPersistence) AddLogs(ctx context.Context, lc []config.Log) error {
+func (p *sqlLogPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	for _, l := range lc {
 		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
 		// update the stored config for a given log. There may be reasons to revisit this in the future,
@@ -67,11 +67,11 @@ func (p *sqlLogPersistence) AddLogs(ctx context.Context, lc []config.Log) error 
 	return nil
 }
 
-func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
-	return func(yield func(config.Log, error) bool) {
+func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
+	return func(yield func(omniwitness.Log, error) bool) {
 		rows, err := p.db.QueryContext(ctx, "SELECT origin, vkey, contact, disabled FROM logs")
 		if err != nil {
-			if !yield(config.Log{}, fmt.Errorf("failed to select from logs: %v", err)) {
+			if !yield(omniwitness.Log{}, fmt.Errorf("failed to select from logs: %v", err)) {
 				return
 			}
 		}
@@ -79,10 +79,10 @@ func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, erro
 			_ = rows.Close()
 		}()
 		for rows.Next() {
-			c := config.Log{}
+			c := omniwitness.Log{}
 			disabled := false
 			if err := rows.Scan(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
-				if !yield(config.Log{}, fmt.Errorf("failed to scan columns: %v", err)) {
+				if !yield(omniwitness.Log{}, fmt.Errorf("failed to scan columns: %v", err)) {
 					return
 				}
 			}
@@ -92,7 +92,7 @@ func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, erro
 			}
 			c.Verifier, err = note.NewVerifier(c.VKey)
 			if err != nil {
-				if !yield(config.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
+				if !yield(omniwitness.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
 					return
 				}
 			}
@@ -103,16 +103,16 @@ func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, erro
 	}
 }
 
-func (p *sqlLogPersistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
+func (p *sqlLogPersistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
 	logID := log.ID(origin)
 	row := p.db.QueryRowContext(ctx, "SELECT origin, vkey, contact, disabled FROM logs WHERE logID = ?", logID)
 	if row.Err() != nil {
-		return config.Log{}, false, fmt.Errorf("failed to select from logs: %v", row.Err())
+		return omniwitness.Log{}, false, fmt.Errorf("failed to select from logs: %v", row.Err())
 	}
-	c := config.Log{}
+	c := omniwitness.Log{}
 	disabled := false
 	if err := row.Scan(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
-		return config.Log{}, false, fmt.Errorf("failed to scan columns: %v", err)
+		return omniwitness.Log{}, false, fmt.Errorf("failed to scan columns: %v", err)
 	}
 	if disabled {
 		klog.V(1).Infof("Ignoring disabled log %q", c.Origin)
@@ -121,7 +121,7 @@ func (p *sqlLogPersistence) Log(ctx context.Context, origin string) (config.Log,
 	var err error
 	c.Verifier, err = note.NewVerifier(c.VKey)
 	if err != nil {
-		return config.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
+		return omniwitness.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
 	}
 	return c, true, nil
 }
