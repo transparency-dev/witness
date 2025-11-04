@@ -26,7 +26,7 @@ import (
 	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/omniwitness"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -98,7 +98,7 @@ func (p *spannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 	return nil
 }
 
-func (p *spannerPersistence) AddLogs(ctx context.Context, lc []config.Log) error {
+func (p *spannerPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	m := []*spanner.MutationGroup{}
 	for _, l := range lc {
 		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
@@ -134,8 +134,8 @@ func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGro
 	return errors.Join(errs...)
 }
 
-func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
-	return func(yield func(config.Log, error) bool) {
+func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
+	return func(yield func(omniwitness.Log, error) bool) {
 		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "contact", "disabled"})
 		for {
 			row, err := r.Next()
@@ -143,15 +143,15 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 				if err == iterator.Done {
 					return
 				}
-				if !yield(config.Log{}, fmt.Errorf("failed to read row: %v", err)) {
+				if !yield(omniwitness.Log{}, fmt.Errorf("failed to read row: %v", err)) {
 					return
 				}
 			}
-			c := config.Log{}
+			c := omniwitness.Log{}
 			var disabled spanner.NullBool
 			var contact spanner.NullString
 			if err := row.Columns(&c.Origin, &c.VKey, &contact, &disabled); err != nil {
-				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
+				if !yield(omniwitness.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
 			}
@@ -162,7 +162,7 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 			c.Contact = contact.StringVal
 			c.Verifier, err = note.NewVerifier(c.VKey)
 			if err != nil {
-				if !yield(config.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
+				if !yield(omniwitness.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
 					return
 				}
 			}
@@ -173,20 +173,20 @@ func (p *spannerPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, err
 	}
 }
 
-func (p *spannerPersistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
+func (p *spannerPersistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
 	logID := logfmt.ID(origin)
 	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "contact", "disabled"})
 	if err != nil {
 		if errors.Is(err, spanner.ErrRowNotFound) {
-			return config.Log{}, false, nil
+			return omniwitness.Log{}, false, nil
 		}
-		return config.Log{}, false, fmt.Errorf("failed to read row: %v", err)
+		return omniwitness.Log{}, false, fmt.Errorf("failed to read row: %v", err)
 	}
-	c := config.Log{}
+	c := omniwitness.Log{}
 	var disabled spanner.NullBool
 	var contact spanner.NullString
 	if err := row.Columns(&c.Origin, &c.VKey, &contact, &disabled); err != nil {
-		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
+		return omniwitness.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
 	}
 	if disabled.Bool {
 		klog.V(1).Infof("Ignoring disabled log %q", c.Origin)
@@ -195,7 +195,7 @@ func (p *spannerPersistence) Log(ctx context.Context, origin string) (config.Log
 	c.Contact = contact.StringVal
 	c.Verifier, err = note.NewVerifier(c.VKey)
 	if err != nil {
-		return config.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
+		return omniwitness.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
 	}
 	return c, true, nil
 }

@@ -26,9 +26,9 @@ import (
 	"cloud.google.com/go/spanner"
 	"cloud.google.com/go/spanner/spannertest"
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
+	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -124,7 +124,7 @@ func TestDisableLog(t *testing.T) {
 	sp.batchWrite = testBatchWrite
 
 	if err := sp.AddLogs(t.Context(),
-		[]config.Log{
+		[]omniwitness.Log{
 			{
 				Origin: "log1",
 				VKey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
@@ -171,7 +171,7 @@ func TestDisabledLogStaysDisabled(t *testing.T) {
 		t.Fatalf("Init(): %v", err)
 	}
 
-	logs := []config.Log{
+	logs := []omniwitness.Log{
 		{
 			Origin: "log1",
 			VKey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
@@ -217,9 +217,9 @@ func TestDisabledLogStaysDisabled(t *testing.T) {
 	}
 }
 
-func toSlice(t *testing.T, i iter.Seq2[config.Log, error]) []config.Log {
+func toSlice(t *testing.T, i iter.Seq2[omniwitness.Log, error]) []omniwitness.Log {
 	t.Helper()
-	logs := []config.Log{}
+	logs := []omniwitness.Log{}
 	for l, err := range i {
 		if err != nil {
 			t.Fatalf("Logs(): %v", err)
