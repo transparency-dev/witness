@@ -164,7 +164,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 				}
 
 				// Create a source for this log to be used in the feeding operation.
-				src, err := c.Feeder.NewSourceFunc()(c.Log, opts.HTTPClient)
+				src, err := c.Feeder.NewSourceFunc()(c.Log.Origin, c.Log.Verifier, c.Log.URL, opts.HTTPClient)
 				if err != nil {
 					klog.Warningf("Failed to create feeder opts for %s: %v", c.Feeder.String(), err)
 					continue

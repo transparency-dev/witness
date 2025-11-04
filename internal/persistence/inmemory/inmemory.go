@@ -24,14 +24,14 @@ import (
 	"sync"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/config"
+	"github.com/transparency-dev/witness/omniwitness"
 )
 
 // NewPersistence returns a persistence object that lives only in memory.
 func NewPersistence() *inMemoryPersistence {
 	return &inMemoryPersistence{
 		checkpoints: make(map[string][]byte),
-		logs:        make(map[string]config.Log),
+		logs:        make(map[string]omniwitness.Log),
 	}
 }
 
@@ -40,14 +40,14 @@ type inMemoryPersistence struct {
 	// exclusively locked for writing.
 	mu          sync.RWMutex
 	checkpoints map[string][]byte
-	logs        map[string]config.Log
+	logs        map[string]omniwitness.Log
 }
 
 func (p *inMemoryPersistence) Init(_ context.Context) error {
 	return nil
 }
 
-func (p *inMemoryPersistence) AddLogs(ctx context.Context, lc []config.Log) error {
+func (p *inMemoryPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, l := range lc {
@@ -57,10 +57,10 @@ func (p *inMemoryPersistence) AddLogs(ctx context.Context, lc []config.Log) erro
 	return nil
 }
 
-func (p *inMemoryPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
+func (p *inMemoryPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return func(yield func(config.Log, error) bool) {
+	return func(yield func(omniwitness.Log, error) bool) {
 		for _, lc := range p.logs {
 			if !yield(lc, nil) {
 				return
@@ -69,7 +69,7 @@ func (p *inMemoryPersistence) Logs(ctx context.Context) iter.Seq2[config.Log, er
 	}
 }
 
-func (p *inMemoryPersistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
+func (p *inMemoryPersistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	logID := log.ID(origin)

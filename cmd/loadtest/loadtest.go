@@ -40,13 +40,13 @@ import (
 )
 
 var (
-	logCount     = flag.Int("log_count", 50, "The number of logs to use")
-	numExtraSigs = flag.Uint("num_extra_sigs", 0, "The number of additional signatures to put on each checkpoint sent to the witness")
-	target       = flag.String("target", "", "Base URL of the witness to load test")
-	timeout      = flag.Duration("timeout", time.Second, "How much witness latency terminates the load test")
-	startQPS     = flag.Uint("start_qps", 5, "Starting QPS")
-	maxQPS       = flag.Uint("max_qps", 0, "Max QPS, set to zero for no maximum")
-	successQPS   = flag.Uint("success_qps", 32000, "If the witness can take this much QPS then the load test ends")
+	logCount       = flag.Int("log_count", 50, "The number of logs to use")
+	numExtraSigs   = flag.Uint("num_extra_sigs", 0, "The number of additional signatures to put on each checkpoint sent to the witness")
+	target         = flag.String("target", "", "Base URL of the witness to load test")
+	timeout        = flag.Duration("timeout", time.Second, "How much witness latency terminates the load test")
+	startQPS       = flag.Uint("start_qps", 5, "Starting QPS")
+	maxQPS         = flag.Uint("max_qps", 0, "Max QPS, set to zero for no maximum")
+	successQPS     = flag.Uint("success_qps", 32000, "If the witness can take this much QPS then the load test ends")
 	ignorePushback = flag.Bool("ignore_pushback", false, "Whether to ignore 429 errors from the witness")
 )
 

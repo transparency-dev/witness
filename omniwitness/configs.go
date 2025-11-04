@@ -29,7 +29,6 @@ import (
 
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,7 +59,7 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 		return nil, fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}
 	r := &staticLogConfig{
-		logs:    make(map[string]config.Log),
+		logs:    make(map[string]Log),
 		feeders: make(map[string]FeederConfig),
 	}
 	for _, log := range cfg.Logs {
@@ -68,7 +67,7 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
 		}
-		logCfg := config.Log{
+		logCfg := Log{
 			VKey:     log.PublicKey,
 			Verifier: logV,
 			Origin:   log.Origin,
@@ -97,12 +96,12 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 }
 
 type staticLogConfig struct {
-	logs    map[string]config.Log
+	logs    map[string]Log
 	feeders map[string]FeederConfig
 }
 
-func (s *staticLogConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
-	return func(yield func(config.Log, error) bool) {
+func (s *staticLogConfig) Logs(_ context.Context) iter.Seq2[Log, error] {
+	return func(yield func(Log, error) bool) {
 		for _, v := range s.logs {
 			if !yield(v, nil) {
 				return
@@ -121,7 +120,7 @@ func (s *staticLogConfig) Feeders(_ context.Context) iter.Seq2[FeederConfig, err
 	}
 }
 
-func (s *staticLogConfig) Log(_ context.Context, origin string) (config.Log, bool, error) {
+func (s *staticLogConfig) Log(_ context.Context, origin string) (Log, bool, error) {
 	logID := logfmt.ID(origin)
 	l, ok := s.logs[logID]
 	return l, ok, nil
@@ -134,7 +133,7 @@ func (s *staticLogConfig) Merge(other *staticLogConfig) {
 	maps.Copy(s.logs, other.logs)
 }
 
-func (s *staticLogConfig) AddLogs(_ context.Context, _ []config.Log) error {
+func (s *staticLogConfig) AddLogs(_ context.Context, _ []Log) error {
 	return errors.New("staticLogConfig doesn't support adding logs")
 }
 
@@ -146,7 +145,7 @@ type PublicFetchOpts struct {
 	URL string
 }
 
-func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]config.Log, error) {
+func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]Log, error) {
 	if opts.Client == nil {
 		opts.Client = http.DefaultClient
 	}
@@ -171,10 +170,10 @@ func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]config.Log,
 // ParsePublicWitnessConfig implements a parser for the public witness config format.
 //
 // The format is described here: https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md
-func ParsePublicWitnessConfig(r io.Reader) ([]config.Log, error) {
-	ret := []config.Log{}
+func ParsePublicWitnessConfig(r io.Reader) ([]Log, error) {
+	ret := []Log{}
 	foundHeader := false
-	var candidate *config.Log
+	var candidate *Log
 	scanner := bufio.NewScanner(r)
 	for l := range filteringScan(scanner) {
 		bits := strings.SplitN(l, " ", 2)
@@ -194,7 +193,7 @@ func ParsePublicWitnessConfig(r io.Reader) ([]config.Log, error) {
 			if candidate != nil {
 				ret = append(ret, *candidate)
 			}
-			candidate = &config.Log{}
+			candidate = &Log{}
 			if len(bits) != 2 {
 				return nil, fmt.Errorf("invalid vkey line %q", l)
 			}

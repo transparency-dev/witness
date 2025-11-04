@@ -25,7 +25,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/witness"
 )
 
@@ -96,8 +95,8 @@ func TestHandler(t *testing.T) {
 	}
 	logID := log.ID(testCPOrigin)
 	logs := &staticLogConfig{
-		logs: map[string]config.Log{
-			logID: config.Log{Origin: testCPOrigin},
+		logs: map[string]Log{
+			logID: Log{Origin: testCPOrigin},
 		},
 	}
 	for _, test := range []struct {

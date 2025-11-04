@@ -32,7 +32,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/persistence/inmemory"
 	psql "github.com/transparency-dev/witness/internal/persistence/sql"
 	"github.com/transparency-dev/witness/monitoring"
@@ -68,6 +67,11 @@ var (
 
 	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
+
+type logAndConfigPersistence interface {
+	omniwitness.Persistence
+	omniwitness.LogConfig
+}
 
 func main() {
 	klog.InitFlags(nil)
@@ -134,7 +138,7 @@ func main() {
 		l.Merge(al)
 	}
 
-	var p omniwitness.Persistence
+	var p logAndConfigPersistence
 	if len(*dbFile) > 0 {
 		// Start up local database.
 		klog.Infof("Connecting to local DB at %q", *dbFile)
@@ -156,7 +160,7 @@ func main() {
 	}
 	// Merge embedded configs into persisted configs
 	{
-		lc := []config.Log{}
+		lc := []omniwitness.Log{}
 		for c, err := range l.Logs(ctx) {
 			if err != nil {
 				klog.Exitf("Failed to read embedded log config: %v", err)

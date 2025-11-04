@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/transparency-dev/witness/api"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
@@ -39,7 +38,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/transparency-dev/witness/internal/bastion"
-	"github.com/transparency-dev/witness/internal/distribute/rest"
 	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
 	"github.com/transparency-dev/witness/internal/feeder/rekor_v1"
 	"github.com/transparency-dev/witness/internal/feeder/serverless"
@@ -48,16 +46,29 @@ import (
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
-// in order to persist its view of log state and log configs
-type Persistence interface {
-	persistence.LogStatePersistence
-	LogConfig
-}
+// in order to persist its view of log state
+type Persistence = persistence.LogStatePersistence
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
 	defaultProvisionInterval  = 10 * time.Minute
 )
+
+// Log describes a verifiable log.
+type Log struct {
+	// VKey is the serialised note-compliant vkey for the log.
+	VKey string
+	// Verifier is a signature verifier for log checkpoints.
+	Verifier note.Verifier
+	// Origin is the expected first line of checkpoints from the log.
+	Origin string
+	// QPD is the expected number of witness requests per day from the log.
+	QPD float64
+	// Contact is an arbitrary string with contact information for the log operator.
+	Contact string
+	// URL is the URL of the root of the log.
+	URL string
+}
 
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
@@ -109,16 +120,16 @@ type OperatorConfig struct {
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
 type LogConfig interface {
 	// Logs returns an iterator of all known logs.
-	Logs(ctx context.Context) iter.Seq2[config.Log, error]
+	Logs(ctx context.Context) iter.Seq2[Log, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
-	Log(ctx context.Context, id string) (config.Log, bool, error)
+	Log(ctx context.Context, id string) (Log, bool, error)
 	// AddLogs should attempt to merge the provided logs into the current config.
 	// The merge must be additive only with respect to the logs.
-	AddLogs(ctx context.Context, cfg []config.Log) error
+	AddLogs(ctx context.Context, cfg []Log) error
 }
 
 type FeederConfig struct {
-	Log    config.Log
+	Log    Log
 	Feeder Feeder
 }
 
@@ -146,9 +157,15 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	}
 
 	witness, err := witness.New(ctx, witness.Opts{
-		Persistence:  p,
-		Signers:      operatorConfig.WitnessKeys,
-		ConfigForLog: operatorConfig.Logs.Log,
+		Persistence: p,
+		Signers:     operatorConfig.WitnessKeys,
+		VerifierForLog: func(ctx context.Context, origin string) (note.Verifier, bool, error) {
+			c, ok, err := operatorConfig.Logs.Log(ctx, origin)
+			if err != nil || !ok {
+				return nil, false, err
+			}
+			return c.Verifier, true, nil
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create witness: %v", err)
@@ -229,9 +246,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	return g.Wait()
 }
 
-func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest rest.GetLatestCheckpointFn, witnessV note.Verifier, rateLimit float64) {
+func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *http.Client, interval time.Duration, logs LogConfig, distributorBaseURL string, getLatest getLatestCheckpointFn, witnessV note.Verifier, rateLimit float64) {
 	g.Go(func() error {
-		d, err := rest.NewDistributor(distributorBaseURL, httpClient, logs, witnessV, getLatest, rateLimit)
+		d, err := newDistributor(distributorBaseURL, httpClient, logs.Logs, witnessV, getLatest, rateLimit)
 		if err != nil {
 			return fmt.Errorf("NewDistributor: %v", err)
 		}
@@ -293,7 +310,7 @@ func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	return nil
 }
 
-func (f Feeder) NewSourceFunc() func(config.Log, *http.Client) (feeder.Source, error) {
+func (f Feeder) NewSourceFunc() func(origin string, v note.Verifier, url string, c *http.Client) (feeder.Source, error) {
 	switch f {
 	case Serverless:
 		return serverless.NewFeedSource

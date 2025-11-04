@@ -22,8 +22,8 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/client"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
 	"k8s.io/klog/v2"
 )
@@ -34,8 +34,8 @@ const (
 )
 
 // NewFeedSource returns a populated NewFeedSource configured for a sumdb log.
-func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
-	sdb := client.NewSumDB(tileHeight, l.Verifier, l.URL, c)
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+	sdb := client.NewSumDB(tileHeight, verifier, logURL, c)
 
 	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
 		if from == 0 {
@@ -69,10 +69,10 @@ func NewFeedSource(l config.Log, c *http.Client) (feeder.Source, error) {
 	}
 
 	return feeder.Source{
-		LogOrigin:       l.Origin,
+		LogOrigin:       origin,
 		FetchCheckpoint: fetchCheckpoint,
 		FetchProof:      fetchProof,
-		LogSigVerifier:  l.Verifier,
+		LogSigVerifier:  verifier,
 	}, nil
 }
 

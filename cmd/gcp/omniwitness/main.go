@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/transparency-dev/witness/internal/config"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -114,7 +113,7 @@ func mustUpdateLogs(ctx context.Context, y []byte, p *spannerPersistence) {
 	if err != nil {
 		klog.Exitf("Failed to parse YAML logs config: %v", err)
 	}
-	logs := []config.Log{}
+	logs := []omniwitness.Log{}
 	for log, err := range l.Logs(ctx) {
 		if err != nil {
 			klog.Exitf("Error iterating over logs: %v", err)
