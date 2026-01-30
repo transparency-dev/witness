@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  release:
+    types:
+      - 'published'
+  push:
+    branches:
+      - 'main'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      matrix:
+        binary: ["gcp/omniwitness"]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: witness
+
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: witness/go.mod
+          cache-dependency-path: witness/go.sum
+
+      - name: Install ko
+        uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        id: build
+        run: |
+          export KO_DOCKER_REPO="ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]' )"
+
+          mkdir -p ${GITHUB_WORKSPACE}/sbom-output
+
+          cd ${GITHUB_WORKSPACE}/witness
+          tags="latest,${{ github.sha }}"
+          if [ "${{ github.event.release.tag_name }}" != ""]; then
+           tags="${tags},${{ github.event.release.tag_name }}"
+          fi
+          image_and_digest=$(ko publish \
+            --base-import-paths \
+            --platform=linux/amd64,linux/arm64 \
+            --tags=${tags} \
+            --sbom-dir=${GITHUB_WORKSPACE}/sbom-output \
+            github.com/transparency-dev/witness/cmd/${BINARY})
+
+          echo "Images: ${image}"
+          echo "SBOM files:"
+          ls -la ${GITHUB_WORKSPACE}/sbom-output/
+
+          image=$(echo "${image_and_digest}" | cut -d'@' -f1)
+          digest=$(echo "${image_and_digest}" | cut -d'@' -f2)
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+        env:
+          BINARY: ${{ matrix.binary }}
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ steps.build.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Sign images
+        run: |
+          cosign sign --yes --recursive "${IMAGE}@${DIGEST}"
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - name: Attest SBOMs
+        run: |
+            sbom="${GITHUB_WORKSPACE}/sbom-output/${BINARY##*/}-index.spdx.json"
+            cosign attest --yes --predicate "${sbom}" --type spdxjson "${IMAGE}@${DIGEST}"
+        env:
+          BINARY: ${{ matrix.binary }}
+          IMAGE: ${{ steps.build.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
