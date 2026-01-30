@@ -50,7 +50,7 @@ jobs:
 
           cd ${GITHUB_WORKSPACE}/witness
           tags="latest,${{ github.sha }}"
-          if [ "${{ github.event.release.tag_name }}" != ""]; then
+          if [ "${{ github.event.release.tag_name }}" != "" ]; then
            tags="${tags},${{ github.event.release.tag_name }}"
           fi
           image_and_digest=$(ko publish \
