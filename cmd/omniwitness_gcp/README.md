@@ -71,6 +71,6 @@ You can run this binary directly on a GCP VM like so:
 ```bash
 export SPANNER="projects/..." # This is the spanner resource name of the existing database.
 export SECRET="projects/..." # This is the secret manager secret name.
-go run ./cmd/gcp/omniwitness/ --signer_private_key_secret_name=${SECRET} --spanner=${SPANNER}
+go run ./cmd/omniwitness_gcp/ --signer_private_key_secret_name=${SECRET} --spanner=${SPANNER}
 ```
 

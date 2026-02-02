@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gcp/omniwitness is a single executable that runs a witness using GCP services.
+// omniwitness_gcp is a single executable that runs a witness using GCP services.
 package main
 
 import (
