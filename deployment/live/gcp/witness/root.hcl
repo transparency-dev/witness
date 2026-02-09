@@ -1,5 +1,5 @@
 terraform {
-  source = "${get_repo_root()}/deployment/modules/witness"
+  source = "${get_repo_root()}/deployment/modules/gcp/witness"
 }
 
 locals {
