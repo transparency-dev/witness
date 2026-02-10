@@ -135,7 +135,7 @@ resource "google_cloud_run_v2_service" "default" {
 
 
   template {
-    ## This Service account will be used for running the Cloud Run service which hosts the witness.
+    ## This service account will be used for running the Cloud Run service which hosts the witness.
     ## 
     ## The service account provided here must be a member of the following roles in order to function properly:
     ##   "roles/iam.serviceAccountUser"
@@ -151,7 +151,7 @@ resource "google_cloud_run_v2_service" "default" {
     }
     max_instance_request_concurrency = 1000
     containers {
-      # Access the witness docker image via our "pull-through" cache artifcat registry.
+      # Access the witness docker image via our "pull-through" cache artifact registry.
       image = "${google_artifact_registry_repository.witness.registry_uri}/${var.witness_docker_image}"
       name  = "witness"
       args = concat([

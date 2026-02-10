@@ -40,7 +40,7 @@ variable "witness_docker_image" {
 }
 
 variable "extra_args" {
-  description = "Extra arguments to be provided to the witness invoked in cloud run"
+  description = "Extra arguments to be provided to the witness invoked in Cloud Run"
   type        = list(string)
   default     = []
 }
@@ -63,6 +63,6 @@ variable "witness_service_account" {
 }
 
 variable "witness_secret_name" {
-  description = "Secret manager secret name containing the note-formatted key to use for signing checkpoints."
+  description = "Secret Manager secret name containing the note-formatted key to use for signing checkpoints."
   type        = string
 }

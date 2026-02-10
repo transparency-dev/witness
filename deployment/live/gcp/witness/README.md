@@ -9,7 +9,7 @@ and stored it in Secret Manager, or the `terragrunt apply` will fail.
 > While the witness binary itself doesn't need the `public` key, *you will* in order to share it
 > with others.
 
-Below is a `bash` snippet which will generate and store both the public and private key in Secret
+Below is a `bash` snippet which will generate and store both the public and private keys in Secret
 Manager under secrets called `witness_public_XXX` and `witness_secret_XXX` respectively, where
 ```XXX``` is the name of the target deployment environment.
 
