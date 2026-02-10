@@ -63,6 +63,7 @@ data "google_secret_manager_secret" "witness_secret" {
 data "google_secret_manager_secret_version" "witness_secret_data" {
   secret  = data.google_secret_manager_secret.witness_secret.id
   version = 1
+  fetch_secret_data = false
 }
 
 # Update service accounts to allow secret access
