@@ -117,6 +117,11 @@ resource "google_compute_url_map" "url_map" {
       path_rule {
         paths   = ["/${each.key}/add-checkpoint"]
         service = module.gce-lb-http.backend_services["${each.key}-backend"].self_link
+        route_action {
+          url_rewrite {
+            path_prefix_rewrite = "/add-checkpoint"
+          }
+        }
       }
     }
   }
