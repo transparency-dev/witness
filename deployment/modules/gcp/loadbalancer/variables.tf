@@ -3,6 +3,11 @@ variable "project_id" {
   type        = string
 }
 
+variable "env" {
+  description = "Environment name to deploy to"
+  type        = string
+}
+
 variable "domain" {
   description = "Domain mapped to the load balancer."
   type        = string
