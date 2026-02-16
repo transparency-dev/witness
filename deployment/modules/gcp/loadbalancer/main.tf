@@ -95,7 +95,7 @@ resource "google_compute_url_map" "url_map" {
 
     content {
       hosts        = [var.domain]
-      path_matcher = "${each.key}-path-matcher"
+      path_matcher = "${var.env}-${each.key}-path-matcher"
     }
   }
 
