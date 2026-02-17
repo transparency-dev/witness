@@ -74,9 +74,9 @@ resource "google_secret_manager_secret_iam_member" "secretaccess_compute_witness
 }
 
 resource "google_spanner_instance" "witness_spanner" {
-  name             = "witness-${var.env}"
+  name             = var.base_name
   config           = "regional-${var.region}"
-  display_name     = "Witness ${var.env}"
+  display_name     = var.base_name
   processing_units = 100
 
   force_destroy = var.ephemeral
@@ -109,7 +109,7 @@ locals {
 # This is intended to guard against the upstream image being unavailable for some reason.
 resource "google_artifact_registry_repository" "witness" {
   location      = var.region 
-  repository_id = "witness-remote-${var.env}"
+  repository_id = var.base_name
   description   = "Remote repository with witness docker images upstream"
   format        = "DOCKER"
   mode          = "REMOTE_REPOSITORY"
@@ -130,7 +130,7 @@ locals {
 }
 
 resource "google_cloud_run_v2_service" "default" {
-  name         = "witness-service-${var.env}"
+  name         = var.base_name
   location     = var.region
   launch_stage = "GA"
 
