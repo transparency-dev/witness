@@ -50,8 +50,8 @@ jobs:
 
           cd ${GITHUB_WORKSPACE}/witness
           tags="latest,${{ github.sha }}"
-          if [ "${{ github.event.release.tag_name }}" != "" ]; then
-           tags="${tags},${{ github.event.release.tag_name }}"
+          if [ "${GITHUB_EVENT_RELEASE_TAG_NAME}" != "" ]; then
+           tags="${tags},${GITHUB_EVENT_RELEASE_TAG_NAME}"
           fi
           image_and_digest=$(ko publish \
             --base-import-paths \
@@ -70,6 +70,7 @@ jobs:
           echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
         env:
           BINARY: ${{ matrix.binary }}
+          GITHUB_EVENT_RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v3
