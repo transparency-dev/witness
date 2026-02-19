@@ -87,7 +87,7 @@ resource "google_spanner_instance" "witness_spanner" {
 
 resource "google_spanner_database" "witness_db" {
   instance = google_spanner_instance.witness_spanner.name
-  name     = "witness_db_${var.env}"
+  name     = var.base_name
 
   deletion_protection = !var.ephemeral
 }
