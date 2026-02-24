@@ -24,9 +24,9 @@ variable "base_name" {
   type        = string
 }
 
-variable "region" {
-  description = "The region to host the cluster in"
-  type        = string
+variable "regions" {
+  description = "The region(s) to host the service in. The Cloud Run service will be deployed in all regions, and the Spanner database (along with any other ancilliary services) will be deployed in just the first."
+  type        = list(string)
 }
 
 variable "env" {
