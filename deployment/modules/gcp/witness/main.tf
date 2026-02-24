@@ -61,8 +61,8 @@ data "google_secret_manager_secret" "witness_secret" {
 }
 
 data "google_secret_manager_secret_version" "witness_secret_data" {
-  secret  = data.google_secret_manager_secret.witness_secret.id
-  version = 1
+  secret            = data.google_secret_manager_secret.witness_secret.id
+  version           = 1
   fetch_secret_data = false
 }
 
@@ -75,7 +75,7 @@ resource "google_secret_manager_secret_iam_member" "secretaccess_compute_witness
 
 resource "google_spanner_instance" "witness_spanner" {
   name             = var.base_name
-  config           = "regional-${var.region}"
+  config           = "regional-${var.regions[0]}"
   display_name     = var.base_name
   processing_units = 100
 
@@ -108,7 +108,7 @@ locals {
 #
 # This is intended to guard against the upstream image being unavailable for some reason.
 resource "google_artifact_registry_repository" "witness" {
-  location      = var.region 
+  location      = var.regions[0]
   repository_id = var.base_name
   description   = "Remote repository with witness docker images upstream"
   format        = "DOCKER"
@@ -116,7 +116,7 @@ resource "google_artifact_registry_repository" "witness" {
   remote_repository_config {
     description = "Pull-through cache of witness repository"
     common_repository {
-      uri         = var.witness_docker_repo
+      uri = var.witness_docker_repo
     }
   }
 }
@@ -131,8 +131,12 @@ locals {
 
 resource "google_cloud_run_v2_service" "default" {
   name         = var.base_name
-  location     = var.region
+  location     = length(var.regions) == 1 ? var.regions[0] : "global"
   launch_stage = "GA"
+
+  multi_region_settings {
+    regions = length(var.regions) > 1 ? var.regions : null
+  }
 
 
   template {
