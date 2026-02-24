@@ -35,8 +35,9 @@ module "gce-lb-http" {
   // Use the Cloud Armor policy, if it's enabled.
   security_policy = one(module.cloud_armor[*].policy.self_link)
 
-  backends = { for witness_name, witness in var.witnesses :
-    "${witness_name}-backend" => {
+  backends = {
+    for name, witness in var.witnesses :
+    "${name}" => {
       protocol   = "HTTP"
       port       = 80
       port_name  = "http"
@@ -48,30 +49,36 @@ module "gce-lb-http" {
         sample_rate = 1.0
       }
 
-      groups = [
-        {
-          group = google_compute_region_network_endpoint_group.serverless_neg[witness_name].self_link
-        },
-      ]
+      groups = [for region in witness.regions : {
+        group = google_compute_region_network_endpoint_group.serverless_neg["${var.env}-${name}-${region}"].self_link
+      }]
 
       iap_config = {
         enable = false
       }
-
     }
   }
 }
 
 resource "google_compute_region_network_endpoint_group" "serverless_neg" {
   # One NEG group per witness Cloud Run service.
-  for_each = var.witnesses
+  for_each = tomap({
+    for witness in flatten([
+      for witness_name, witness in var.witnesses : [
+        for region in witness.regions : {
+          name = witness_name
+          witness = witness
+          region  = region
+        }
+    ]]) : "${var.env}-${witness.name}-${witness.region}" => witness
+  })
 
   #provider              = google-beta
-  name                  = "serverless-neg-${var.env}-${each.key}"
+  name                  = "${var.env}-${each.value.name}-${each.value.region}"
   network_endpoint_type = "SERVERLESS"
   region                = each.value.region
   cloud_run {
-    service = each.value.service_name
+    service = each.value.witness.service_name
   }
 }
 
@@ -116,7 +123,7 @@ resource "google_compute_url_map" "url_map" {
 
       path_rule {
         paths   = ["/${each.key}/add-checkpoint"]
-        service = module.gce-lb-http.backend_services["${each.key}-backend"].self_link
+        service = module.gce-lb-http.backend_services[each.key].self_link
         route_action {
           url_rewrite {
             path_prefix_rewrite = "/add-checkpoint"

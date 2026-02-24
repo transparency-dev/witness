@@ -17,7 +17,7 @@ variable "witnesses" {
   description = "Map of witnesses by name. This name will be used as the path component of the URL under 'domain' when mapping the provided witness service_name"
   type = map(object({
     service_name = string,
-    region       = string,
+    regions      = list(string),
   }))
 }
 
