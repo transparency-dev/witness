@@ -33,6 +33,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// maxRequestBodyBytes is the limit on the number of bytes we'll read from incoming requests.
+// 10KB should be more than enough, even in a PQ world.
+const maxRequestBodyBytes = 10 << 10
+
 var (
 	httpDoOnce                  sync.Once
 	counterHTTPIncomingRequest  monitoring.Counter
@@ -76,7 +80,7 @@ func (a *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldSize, proof, cp, err := parseBody(r.Body)
+	oldSize, proof, cp, err := parseBody(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
 	if err != nil {
 		klog.V(1).Infof("invalid body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
