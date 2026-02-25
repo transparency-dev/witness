@@ -29,11 +29,11 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "7.18.0"
+      version = "7.20.0"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = "7.18.0"
+      version = "7.20.0"
     }
   }
 }
@@ -108,15 +108,18 @@ locals {
 #
 # This is intended to guard against the upstream image being unavailable for some reason.
 resource "google_artifact_registry_repository" "witness" {
-  location      = var.regions[0]
+  location      = "us"
   repository_id = var.base_name
   description   = "Remote repository with witness docker images upstream"
   format        = "DOCKER"
   mode          = "REMOTE_REPOSITORY"
   remote_repository_config {
     description = "Pull-through cache of witness repository"
-    common_repository {
-      uri = var.witness_docker_repo
+    disable_upstream_validation = true
+    docker_repository {
+      custom_repository {
+        uri = var.witness_docker_repo
+      }
     }
   }
 }
@@ -138,6 +141,10 @@ resource "google_cloud_run_v2_service" "default" {
     regions = length(var.regions) > 1 ? var.regions : null
   }
 
+  scaling {
+    min_instance_count = 1
+    max_instance_count = 3
+  }
 
   template {
     ## This service account will be used for running the Cloud Run service which hosts the witness.
@@ -150,11 +157,9 @@ resource "google_cloud_run_v2_service" "default" {
     ##   "roles/secretmanager.secretAccessor"
     service_account = var.witness_service_account
 
-    scaling {
-      min_instance_count = 1
-      max_instance_count = 3
-    }
     max_instance_request_concurrency = 1000
+    timeout = "1s"
+
     containers {
       # Access the witness docker image via our "pull-through" cache artifact registry.
       image = "${google_artifact_registry_repository.witness.registry_uri}/${var.witness_docker_image}"
@@ -199,7 +204,9 @@ resource "google_cloud_run_v2_service" "default" {
 }
 
 resource "google_cloud_run_service_iam_binding" "default" {
-  location = google_cloud_run_v2_service.default.location
+  count = length(var.regions)
+
+  location = var.regions[count.index]
   service  = google_cloud_run_v2_service.default.name
   role     = "roles/run.invoker"
   members = [
