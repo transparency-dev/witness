@@ -62,10 +62,7 @@ of a brand new witness).
 You'll need an ID/name for your witness. This should be a schemaless-URL which
 uniquely identifies the witness, and be under a domain you control.
 
-A keypair can be generated using `note.GenerateKey`; example code is provided
-at https://play.golang.org/p/uWUKLNK6h9v. It is recommended to copy this code
-to your local machine and run from there in order to minimize the risk to the
-private key material.
+A keypair can be generated using the `cmd/generate_keys` tool in this repo.
 
 ### Public witness network support
 

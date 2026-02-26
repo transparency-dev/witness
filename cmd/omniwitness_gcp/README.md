@@ -46,22 +46,17 @@ There must already be a Secret Manager secret created which contains a note-form
 
 You'll need the resource name for the initial version of this secret , it'be of the format `projects/{project_id}/secrets/{secret_name}/versions/1`
 
-The following command will generate a new signing & verification key pair, and store them directly in Secret Manager, without writing
-temporary files to the local disk or printing the secret key to the terminal:
+The `cmd/generate_keys_gcp` tool in this repo will generate a new signing & verification key pair and store them directly in Secret Manager.
 
 ```bash
-export WITNESS_NAME=example.com/example-witness
-export WITNESS_SECRET_NAME=witness_secret
-export WITNESS_VERIFIER_NAME=witness_verifier
-go run github.com/transparency-dev/serverless-log/cmd/generate_keys@HEAD \
-   --key_name="${WITNESS_NAME}" \
-   --print | 
-   tee >(grep -v PRIVATE | gcloud secrets create ${WITNESS_VERIFIER_NAME} --data-file=-) |
-   grep PRIVATE | gcloud secrets create ${WITNESS_SECRET_NAME} --data-file=-
+export WITNESS_SHORT_NAME=example-witness
+export WITNESS_ORIGIN="<something including ${WITNESS_SHORT_NAME}"
+go run github.com/transparency-dev/witness/cmd/generate_keys_gcp@HEAD \
+   --origin="${WITNESS_ORIGIN}" \
+   --resource_suffix="${WITNESS_SHORT_NAME}"
 ```
 
-
-Note that while we *only* need the signing key to start the witness (`omniwitness` is able to derive the corresponding public key at runtime
+Note that while we *only* need the signing key to start the witness (`omniwitness_gcp` is able to derive the corresponding public key at runtime
 from the secret key), having the public key stored somewhere is likely to be useful when you wish to publicise/share your witness' identity.
 
 ### Starting the witness
