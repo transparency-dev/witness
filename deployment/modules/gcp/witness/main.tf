@@ -76,7 +76,7 @@ resource "google_secret_manager_secret_iam_member" "secretaccess_compute_witness
 resource "google_spanner_instance" "witness_spanner" {
   name             = var.base_name
   config           = "regional-${var.regions[0]}"
-  display_name     = var.base_name
+  display_name     = var.display_name
   processing_units = 100
 
   force_destroy = var.ephemeral

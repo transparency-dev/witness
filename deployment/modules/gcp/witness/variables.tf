@@ -24,6 +24,11 @@ variable "base_name" {
   type        = string
 }
 
+variable "display_name" {
+  description = "Display name to use on resources which support it"
+  type        = string
+}
+
 variable "regions" {
   description = "The region(s) to host the service in. The Cloud Run service will be deployed in all regions, and the Spanner database (along with any other ancillary services) will be deployed in just the first."
   type        = list(string)

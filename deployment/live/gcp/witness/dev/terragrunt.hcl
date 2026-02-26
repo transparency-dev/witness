@@ -6,6 +6,8 @@ include "root" {
 inputs = merge(
   include.root.locals,
   {
+    base_name                  = "dev-witness"
+    display_name               = "Dev Witness"
     public_witness_config_urls = ["https://raw.githubusercontent.com/transparency-dev/witness-network/refs/heads/main/lists/testing/log-list.1"]
     witness_docker_repo        = "https://ghcr.io"
     witness_docker_image       = "transparency-dev/witness/omniwitness_gcp:latest"
