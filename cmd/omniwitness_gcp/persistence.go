@@ -116,6 +116,11 @@ func (p *spannerPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) 
 }
 
 func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGroup) error {
+	if len(m) == 0 {
+		// Nothing to do, nothing done.
+		return nil
+	}
+
 	errs := []error{}
 	err := s.BatchWrite(ctx, m).Do(func(r *spannerpb.BatchWriteResponse) error {
 		switch c := codes.Code(r.Status.Code); c {
