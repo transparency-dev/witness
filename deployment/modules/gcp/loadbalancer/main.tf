@@ -66,7 +66,7 @@ resource "google_compute_region_network_endpoint_group" "serverless_neg" {
     for witness in flatten([
       for witness_name, witness in var.witnesses : [
         for region in witness.regions : {
-          name = witness_name
+          name    = witness_name
           witness = witness
           region  = region
         }
@@ -122,7 +122,7 @@ resource "google_compute_url_map" "url_map" {
       }
 
       path_rule {
-        paths   = ["/${each.key}/add-checkpoint"]
+        paths   = ["/${coalesce(each.value.path_override, each.key)}/add-checkpoint"]
         service = module.gce-lb-http.backend_services[each.key].self_link
         route_action {
           url_rewrite {
