@@ -22,7 +22,7 @@ import (
 	"net/url"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/trillian-tessera/client"
+	"github.com/transparency-dev/tessera/client"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 )
