@@ -310,6 +310,11 @@ func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
 	return nil
 }
 
+// MarshalYAML serializes the feeder to its string representation.
+func (f Feeder) MarshalYAML() (any, error) {
+	return f.String(), nil
+}
+
 func (f Feeder) NewSourceFunc() func(origin string, v note.Verifier, url string, c *http.Client) (feeder.Source, error) {
 	switch f {
 	case Serverless:
