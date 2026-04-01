@@ -2,6 +2,7 @@ on: [push, pull_request]
 name: Test Go
 permissions:
   contents: read
+  id-token: write
 jobs:
   test:
     strategy:
@@ -16,3 +17,5 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
     - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+      with:
+        use_oidc: true
