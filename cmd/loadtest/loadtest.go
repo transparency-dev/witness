@@ -35,7 +35,9 @@ import (
 	"github.com/transparency-dev/merkle/rfc6962"
 	wit_client "github.com/transparency-dev/witness/client/http"
 	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/mod/sumdb/note"
+	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 )
 
@@ -57,7 +59,7 @@ func main() {
 	ctx := context.Background()
 
 	logs := newInMemoryLogs(*logCount)
-	klog.Infof("Log config stanza:\n%s", logs.config())
+	fmt.Print(logs.config())
 
 	if *target == "" {
 		klog.Info("--target not provided, exiting")
@@ -165,11 +167,22 @@ type inMemoryLogs struct {
 }
 
 func (ls inMemoryLogs) config() string {
-	s := "- Logs\n"
-	for _, l := range ls.logs {
-		s += l.config()
+	cfg := omniwitness.ConfigYAML{
+		Logs: make([]omniwitness.LogYAML, len(ls.logs)),
 	}
-	return s
+	for i, l := range ls.logs {
+		cfg.Logs[i] = omniwitness.LogYAML{
+			Origin:    l.o,
+			URL:       fmt.Sprintf("http://%s/", l.o),
+			PublicKey: l.vkey,
+			Feeder:    omniwitness.None,
+		}
+	}
+	out, err := yaml.Marshal(cfg)
+	if err != nil {
+		klog.Exitf("Failed to marshal config: %v", err)
+	}
+	return string(out)
 }
 
 // newInMemoryLog creates a new in memory log that is initially empty. Given a particular
@@ -322,16 +335,6 @@ func (l *inMemoryLog) next() (cpSigned []byte, cpSize uint64, consProof [][]byte
 	return cpSigned, l.size, consProof
 }
 
-func (l *inMemoryLog) config() string {
-	stanza := `
-  - Origin: %s
-    URL: http://%s/
-    PublicKey: %s
-    Feeder: none
-`
-	return fmt.Sprintf(stanza, l.o, l.o, l.vkey)
-}
-
 func newThrottle(opsPerSecond, maxOpsPerSecond uint) *throttle {
 	return &throttle{
 		opsPerSecond:    opsPerSecond,
@@ -354,7 +357,11 @@ func (t *throttle) increase() {
 	if delta < 1 {
 		delta = 1
 	}
-	t.opsPerSecond = min(t.maxOpsPerSecond, tokenCount+uint(delta))
+	newOps := tokenCount + uint(delta)
+	if t.maxOpsPerSecond > 0 {
+		newOps = min(t.maxOpsPerSecond, newOps)
+	}
+	t.opsPerSecond = newOps
 }
 
 func (t *throttle) run(ctx context.Context) {
