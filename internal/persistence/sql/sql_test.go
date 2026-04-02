@@ -45,7 +45,7 @@ func mustCreateDB(t *testing.T) (*sql.DB, func() error) {
 
 func TestLogConfig(t *testing.T) {
 	db, cleanup := mustCreateDB(t)
-	defer cleanup()
+	defer func() { _ = cleanup() }()
 
 	p := NewPersistence(db)
 	if err := p.Init(t.Context()); err != nil {
@@ -115,7 +115,7 @@ func TestLogConfig(t *testing.T) {
 
 func TestDisabledLogs(t *testing.T) {
 	db, cleanup := mustCreateDB(t)
-	defer cleanup()
+	defer func() { _ = cleanup() }()
 
 	p := NewPersistence(db)
 	if err := p.Init(t.Context()); err != nil {
