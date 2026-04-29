@@ -69,3 +69,56 @@ export SECRET="projects/..." # This is the secret manager secret name.
 go run ./cmd/omniwitness_gcp/ --signer_private_key_secret_name=${SECRET} --spanner=${SPANNER}
 ```
 
+## Operations
+
+### Adding a new log
+
+To add a new log configuration to a running witness, you can insert a row directly into the Spanner `logs` table. Since the persistence layer requires a deterministic `logID` derived from the log's origin, you can use the following standalone Go program to generate the exact `INSERT` statement to execute in Spanner Studio.
+
+Either save and run this snippet locally, or use https://go.dev/play/ to generate the SQL.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/transparency-dev/formats/log"
+)
+
+func main() {
+	// Edit these parameters for the log you wish to add:
+	origin := "vindex.gopherwatch.org"
+	vkey := "vindex.gopherwatch.org+af4f4f3a+AYlEp21ErzmKZa+aqhjC8BQteyEtsVwmLzblkzHxn8et"
+	contact := "admin@gopherwatch.org"
+	qpd := 86400.0
+	disabled := false
+
+	fmt.Println(generateInsert(origin, vkey, contact, qpd, disabled))
+}
+
+func generateInsert(origin, vkey, contact string, qpd float64, disabled bool) string {
+	id := log.ID(origin)
+
+	contactVal := "NULL"
+	if contact != "" {
+		contactVal = fmt.Sprintf("'%s'", contact)
+	}
+
+	qpdVal := "NULL"
+	if qpd > 0 {
+		qpdVal = fmt.Sprintf("%f", qpd)
+	}
+
+	return fmt.Sprintf(`INSERT INTO logs (logID, origin, vkey, contact, qpd, disabled)
+VALUES (
+    '%s',
+    '%s',
+    '%s',
+    %s,
+    %s,
+    %t
+);`, id, origin, vkey, contactVal, qpdVal, disabled)
+}
+```
+
