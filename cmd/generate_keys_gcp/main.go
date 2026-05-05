@@ -34,6 +34,7 @@ var (
 	origin         = flag.String("origin", "", "Witness origin for the key.")
 	resourceSuffix = flag.String("resource_suffix", "", "Suffix to be used when naming Secret Manager resources.")
 	projectID      = flag.String("project_id", os.Getenv("GOOGLE_CLOUD_PROJECT"), "GCP Project ID in which to store the generated secret & public keys.")
+	mldsa          = flag.Bool("mldsa", false, "If set, generates an MLDSA-44 key, ed25519 otherwise.")
 )
 
 func main() {
@@ -62,30 +63,40 @@ func main() {
 		}
 	}()
 
+	var (
+		skey, vkey string
+	)
+	
 	// Generate key pair
-	sec, pub, err := note.GenerateKey(rand.Reader, *origin)
-	if err != nil {
-		klog.Exitf("Unable to create key: %q", err)
-	}
+	if *mldsa {
+		skey, vkey, err = f_note.GenerateMLDSAKey(*origin)
+		if err != nil {
+			klog.Exitf("Unable to create MLDSA key: %q", err)
+		}
+	} else {
+		skey, vkey, err = note.GenerateKey(rand.Reader, *origin)
+		if err != nil {
+			klog.Exitf("Unable to create ed25519 key: %q", err)
+		}
 
-	// Convert pubk to a cosig/v1 key.
-	pub, err = f_note.VKeyToCosignatureV1(pub)
-	if err != nil {
-		klog.Exitf("Failed to convert ed25519 vkey to Cosig/V1 vkey: %v", err)
+		vkey, err = f_note.VKeyToCosignatureV1(vkey)
+		if err != nil {
+			klog.Exitf("Failed to convert ed25519 vkey to Cosig/V1 vkey: %v", err)
+		}
 	}
 
 	// Store keys in Secret Manager.
 	pubKName := fmt.Sprintf("witness-verifier-%s", safeResource(*resourceSuffix))
-	if err := createSecret(ctx, *projectID, client, pubKName, pub); err != nil {
+	if err := createSecret(ctx, *projectID, client, pubKName, vkey); err != nil {
 		exit("Failed to create secret %q: %v", pubKName, err)
 	}
 	secKName := fmt.Sprintf("witness-secret-%s", safeResource(*resourceSuffix))
-	if err := createSecret(ctx, *projectID, client, secKName, sec); err != nil {
+	if err := createSecret(ctx, *projectID, client, secKName, skey); err != nil {
 		exit("Failed to create secret %q: %v", secKName, err)
 	}
 
 	// All done!
-	fmt.Printf("Created new witness keypair:\n  Secret name: %s\n  Public name: %v\n\nPublic Key:\n%s\n", secKName, pubKName, pub)
+	fmt.Printf("Created new witness keypair:\n  Secret name: %s\n  Public name: %v\n\nPublic Key:\n%s\n", secKName, pubKName, vkey)
 }
 
 // safeResource attempts to derive a safe GCP resource name from the provided origin string.
