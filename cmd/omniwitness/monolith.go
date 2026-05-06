@@ -45,6 +45,7 @@ import (
 
 func init() {
 	flag.Var(&publicWitnessConfigs, "public_witness_config_url", "URL of a public witness network config file. May be specified multiple times to configure the union of multiple files.")
+	flag.Var(&signingKeyPaths, "private_key_path", "Path to a file containing a note-compatible Ed25519 or MLDSA signing key to use. May be specified multiple times to configure multiple signing keys to use. See README.md for details.")
 }
 
 var (
@@ -54,7 +55,7 @@ var (
 	dbMaxConns  = flag.Int("db_max_conns", 1000, "Maximum number of connections to sqlite3 database")
 
 	signingKey                  = flag.String("private_key", "", "The note-compatible signing key to use. DEPRECATED: please use --private_key_path")
-	signingKeyPath              = flag.String("private_key_path", "", "Path to a file containing a note-compatible Ed25519 signing key to use")
+	signingKeyPaths             multiStringFlag
 	restDistributorBaseURL      = flag.String("rest_distro_url", "", "Optional base URL to a distributor that takes witnessed checkpoints via a PUT request")
 	bastionAddr                 = flag.String("bastion_addr", "", "host:port of the bastion to connect to, or empty to not connect to a bastion")
 	bastionKeyPath              = flag.String("bastion_key_path", "", "Path to a file containing an ed25519 private key in PKCS8 PEM format")
@@ -120,7 +121,7 @@ func main() {
 		}
 	}
 
-	signerCosigV1 := signerFromFlags()
+	witnessSigners, witnessVerifier := signerFromFlags()
 
 	l, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
 	if err != nil {
@@ -173,8 +174,8 @@ func main() {
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:                  []note.Signer{signerCosigV1},
-		WitnessVerifier:              signerCosigV1.Verifier(),
+		WitnessKeys:                  witnessSigners,
+		WitnessVerifier:              witnessVerifier,
 		RestDistributorBaseURL:       *restDistributorBaseURL,
 		BastionAddr:                  *bastionAddr,
 		BastionKey:                   bastionKey,
@@ -192,26 +193,36 @@ func main() {
 	}
 }
 
-func signerFromFlags() *f_note.Signer {
-	var k string
+func signerFromFlags() ([]note.Signer, note.Verifier) {
+	var ks []string
 	switch {
 	case *signingKey != "":
 		klog.Warningf("The --private_key flag is deprecated, please use --private_key_path flag instead. This will become a fatal error shortly.")
-		k = *signingKey
-	case *signingKeyPath != "":
-		r, err := os.ReadFile(*signingKeyPath)
-		if err != nil {
-			klog.Exitf("Failed to read private key from %q: %v", *signingKeyPath, err)
+		ks = append(ks, *signingKey)
+	case len(signingKeyPaths) > 0:
+		for _, p := range signingKeyPaths {
+			r, err := os.ReadFile(p)
+			if err != nil {
+				klog.Exitf("Failed to read private key from %q: %v", p, err)
+			}
+			ks = append(ks, string(r))
 		}
-		k = string(r)
 	default:
 		klog.Exitf("Please provide a --private_key_path flag.")
 	}
-	signerCosigV1, err := f_note.NewSignerForCosignatureV1(k)
-	if err != nil {
-		klog.Exitf("Failed to init signer v1: %v", err)
+	signers := []note.Signer{}
+	var verifier note.Verifier
+	for _, k := range ks {
+		signerCosigV1, err := f_note.NewSignerForCosignatureV1(k)
+		if err != nil {
+			klog.Exitf("Failed to init signer v1: %v", err)
+		}
+		signers = append(signers, signerCosigV1)
+		if verifier == nil {
+			verifier = signerCosigV1.Verifier()
+		}
 	}
-	return signerCosigV1
+	return signers, verifier
 }
 
 func readPrivateKey(f string) (ed25519.PrivateKey, error) {

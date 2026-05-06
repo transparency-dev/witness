@@ -64,6 +64,20 @@ uniquely identifies the witness, and be under a domain you control.
 
 A keypair can be generated using the `cmd/generate_keys` tool in this repo.
 
+### Witness Key Rotation
+
+The omniwitness allows for multiple signatures to be added to checkpoints, this
+is accomplished by providing multiple instances of the `--private_key_path` flag.
+
+Note that ordering is important - the witness uses the verifier from the _first_
+provided flag to authenticate previously witnesses checkpoints which are stored locally.
+
+In order to rotate the key used by the witness, you should use several steps:
+1. Witness signing with key `A`: `--private_key_path=.../A.sec`
+1. Update to sign with keys `A` and `B`: `--private_key_path=.../A.sec --private_key_path=.../B.sec` (note ordering - `A.sec` _before_ `B.sec`)
+1. Wait sufficient time for all clients to become aware of, and switch over to, the new 'B' key.
+1. Stop signing with key 'A': `--private_key_path=.../B.sec`.
+
 ### Public witness network support
 
 The omniwitness supports automatic provisioning of logs via the public witness network.
