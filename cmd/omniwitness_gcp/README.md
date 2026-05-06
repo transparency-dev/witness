@@ -44,7 +44,7 @@ Take note of the resource name for this database, it'll be of the format `projec
 
 There must already be a Secret Manager secret created which contains a note-formatted Ed25519 signing key.
 
-You'll need the resource name for the initial version of this secret , it'be of the format `projects/{project_id}/secrets/{secret_name}/versions/1`
+You'll need the resource name for the initial version of this secret , it should be of the format `projects/{project_id}/secrets/{secret_name}/versions/1`
 
 The `cmd/generate_keys_gcp` tool in this repo will generate a new signing & verification key pair and store them directly in Secret Manager.
 
@@ -58,6 +58,21 @@ go run github.com/transparency-dev/witness/cmd/generate_keys_gcp@HEAD \
 
 Note that while we *only* need the signing key to start the witness (`omniwitness_gcp` is able to derive the corresponding public key at runtime
 from the secret key), having the public key stored somewhere is likely to be useful when you wish to publicise/share your witness' identity.
+
+### Witness Key Rotation
+
+OmniGCP allows for multiple signatures to be added to checkpoints, this
+is accomplished by providing multiple instances of the `--signer_private_key_secret_name` flag.
+
+Note that ordering is important - the witness uses the verifier from the _first_
+provided flag to authenticate previously witnesses checkpoints which are stored locally.
+
+In order to rotate the key used by the witness, you should use several steps:
+1. Witness signing with key `A`: `--signer_private_key_secret_name=.../secrets/A/...`
+1. Update to sign with keys `A` and `B`: `--signer_private_key_secret_name=.../secrets/A/... --signer_private_key_secret_name=.../secrets/B/...` (note ordering - `A` _before_ `B`)
+1. Wait sufficient time for all clients to become aware of, and switch over to, the new 'B' key.
+1. Stop signing with key 'A': `--signer_private_key_secret_name=.../secrets/B/...`.
+
 
 ### Starting the witness
 

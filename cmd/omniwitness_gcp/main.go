@@ -34,14 +34,15 @@ import (
 
 func init() {
 	flag.Var(&publicWitnessConfigs, "public_witness_config_url", "URL of a public witness network config file. May be specified multiple times to configure the union of multiple files.")
+	flag.Var(&signerPrivateKeySecretNames, "signer_private_key_secret_name", "Private key secret name for witness signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}. May be specified multiple times to configure multiple signing keys to use, see README.md for details.")
 }
 
 var (
 	addr       = flag.String("listen", ":8080", "Address to listen on")
 	spannerURI = flag.String("spanner", "", "Spanner resource URI. Format: projects/{projectName}/instances/{spannerInstance}/databases/{databaseName}.")
 
-	signerPrivateKeySecretName = flag.String("signer_private_key_secret_name", "", "Private key secret name for witnes signatures. Format: projects/{projectId}/secrets/{secretName}/versions/{secretVersion}.")
-	httpTimeout                = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
+	signerPrivateKeySecretNames multiStringFlag
+	httpTimeout                 = flag.Duration("http_timeout", 10*time.Second, "HTTP timeout for outbound requests.")
 
 	additionalLogYaml           = flag.String("additional_logs", "", "The path to an optional addition logs YAML file. Entries in this file will be *added* to the logs configured by default")
 	publicWitnessConfigs        multiStringFlag
@@ -71,9 +72,22 @@ func main() {
 		Timeout: *httpTimeout,
 	}
 
-	signer, err := NewSecretManagerSigner(ctx, *signerPrivateKeySecretName)
-	if err != nil {
-		klog.Exitf("Failed to init signer v1: %v", err)
+	if len(signerPrivateKeySecretNames) == 0 {
+		klog.Exit("Must provide at least one --signer_private_key_secret_name flag")
+	}
+
+	signers := []note.Signer{}
+	var verifier note.Verifier
+
+	for _, s := range signerPrivateKeySecretNames {
+		signer, err := NewSecretManagerSigner(ctx, s)
+		if err != nil {
+			klog.Exitf("Failed to init signer %q: %v", s, err)
+		}
+		signers = append(signers, signer)
+		if verifier == nil {
+			verifier = signer.Verifier()
+		}
 	}
 
 	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
@@ -96,8 +110,8 @@ func main() {
 	}
 
 	opConfig := omniwitness.OperatorConfig{
-		WitnessKeys:                  []note.Signer{signer},
-		WitnessVerifier:              signer.Verifier(),
+		WitnessKeys:                  signers,
+		WitnessVerifier:              verifier,
 		ServeMux:                     mux,
 		Logs:                         p,
 		WitnessNetworkConfigURLs:     publicWitnessConfigs,
