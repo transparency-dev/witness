@@ -19,6 +19,8 @@ cloud.google.com/go/secretmanager v1.19.0 h1:dm9BK06xl+hrxp2unT2psjZeypPj5c6uPiA
 cloud.google.com/go/secretmanager v1.19.0/go.mod h1:9OmSuOeiiUicANglrbdKWSnT3gYkRcXuUQDk7dDW0zU=
 cloud.google.com/go/spanner v1.90.0 h1:tVUzYI9IZJY1SDvCmCzyuLoaAyotZgiyQq6go+lNH5A=
 cloud.google.com/go/spanner v1.90.0/go.mod h1:8NB5a7qgwIhGD19Ly+vkpKffPL78vIG9RcrgsuREha0=
+filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e h1:VsUbObBMxXlc23Eb9VeeJYE4jvTs87qa5RqSN2U5FJU=
+filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e/go.mod h1:32qQ5yj3R24Eu03iWFWchdC3OB653wPvoepWejkefbY=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0 h1:BzsL0qE7LvtTEtXG7Dt5NS1EP0CQwI21HZfj9aGghhw=
 github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0/go.mod h1:I7kE2kM3qCr9QPT4cU4cCFYkEpVyVr16YOGUHzy+nR0=
@@ -137,8 +139,10 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/transparency-dev/formats v0.1.0 h1:oL0zUFuYUjg8AbtjPMnIRDmjbaHo5jCjEWU5yaNuz0g=
-github.com/transparency-dev/formats v0.1.0/go.mod h1:d2FibUOHfCMdCe/+/rbKt1IPLBbPTDfwj46kt541/mU=
+github.com/transparency-dev/formats v0.1.1-0.20260505141615-7f7fdcf1625e h1:Narnmxre3uwnDefYUaGlLjFboH8TIFpBDXtfi6EuRRQ=
+github.com/transparency-dev/formats v0.1.1-0.20260505141615-7f7fdcf1625e/go.mod h1:WUGHNGM6NfGokBnNSJ14qM4MSDmgEyoobjoM9aDgAM0=
+github.com/transparency-dev/formats v0.1.1-0.20260505144013-1e3a4ad78464 h1:AEnMKcjHe3UvIPEB+Bm73I+Od8EfFYiCApTIgR4PBCQ=
+github.com/transparency-dev/formats v0.1.1-0.20260505144013-1e3a4ad78464/go.mod h1:WUGHNGM6NfGokBnNSJ14qM4MSDmgEyoobjoM9aDgAM0=
 github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14 h1:K8JqF1HyGDXfTdDHtHe7VsIzeuFEcfLhioOXaupKB+Q=
 github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14/go.mod h1:EoKPjljyIALg1rldsJwRQVKOJO7sLd6eUqki19ruI80=
 github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10 h1:mQ9ZzYoywyFZ4Cvm7PtbFQHm/cnKgWvUUJHQlHG608I=

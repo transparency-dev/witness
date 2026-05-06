@@ -31,6 +31,7 @@ var (
 	outPriv = flag.String("out_priv", "", "Output file for private key.")
 	outPub  = flag.String("out_pub", "", "Output file for public key.")
 	print   = flag.Bool("print", false, "Print private key, then public key, over 2 lines, to stdout.")
+	mldsa   = flag.Bool("mldsa", false, "If set, generates an MLDSA-44 key, ed25519 otherwise.")
 )
 
 func main() {
@@ -47,14 +48,26 @@ func main() {
 		}
 	}
 
-	skey, vkey, err := note.GenerateKey(rand.Reader, *origin)
-	if err != nil {
-		klog.Exitf("Unable to create key: %q", err)
-	}
+	var (
+		skey, vkey string
+		err error
+	)
+	
+	if *mldsa {
+		skey, vkey, err = f_note.GenerateMLDSAKey(*origin)
+		if err != nil {
+			klog.Exitf("Unable to create MLDSA key: %q", err)
+		}
+	} else {
+		skey, vkey, err = note.GenerateKey(rand.Reader, *origin)
+		if err != nil {
+			klog.Exitf("Unable to create ed25519 key: %q", err)
+		}
 
-	vkey, err = f_note.VKeyToCosignatureV1(vkey)
-	if err != nil {
-		klog.Exitf("Failed to convert ed25519 vkey to Cosig/V1 vkey: %v", err)
+		vkey, err = f_note.VKeyToCosignatureV1(vkey)
+		if err != nil {
+			klog.Exitf("Failed to convert ed25519 vkey to Cosig/V1 vkey: %v", err)
+		}
 	}
 
 	if *print {

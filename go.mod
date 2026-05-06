@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/mattn/go-sqlite3 v1.14.42
 	github.com/prometheus/client_golang v1.23.2
-	github.com/transparency-dev/formats v0.1.0
+	github.com/transparency-dev/formats v0.1.1-0.20260505144013-1e3a4ad78464
 	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10
 	github.com/transparency-dev/tessera v1.0.3-0.20260303172654-b64a6fdf82f4
@@ -33,6 +33,7 @@ require (
 	cloud.google.com/go/iam v1.7.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	cloud.google.com/go/monitoring v1.25.0 // indirect
+	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.31.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
