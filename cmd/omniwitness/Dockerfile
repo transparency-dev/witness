@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine@sha256:c2a1f7b2095d046ae14b286b18413a05bb82c9bca9b25fe7ff5efef0f0826166 AS builder
+FROM golang:1.26-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d AS builder
 RUN apk add --no-cache gcc musl-dev
 
 ARG GOFLAGS=""
@@ -20,7 +20,7 @@ COPY . .
 RUN go build -o bin/omniwitness ./cmd/omniwitness
 
 # Build release image
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 
 COPY --from=builder /build/bin/omniwitness /bin/omniwitness
 ENTRYPOINT ["/bin/omniwitness"]
