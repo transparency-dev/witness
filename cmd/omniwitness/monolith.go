@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// omniwitness is a single executable that runs all of the feeders and witness
-// in a single process.
+// omniwitness is a single executable that runs a pre-configured witness.
 package main
 
 import (
@@ -65,8 +64,6 @@ var (
 	additionalLogYaml           = flag.String("additional_logs", "", "The path to an optional addition logs YAML file. Entries in this file will be *added* to the logs configured by default")
 	publicWitnessConfigs        multiStringFlag
 	publicWitnessConfigInterval = flag.Duration("public_witness_config_poll_interval", 1*time.Minute, "Interval between checking the public witness config for new logs to add.")
-
-	pollInterval = flag.Duration("poll_interval", 1*time.Minute, "Time to wait between polling logs for new checkpoints. Set to 0 to disable polling logs.")
 )
 
 type logAndConfigPersistence interface {
@@ -181,9 +178,7 @@ func main() {
 		BastionKey:                   bastionKey,
 		RateLimit:                    *rateLimit,
 		DistributeRateLimit:          *distributeRateLimit,
-		FeedInterval:                 *pollInterval,
 		Logs:                         p,
-		Feeders:                      l.Feeders,
 		WitnessNetworkConfigURLs:     publicWitnessConfigs,
 		WitnessNetworkConfigInterval: *publicWitnessConfigInterval,
 	}

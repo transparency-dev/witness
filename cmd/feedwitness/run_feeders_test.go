@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package omniwitness
+package main
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func TestFeedOnce(t *testing.T) {
 	for _, test := range []struct {
 		desc     string
 		submitCP []byte
-		update   UpdateFn
+		update   updateFn
 		wantErr  bool
 	}{
 		{
@@ -89,7 +89,7 @@ func TestFeedOnce(t *testing.T) {
 			LogSigVerifier: testdata.LogSigVerifier(t),
 		}
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := feedOnce(ctx, 0, Witness{Update: test.update}, test.submitCP, src)
+			_, err := feedOnce(ctx, 0, targetWitness{Update: test.update}, test.submitCP, src)
 			gotErr := err != nil
 			if test.wantErr != gotErr {
 				t.Fatalf("Got err %v, want err %t", err, test.wantErr)

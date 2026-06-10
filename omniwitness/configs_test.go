@@ -52,22 +52,6 @@ func testConfig(t *testing.T, cfg []byte) {
 			t.Fatal("no logs defined in config")
 		}
 	}
-
-	{
-		c := 0
-		for f, err := range logCfg.Feeders(t.Context()) {
-			if err != nil {
-				t.Fatalf("Failed to iterate over feeders: %v", err)
-			}
-			if f.Feeder == omniwitness.None {
-				t.Errorf("log %q has unknown feeder", f.Log.Origin)
-			}
-			c++
-		}
-		if c == 0 {
-			t.Fatal("no feeders defined in config")
-		}
-	}
 }
 
 func TestProdConfig(t *testing.T) {
@@ -84,7 +68,6 @@ Logs:
   - Origin: go.sum database tree
     URL: https://sum.golang.org
     PublicKey: sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8
-    Feeder: sumdb
 `))
 	if err != nil {
 		t.Fatalf("Failed to parse base config: %v", err)
@@ -95,7 +78,6 @@ Logs:
   - Origin: Armory Drive Prod 2
     URL: https://raw.githubusercontent.com/f-secure-foundry/armory-drive-log/master/log/
     PublicKey: armory-drive-log+16541b8f+AYDPmG5pQp4Bgu0a1mr5uDZ196+t8lIVIfWQSPWmP+Jv
-    Feeder: serverless
 `))
 	if err != nil {
 		t.Fatalf("Failed to parse extra config: %v", err)

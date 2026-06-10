@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(al): We should remove the concept of feeding from Omniwitness now that we're moving to a
-// tlog-witness world, and all the stuff in here can then be moved over to `cmd/feedwitness`.
-
-package omniwitness
+package main
 
 import (
 	"context"
@@ -24,13 +21,21 @@ import (
 	"iter"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/feeder"
+	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
+	"github.com/transparency-dev/witness/internal/feeder/rekor_v1"
+	"github.com/transparency-dev/witness/internal/feeder/serverless"
+	"github.com/transparency-dev/witness/internal/feeder/sumdb"
+	"github.com/transparency-dev/witness/internal/feeder/tiles"
 	"github.com/transparency-dev/witness/internal/witness"
 	"github.com/transparency-dev/witness/monitoring"
+	"github.com/transparency-dev/witness/omniwitness"
+	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -56,17 +61,22 @@ func initFeederMetrics() {
 	})
 }
 
-// UpdateFn is the signature of a function which knows how to update a witness.
-type UpdateFn func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
+type feederConfig struct {
+	Log    omniwitness.Log
+	Feeder logFeeder
+}
 
-// Witness represents a target witness to be fed.
-type Witness struct {
-	Update UpdateFn
+// updateFn is the signature of a function which knows how to update a witness.
+type updateFn func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
+
+// targetWitness represents a target witness to be fed.
+type targetWitness struct {
+	Update updateFn
 	Name   string
 }
 
-// RunFeedOpts is the configuration to use for RunFeeders.
-type RunFeedOpts struct {
+// runFeedOpts is the configuration to use for RunFeeders.
+type runFeedOpts struct {
 	// MaxWitnessQPS is the maximum number of requests to make per second to any given witness.
 	// If unset, a default of 1 QPS will be assumed.
 	MaxWitnessQPS float64
@@ -75,20 +85,20 @@ type RunFeedOpts struct {
 	// MatchLogs is an optional regex to select a submet of logs to feed.
 	MatchLogs string
 	// FeederConfigs provides access to feeder configs. Required.
-	FeederConfigs func(context.Context) iter.Seq2[FeederConfig, error]
+	FeederConfigs func(context.Context) iter.Seq2[feederConfig, error]
 	// Witnesses is the set of witnesses to feed to. Required.
-	Witnesses []Witness
+	Witnesses []targetWitness
 }
 
 type wJob struct {
 	logOrigin string
-	f         func(sizeHint uint64, w Witness) (uint64, error)
+	f         func(sizeHint uint64, w targetWitness) (uint64, error)
 }
 
-// RunFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
+// runFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
 //
 // This is a long-running function which will only return when the context is done.
-func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
+func runFeeders(ctx context.Context, opts runFeedOpts) error {
 	initFeederMetrics()
 
 	if opts.HTTPClient == nil {
@@ -183,7 +193,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 					select {
 					case wc <- wJob{
 						logOrigin: c.Log.Origin,
-						f: func(sizeHint uint64, w Witness) (uint64, error) {
+						f: func(sizeHint uint64, w targetWitness) (uint64, error) {
 							return feedOnce(ctx, sizeHint, w, cp, src)
 						},
 					}:
@@ -203,7 +213,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 // The provided sizeHint is size of the log that the caller believes is current on the target witness.
 //
 // Returns a new hint on what the current size of the log on the target witness.
-func feedOnce(ctx context.Context, sizeHint uint64, w Witness, cp []byte, src feeder.Source) (uint64, error) {
+func feedOnce(ctx context.Context, sizeHint uint64, w targetWitness, cp []byte, src feeder.Source) (uint64, error) {
 	klog.V(2).Infof("CP to feed:\n%s", string(cp))
 
 	cpSubmit, _, _, err := log.ParseCheckpoint(cp, src.LogOrigin, src.LogSigVerifier)
@@ -219,7 +229,7 @@ func feedOnce(ctx context.Context, sizeHint uint64, w Witness, cp []byte, src fe
 }
 
 // submitToWitness will submit the checkpoint to the witness, retrying up to 3 times if the local checkpoint is stale.
-func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmit log.Checkpoint, fetchProof feeder.FetchProofFn, w Witness) (uint64, error) {
+func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmit log.Checkpoint, fetchProof feeder.FetchProofFn, w targetWitness) (uint64, error) {
 	// Since this func will be executed by the backoff mechanism below, we'll
 	// log any error messages directly in here before returning the error, as
 	// the backoff util doesn't seem to log them itself.
@@ -285,4 +295,81 @@ func statusForError(e error) string {
 	default:
 		return "unknown_error"
 	}
+}
+
+// logFeeder is an enum of the known feeder types.
+type logFeeder uint8
+
+const (
+	Serverless logFeeder = iota + 1
+	SumDB
+	Pixel
+	Rekor
+	Tiles
+	None
+)
+
+var (
+	feederByName = map[string]logFeeder{
+		"serverless": Serverless,
+		"sumdb":      SumDB,
+		"pixel":      Pixel,
+		"rekor":      Rekor,
+		"tiles":      Tiles,
+		"none":       None,
+	}
+	feederNameByID = func() map[logFeeder]string {
+		r := make(map[logFeeder]string)
+		for k, v := range feederByName {
+			r[v] = k
+		}
+		return r
+	}()
+)
+
+// UnmarshalYAML populates the log from yaml using the unmarshal func provided.
+func (f *logFeeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
+	var raw string
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	if *f, err = parseFeeder(raw); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalYAML serializes the feeder to its string representation.
+func (f logFeeder) MarshalYAML() (any, error) {
+	return f.String(), nil
+}
+
+func (f logFeeder) NewSourceFunc() func(origin string, v note.Verifier, url string, c *http.Client) (feeder.Source, error) {
+	switch f {
+	case Serverless:
+		return serverless.NewFeedSource
+	case SumDB:
+		return sumdb.NewFeedSource
+	case Pixel:
+		return pixelbt.NewFeedSource
+	case Rekor:
+		return rekor_v1.NewFeedSource
+	case Tiles:
+		return tiles.NewFeedSource
+	}
+	panic(fmt.Sprintf("unknown feeder enum: %q", f))
+}
+
+func (f logFeeder) String() string {
+	return feederNameByID[f]
+}
+
+// ParseFeeder takes a string and returns a valid enum or an error.
+func parseFeeder(f string) (logFeeder, error) {
+	f = strings.TrimSpace(strings.ToLower(f))
+	value, ok := feederByName[f]
+	if !ok {
+		return logFeeder(0), fmt.Errorf("unknown feeder type %q", f)
+	}
+	return value, nil
 }

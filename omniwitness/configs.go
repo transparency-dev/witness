@@ -49,7 +49,6 @@ type LogYAML struct {
 	Origin    string `yaml:"Origin"`
 	PublicKey string `yaml:"PublicKey"`
 	URL       string `yaml:"URL"`
-	Feeder    Feeder `yaml:"Feeder"`
 }
 
 // NewStaticLogConfig creates a new LogConfig based on the provided YAML data.
@@ -60,7 +59,6 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 	}
 	r := &staticLogConfig{
 		logs:    make(map[string]Log),
-		feeders: make(map[string]FeederConfig),
 	}
 	for _, log := range cfg.Logs {
 		logV, err := note.NewVerifier(log.PublicKey)
@@ -77,16 +75,6 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 			log.Origin = logV.Name()
 		}
 		logID := logfmt.ID(log.Origin)
-		if log.Feeder != None {
-			f := FeederConfig{
-				Feeder: log.Feeder,
-				Log:    logCfg,
-			}
-			if oldFeeder, found := r.feeders[logID]; found {
-				return nil, fmt.Errorf("colliding feeder configs found for key %x: %+v and %+v", logID, oldFeeder, f)
-			}
-			r.feeders[logID] = f
-		}
 		if oldLog, found := r.logs[logID]; found {
 			return nil, fmt.Errorf("colliding log configs found for key %x: %+v and %+v", logID, oldLog, logCfg)
 		}
@@ -97,22 +85,11 @@ func NewStaticLogConfig(yamlCfg []byte) (*staticLogConfig, error) {
 
 type staticLogConfig struct {
 	logs    map[string]Log
-	feeders map[string]FeederConfig
 }
 
 func (s *staticLogConfig) Logs(_ context.Context) iter.Seq2[Log, error] {
 	return func(yield func(Log, error) bool) {
 		for _, v := range s.logs {
-			if !yield(v, nil) {
-				return
-			}
-		}
-	}
-}
-
-func (s *staticLogConfig) Feeders(_ context.Context) iter.Seq2[FeederConfig, error] {
-	return func(yield func(FeederConfig, error) bool) {
-		for _, v := range s.feeders {
 			if !yield(v, nil) {
 				return
 			}
