@@ -24,7 +24,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/witness"
 	"github.com/transparency-dev/witness/omniwitness"
 	"k8s.io/klog/v2"
 )

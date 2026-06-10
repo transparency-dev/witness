@@ -28,7 +28,7 @@ import (
 	"strings"
 
 	"github.com/transparency-dev/witness/api"
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/witness"
 	"k8s.io/klog/v2"
 )
 

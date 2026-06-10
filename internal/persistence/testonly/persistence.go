@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/witness"
 )
 
 // TestUpdate exposes a test that can be invoked by tests for specific implementations of persistence.

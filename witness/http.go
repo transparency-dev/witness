@@ -144,4 +144,3 @@ type witness interface {
 	Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
 }
 
-

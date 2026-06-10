@@ -27,7 +27,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
