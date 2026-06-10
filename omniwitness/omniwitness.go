@@ -25,11 +25,9 @@ import (
 	"iter"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/transparency-dev/witness/api"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 	"golang.org/x/mod/sumdb/note"
@@ -38,11 +36,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/transparency-dev/witness/internal/bastion"
-	"github.com/transparency-dev/witness/internal/feeder/pixelbt"
-	"github.com/transparency-dev/witness/internal/feeder/rekor_v1"
-	"github.com/transparency-dev/witness/internal/feeder/serverless"
-	"github.com/transparency-dev/witness/internal/feeder/sumdb"
-	"github.com/transparency-dev/witness/internal/feeder/tiles"
 )
 
 // LogStatePersistence describes functionality the omniwitness requires
@@ -93,7 +86,6 @@ type OperatorConfig struct {
 	// TODO(mhutchinson): This should be baked into the code when there is a public distributor.
 	RestDistributorBaseURL string
 
-	FeedInterval       time.Duration
 	DistributeInterval time.Duration
 	// DistributeRateLimit is the maximum number of calls per second to the configured distributor.
 	DistributeRateLimit float64
@@ -103,9 +95,6 @@ type OperatorConfig struct {
 	// Logs provides the witness with the log configuration.
 	// If unset, uses the embedded default config.
 	Logs LogConfig
-
-	// Feeders provides the witness with the config for self-feeding from logs.
-	Feeders func(context.Context) iter.Seq2[FeederConfig, error]
 
 	// WitnessNetworkConfigURLs is optional, and may be set to one or more URLs pointing to resources
 	// in the public witness network config format.
@@ -128,16 +117,10 @@ type LogConfig interface {
 	AddLogs(ctx context.Context, cfg []Log) error
 }
 
-type FeederConfig struct {
-	Log    Log
-	Feeder Feeder
-}
-
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, httpListener net.Listener, httpClient *http.Client) error {
 	initHTTPMetrics()
-	initFeederMetrics()
 
 	// This error group will be used to run all top level processes.
 	// If any process dies, then all of them will be stopped via context cancellation.
@@ -187,16 +170,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	}
 	if operatorConfig.WitnessNetworkConfigInterval == 0 && len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
 		operatorConfig.WitnessNetworkConfigInterval = defaultProvisionInterval
-	}
-	if operatorConfig.FeedInterval > 0 && operatorConfig.Feeders != nil {
-		rOpts := RunFeedOpts{
-			Witnesses:     []Witness{{Name: operatorConfig.WitnessVerifier.Name(), Update: witness.Update}},
-			HTTPClient:    httpClient,
-			MaxWitnessQPS: float64(time.Second) / float64(operatorConfig.FeedInterval),
-			FeederConfigs: operatorConfig.Feeders,
-		}
-		g.Go(func() error { return RunFeeders(ctx, rOpts) })
-
 	}
 	operatorConfig.ServeMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
 
@@ -266,81 +239,4 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 			}
 		}
 	})
-}
-
-// Feeder is an enum of the known feeder types.
-type Feeder uint8
-
-const (
-	Serverless Feeder = iota + 1
-	SumDB
-	Pixel
-	Rekor
-	Tiles
-	None
-)
-
-var (
-	feederByName = map[string]Feeder{
-		"serverless": Serverless,
-		"sumdb":      SumDB,
-		"pixel":      Pixel,
-		"rekor":      Rekor,
-		"tiles":      Tiles,
-		"none":       None,
-	}
-	feederNameByID = func() map[Feeder]string {
-		r := make(map[Feeder]string)
-		for k, v := range feederByName {
-			r[v] = k
-		}
-		return r
-	}()
-)
-
-// UnmarshalYAML populates the log from yaml using the unmarshal func provided.
-func (f *Feeder) UnmarshalYAML(unmarshal func(any) error) (err error) {
-	var raw string
-	if err := unmarshal(&raw); err != nil {
-		return err
-	}
-	if *f, err = ParseFeeder(raw); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MarshalYAML serializes the feeder to its string representation.
-func (f Feeder) MarshalYAML() (any, error) {
-	return f.String(), nil
-}
-
-func (f Feeder) NewSourceFunc() func(origin string, v note.Verifier, url string, c *http.Client) (feeder.Source, error) {
-	switch f {
-	case Serverless:
-		return serverless.NewFeedSource
-	case SumDB:
-		return sumdb.NewFeedSource
-	case Pixel:
-		return pixelbt.NewFeedSource
-	case Rekor:
-		return rekor_v1.NewFeedSource
-	case Tiles:
-		return tiles.NewFeedSource
-	}
-	panic(fmt.Sprintf("unknown feeder enum: %q", f))
-}
-
-func (f Feeder) String() string {
-	return feederNameByID[f]
-}
-
-// ParseFeeder takes a string and returns a valid enum or an error.
-func ParseFeeder(f string) (Feeder, error) {
-	f = strings.TrimSpace(strings.ToLower(f))
-	value, ok := feederByName[f]
-	if !ok {
-		return Feeder(0), fmt.Errorf("unknown feeder type %q", f)
-	}
-	return value, nil
 }

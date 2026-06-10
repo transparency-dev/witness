@@ -60,7 +60,7 @@ func main() {
 
 	ctx := context.Background()
 
-	cfg, err := omniwitness.NewStaticLogConfig(omniwitness.DefaultConfigLogs)
+	cfg, err := newStaticFeederConfig(omniwitness.DefaultConfigLogs)
 	if err != nil {
 		klog.Exitf("failed to instantiate default witness config: %v", err)
 	}
@@ -86,7 +86,7 @@ func main() {
 
 	httpClient := httpClientFromFlags()
 
-	witnesses := []omniwitness.Witness{}
+	witnesses := []targetWitness{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {
@@ -96,21 +96,21 @@ func main() {
 			witness: w_http.NewWitness(u, httpClient),
 			url:     wu,
 		}
-		witness := omniwitness.Witness{
+		witness := targetWitness{
 			Name:   wu,
 			Update: lc.Update,
 		}
 		witnesses = append(witnesses, witness)
 	}
 
-	rOpts := omniwitness.RunFeedOpts{
+	rOpts := runFeedOpts{
 		Witnesses:     witnesses,
 		HTTPClient:    httpClient,
 		MaxWitnessQPS: *rateLimit,
 		MatchLogs:     *feed,
 		FeederConfigs: cfg.Feeders,
 	}
-	if err := omniwitness.RunFeeders(ctx, rOpts); err != nil {
+	if err := runFeeders(ctx, rOpts); err != nil {
 		klog.Errorf("%v", err)
 	}
 }

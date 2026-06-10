@@ -175,7 +175,6 @@ func (ls inMemoryLogs) config() string {
 			Origin:    l.o,
 			URL:       fmt.Sprintf("http://%s/", l.o),
 			PublicKey: l.vkey,
-			Feeder:    omniwitness.None,
 		}
 	}
 	out, err := yaml.Marshal(cfg)
