@@ -21,13 +21,12 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/persistence"
-	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 	"github.com/transparency-dev/witness/omniwitness"
+	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 )
 
 func TestUpdate(t *testing.T) {
-	ptest.TestUpdate(t, func() (persistence.LogStatePersistence, func() error) {
+	ptest.TestUpdate(t, func() (*sqlLogPersistence, func() error) {
 		db, close := mustCreateDB(t)
 		return NewPersistence(db), close
 	})

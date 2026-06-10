@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package omniwitness
+package witness
 
 import (
 	"bytes"
@@ -23,9 +23,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/witness"
 )
 
 const (
@@ -33,8 +30,6 @@ const (
 	testCPSize   = 56
 	testCPRoot   = "7azctENRYLlBCBQ5OX2qxxIKCTOeCda1KfTwjdt0wdA="
 	testCPSig    = "— transparency.dev-aw-ftlog-ci-2 93xidocoWXVph2jEuzW2oovU+IjU71+FeVGKtKXQknSla2HCvr6RYHRSdJfxpo4kj5geqxkjrDXcbpiSo7lK96X4Dgc=\n"
-
-	testCPVerifier = "transparency.dev-aw-ftlog-ci-2+f77c6276+AZXqiaARpwF4MoNOxx46kuiIRjrML0PDTm+c7BLaAMt6"
 )
 
 var testCP = fmt.Sprintf("%s\n%d\n%s\n\n%s", testCPOrigin, testCPSize, testCPRoot, testCPSig)
@@ -89,16 +84,6 @@ func TestParseBody(t *testing.T) {
 }
 
 func TestHandler(t *testing.T) {
-	v, err := note.NewVerifier(testCPVerifier)
-	if err != nil {
-		t.Fatalf("NewVerifier: %v", err)
-	}
-	logID := log.ID(testCPOrigin)
-	logs := &staticLogConfig{
-		logs: map[string]Log{
-			logID: Log{Origin: testCPOrigin},
-		},
-	}
 	for _, test := range []struct {
 		name string
 		// fake witness control
@@ -115,40 +100,35 @@ func TestHandler(t *testing.T) {
 			wantBody:   testCPSig,
 		}, {
 			name:            "ErrCheckpointStale",
-			witness:         &testWitness{updateErr: witness.ErrCheckpointStale, updateSize: testCPSize},
+			witness:         &testWitness{updateErr: ErrCheckpointStale, updateSize: testCPSize},
 			wantStatus:      http.StatusConflict,
 			wantContentType: "text/x.tlog.size",
 			wantBody:        fmt.Sprintf("%d\n", testCPSize),
 		}, {
 			name:       "ErrNoValidSignature",
-			witness:    &testWitness{updateErr: witness.ErrNoValidSignature},
+			witness:    &testWitness{updateErr: ErrNoValidSignature},
 			wantStatus: http.StatusForbidden,
 		}, {
 			name:       "ErrUnknownLog",
-			witness:    &testWitness{updateErr: witness.ErrUnknownLog},
+			witness:    &testWitness{updateErr: ErrUnknownLog},
 			wantStatus: http.StatusNotFound,
 		}, {
 			name:       "ErrInvalidProof",
-			witness:    &testWitness{updateErr: witness.ErrInvalidProof},
+			witness:    &testWitness{updateErr: ErrInvalidProof},
 			wantStatus: http.StatusUnprocessableEntity,
 		}, {
 			name:       "ErrOldSizeInvalid",
-			witness:    &testWitness{updateErr: witness.ErrOldSizeInvalid},
+			witness:    &testWitness{updateErr: ErrOldSizeInvalid},
 			wantStatus: http.StatusBadRequest,
 		}, {
 			name:       "ErrRootMismatch",
-			witness:    &testWitness{updateErr: witness.ErrRootMismatch},
+			witness:    &testWitness{updateErr: ErrRootMismatch},
 			wantStatus: http.StatusConflict,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			a := httpHandler{
-				update:      test.witness.Update,
-				witVerifier: v,
-				logs:        logs,
-			}
-			if err != nil {
-				t.Fatalf("NewRequest: %v", err)
+			a := HTTPHandler{
+				witness:      test.witness,
 			}
 			sc, body, ct, err := a.handleUpdate(context.Background(), 0, []byte(testCP), [][]byte{})
 			if err != nil {

@@ -21,12 +21,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/internal/witness"
 )
 
 // TestUpdate exposes a test that can be invoked by tests for specific implementations of persistence.
-func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence, func() error)) {
+func TestUpdate[T witness.LogStatePersistence](t *testing.T, lspFactory func() (T, func() error)) {
 	t.Helper()
 	origin := "foo"
 
@@ -69,7 +68,7 @@ func TestUpdate(t *testing.T, lspFactory func() (persistence.LogStatePersistence
 	}
 }
 
-func checkAndSet(ctx context.Context, lsp persistence.LogStatePersistence, origin string, expect []byte, write []byte) error {
+func checkAndSet(ctx context.Context, lsp witness.LogStatePersistence, origin string, expect []byte, write []byte) error {
 	if err := lsp.Update(ctx, origin, func(current []byte) ([]byte, error) {
 		if !bytes.Equal(current, expect) {
 			return nil, fmt.Errorf("got current %x, want %x", current, expect)
