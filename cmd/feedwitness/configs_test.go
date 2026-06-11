@@ -29,33 +29,31 @@ func TestParseConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to unmarshal config", err)
 	}
-	{
-		got := 0
-		for f, err := range fCfg.Feeders(t.Context()) {
-			if err != nil {
-				t.Fatalf("Failed to iterate over feeders: %v", err)
-			}
-			got++
-			if f.Log.URL != wantURL {
-				t.Errorf("got URL %q want %q", f.Log.URL, wantURL)
-			}
-			if f.Log.Origin != wantOrigin {
-				t.Errorf("got Origin %q want %q", f.Log.Origin, wantOrigin)
-			}
-			if f.Log.VKey != wantPublicKey {
-				t.Errorf("got VKey %q want %q", f.Log.VKey, wantPublicKey)
-			}
-			if f.Log.Verifier == nil {
-				t.Error("got nil Verifier want non-nil")
-			}
-			if f.Feeder != Tiles {
-				t.Errorf("got Feeder %s, want Tiles", f.Feeder)
-			}
+	got := 0
+	for f, err := range fCfg.Feeders(t.Context()) {
+		if err != nil {
+			t.Fatalf("Failed to iterate over feeders: %v", err)
 		}
+		got++
+		if f.Log.URL != wantURL {
+			t.Errorf("got URL %q want %q", f.Log.URL, wantURL)
+		}
+		if f.Log.Origin != wantOrigin {
+			t.Errorf("got Origin %q want %q", f.Log.Origin, wantOrigin)
+		}
+		if f.Log.VKey != wantPublicKey {
+			t.Errorf("got VKey %q want %q", f.Log.VKey, wantPublicKey)
+		}
+		if f.Log.Verifier == nil {
+			t.Error("got nil Verifier want non-nil")
+		}
+		if f.Feeder != Tiles {
+			t.Errorf("got Feeder %s, want Tiles", f.Feeder)
+		}
+	}
 
-		if want := 1; got != want {
-			t.Fatalf("Got %d feeders, want %d", got, want)
-		}
+	if want := 1; got != want {
+		t.Fatalf("Got %d feeders, want %d", got, want)
 	}
 }
 
