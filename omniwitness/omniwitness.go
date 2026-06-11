@@ -234,7 +234,7 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 
 func rateLimit(limiter *rate.Limiter, delegate func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		if limiter != nil && !limiter.Allow() {
             http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
             return
         }
