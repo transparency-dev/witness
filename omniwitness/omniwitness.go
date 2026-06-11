@@ -27,9 +27,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/transparency-dev/witness/api"
-	"github.com/transparency-dev/witness/internal/persistence"
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -40,7 +38,7 @@ import (
 
 // LogStatePersistence describes functionality the omniwitness requires
 // in order to persist its view of log state
-type Persistence = persistence.LogStatePersistence
+type Persistence = witness.LogStatePersistence
 
 const (
 	defaultDistributeInterval = 1 * time.Minute
@@ -120,8 +118,6 @@ type LogConfig interface {
 // Main runs the omniwitness, with the witness listening using the listener, and all
 // outbound HTTP calls using the client provided.
 func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, httpListener net.Listener, httpClient *http.Client) error {
-	initHTTPMetrics()
-
 	// This error group will be used to run all top level processes.
 	// If any process dies, then all of them will be stopped via context cancellation.
 	g, ctx := errgroup.WithContext(ctx)
@@ -139,7 +135,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 		operatorConfig.Logs = l
 	}
 
-	witness, err := witness.New(ctx, witness.Opts{
+	w, err := witness.New(ctx, witness.Opts{
 		Persistence: p,
 		Signers:     operatorConfig.WitnessKeys,
 		VerifierForLog: func(ctx context.Context, origin string) (note.Verifier, bool, error) {
@@ -158,12 +154,6 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	if operatorConfig.RateLimit > 0 {
 		limiter = rate.NewLimiter(rate.Limit(operatorConfig.RateLimit), int(operatorConfig.RateLimit))
 	}
-	handler := &httpHandler{
-		update:      witness.Update,
-		logs:        operatorConfig.Logs,
-		witVerifier: operatorConfig.WitnessVerifier,
-		limiter:     limiter,
-	}
 
 	if operatorConfig.DistributeInterval == 0 {
 		operatorConfig.DistributeInterval = defaultDistributeInterval
@@ -171,7 +161,8 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	if operatorConfig.WitnessNetworkConfigInterval == 0 && len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
 		operatorConfig.WitnessNetworkConfigInterval = defaultProvisionInterval
 	}
-	operatorConfig.ServeMux.Handle(api.HTTPAddCheckpoint, http.MaxBytesHandler(handler, 16*1024))
+	h := witness.NewHTTPHandler(w)
+	operatorConfig.ServeMux.HandleFunc("POST /add-checkpoint", rateLimit(limiter, h.AddCheckpoint))
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
 		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))
@@ -189,7 +180,7 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 
 	if operatorConfig.RestDistributorBaseURL != "" {
 		klog.Infof("Starting RESTful distributor for %q", operatorConfig.RestDistributorBaseURL)
-		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, witness.GetCheckpoint, operatorConfig.WitnessVerifier, operatorConfig.DistributeRateLimit)
+		runRestDistributors(ctx, g, httpClient, operatorConfig.DistributeInterval, operatorConfig.Logs, operatorConfig.RestDistributorBaseURL, w.GetCheckpoint, operatorConfig.WitnessVerifier, operatorConfig.DistributeRateLimit)
 	}
 	if len(operatorConfig.WitnessNetworkConfigURLs) > 0 {
 		g.Go(func() error {
@@ -240,3 +231,14 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 		}
 	})
 }
+
+func rateLimit(limiter *rate.Limiter, delegate func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow() {
+            http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+            return
+        }
+		delegate(w, r)
+	}
+}
+

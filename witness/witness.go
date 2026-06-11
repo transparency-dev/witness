@@ -32,7 +32,6 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/witness/internal/persistence"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
@@ -80,7 +79,7 @@ func initMetrics() {
 
 // Opts is the options passed to a witness.
 type Opts struct {
-	Persistence    persistence.LogStatePersistence
+	Persistence    LogStatePersistence
 	Signers        []note.Signer
 	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
 }
@@ -88,7 +87,7 @@ type Opts struct {
 // Witness consists of a database for storing checkpoints, a signer, and a list
 // of logs for which it stores and verifies checkpoints.
 type Witness struct {
-	lsp            persistence.LogStatePersistence
+	lsp            LogStatePersistence
 	Signers        []note.Signer
 	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
 }

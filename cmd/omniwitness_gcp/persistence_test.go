@@ -26,7 +26,6 @@ import (
 	"cloud.google.com/go/spanner"
 	"cloud.google.com/go/spanner/spannertest"
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
@@ -48,9 +47,9 @@ func newSpannerServer(t *testing.T) (string, func()) {
 	return id, srv.Close
 }
 
-func mustNewPersistence(t *testing.T) func() (persistence.LogStatePersistence, func() error) {
+func mustNewPersistence(t *testing.T) func() (*spannerPersistence, func() error) {
 	t.Helper()
-	return func() (persistence.LogStatePersistence, func() error) {
+	return func() (*spannerPersistence, func() error) {
 		spanner, spannerShutdown := newSpannerServer(t)
 		p, clientShutdown, err := newSpannerPersistence(t.Context(), spanner)
 		if err != nil {
@@ -110,17 +109,16 @@ func TestUpdateConcurrent(t *testing.T) {
 }
 
 func TestDisableLog(t *testing.T) {
-	p, shutdown := mustNewPersistence(t)()
+	sp, shutdown := mustNewPersistence(t)()
 	defer func() {
 		if err := shutdown(); err != nil {
 			t.Errorf("shutdown: %v", err)
 		}
 	}()
-	if err := p.Init(t.Context()); err != nil {
+	if err := sp.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
 
-	sp := p.(*spannerPersistence)
 	sp.batchWrite = testBatchWrite
 
 	if err := sp.AddLogs(t.Context(),
@@ -161,13 +159,13 @@ func TestDisableLog(t *testing.T) {
 }
 
 func TestDisabledLogStaysDisabled(t *testing.T) {
-	p, shutdown := mustNewPersistence(t)()
+	sp, shutdown := mustNewPersistence(t)()
 	defer func() {
 		if err := shutdown(); err != nil {
 			t.Errorf("shutdown: %v", err)
 		}
 	}()
-	if err := p.Init(t.Context()); err != nil {
+	if err := sp.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
 
@@ -177,8 +175,6 @@ func TestDisabledLogStaysDisabled(t *testing.T) {
 			VKey:   "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8",
 		},
 	}
-
-	sp := p.(*spannerPersistence)
 
 	if err := sp.AddLogs(t.Context(), logs); err != nil {
 		t.Fatalf("Failed to AddLogs: %v", err)

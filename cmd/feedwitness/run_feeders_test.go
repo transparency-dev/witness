@@ -25,7 +25,7 @@ import (
 	sclient "github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/serverless-log/testdata"
 	"github.com/transparency-dev/witness/internal/feeder"
-	"github.com/transparency-dev/witness/internal/witness"
+	"github.com/transparency-dev/witness/witness"
 	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )

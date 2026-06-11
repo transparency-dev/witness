@@ -19,7 +19,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/transparency-dev/witness/internal/persistence"
 	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
 	"golang.org/x/sync/errgroup"
 )
@@ -27,7 +26,7 @@ import (
 var nopClose = func() error { return nil }
 
 func TestUpdate(t *testing.T) {
-	ptest.TestUpdate(t, func() (persistence.LogStatePersistence, func() error) {
+	ptest.TestUpdate(t, func() (*inMemoryPersistence, func() error) {
 		return NewPersistence(), nopClose
 	})
 }
