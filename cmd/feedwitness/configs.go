@@ -34,7 +34,10 @@ type configYAML struct {
 
 // logYAML contains the details about a log.
 type logYAML struct {
-	omniwitness.LogYAML
+	// From omniwitness.LogYAML
+	Origin    string `yaml:"Origin"`
+	PublicKey string `yaml:"PublicKey"`
+	URL       string `yaml:"URL"`
 
 	Feeder logFeeder `yaml:"Feeder"`
 }
@@ -45,7 +48,9 @@ func newStaticFeederConfig(yamlCfg []byte) (*staticFeederConfig, error) {
 	if err := yaml.Unmarshal(yamlCfg, cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}
-	r := &staticFeederConfig{}
+	r := &staticFeederConfig{
+		feeders: make(map[string]feederConfig),
+	}
 	for _, log := range cfg.Logs {
 		logV, err := note.NewVerifier(log.PublicKey)
 		if err != nil {
