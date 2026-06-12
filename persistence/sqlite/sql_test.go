@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sql
+package sqlite
 
 import (
 	"testing"
@@ -22,7 +22,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/omniwitness"
-	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
+	ptest "github.com/transparency-dev/witness/persistence/testonly"
 )
 
 func TestUpdate(t *testing.T) {

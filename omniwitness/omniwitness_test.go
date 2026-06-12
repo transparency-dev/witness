@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/transparency-dev/witness/internal/persistence/inmemory"
+	"github.com/transparency-dev/witness/persistence/inmemory"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 )

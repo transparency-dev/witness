@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
+	ptest "github.com/transparency-dev/witness/persistence/testonly"
 	"golang.org/x/sync/errgroup"
 )
 

@@ -26,7 +26,7 @@ import (
 	"cloud.google.com/go/spanner"
 	"cloud.google.com/go/spanner/spannertest"
 	"github.com/transparency-dev/formats/log"
-	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
+	ptest "github.com/transparency-dev/witness/persistence/testonly"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"

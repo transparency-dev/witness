@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package sql provides log state persistence backed by a SQL database.
-package sql
+// Package sqlite provides log state persistence backed by an sqlite database.
+package sqlite
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// NewPersistence returns a persistence object that is backed by the SQL database.
+// NewPersistence returns a persistence object that is backed by the provided database.
 func NewPersistence(db *sql.DB) *sqlLogPersistence {
 	return &sqlLogPersistence{
 		db: db,

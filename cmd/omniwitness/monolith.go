@@ -31,8 +31,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/persistence/inmemory"
-	psql "github.com/transparency-dev/witness/internal/persistence/sql"
+	"github.com/transparency-dev/witness/persistence/inmemory"
+	psql "github.com/transparency-dev/witness/persistence/sqlite"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
