@@ -28,6 +28,7 @@ import (
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/persistence/spanner"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
@@ -90,7 +91,7 @@ func main() {
 		}
 	}
 
-	p, shutdown, err := newSpannerPersistence(ctx, *spannerURI)
+	p, shutdown, err := spanner.New(ctx, *spannerURI)
 	if err != nil {
 		klog.Exitf("Failed to create spanner persistence: %v", err)
 	}
@@ -122,7 +123,7 @@ func main() {
 	}
 }
 
-func mustUpdateLogs(ctx context.Context, y []byte, p *spannerPersistence) {
+func mustUpdateLogs(ctx context.Context, y []byte, p *spanner.SpannerPersistence) {
 	l, err := omniwitness.NewStaticLogConfig(y)
 	if err != nil {
 		klog.Exitf("Failed to parse YAML logs config: %v", err)

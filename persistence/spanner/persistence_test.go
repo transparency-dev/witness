@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package spanner
 
 import (
 	"context"
@@ -47,11 +47,11 @@ func newSpannerServer(t *testing.T) (string, func()) {
 	return id, srv.Close
 }
 
-func mustNewPersistence(t *testing.T) func() (*spannerPersistence, func() error) {
+func mustNewPersistence(t *testing.T) func() (*SpannerPersistence, func() error) {
 	t.Helper()
-	return func() (*spannerPersistence, func() error) {
+	return func() (*SpannerPersistence, func() error) {
 		spanner, spannerShutdown := newSpannerServer(t)
-		p, clientShutdown, err := newSpannerPersistence(t.Context(), spanner)
+		p, clientShutdown, err := New(t.Context(), spanner)
 		if err != nil {
 			t.Fatalf("Failed to create spanner persistence: %v", err)
 		}
