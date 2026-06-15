@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package sql provides log state persistence backed by a SQL database.
-package sql
+// Package sqlite provides log state persistence backed by an sqlite database.
+package sqlite
 
 import (
 	"context"
@@ -29,18 +29,20 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// NewPersistence returns a persistence object that is backed by the SQL database.
-func NewPersistence(db *sql.DB) *sqlLogPersistence {
-	return &sqlLogPersistence{
+// New returns a persistence object that is backed by the provided database.
+func New(db *sql.DB) *Persistence {
+	return &Persistence{
 		db: db,
 	}
 }
 
-type sqlLogPersistence struct {
+// Persistence is an implementation of witness.Persistence which knows how to use an sqlite
+// database to safely store witness state.
+type Persistence struct {
 	db *sql.DB
 }
 
-func (p *sqlLogPersistence) Init(ctx context.Context) error {
+func (p *Persistence) Init(ctx context.Context) error {
 	for _, ddl := range []string{
 		"CREATE TABLE IF NOT EXISTS chkpts (logID BLOB PRIMARY KEY, chkpt BLOB)",
 		"CREATE TABLE IF NOT EXISTS logs (logID BLOB PRIMARY KEY, origin STRING NOT NULL, vkey STRING NOT NULL, contact STRING, qpd FLOAT64, disabled BOOL)",
@@ -52,7 +54,7 @@ func (p *sqlLogPersistence) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *sqlLogPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
+func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	for _, l := range lc {
 		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
 		// update the stored config for a given log. There may be reasons to revisit this in the future,
@@ -67,7 +69,7 @@ func (p *sqlLogPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) e
 	return nil
 }
 
-func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
+func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
 	return func(yield func(omniwitness.Log, error) bool) {
 		rows, err := p.db.QueryContext(ctx, "SELECT origin, vkey, contact, disabled FROM logs")
 		if err != nil {
@@ -103,7 +105,7 @@ func (p *sqlLogPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log,
 	}
 }
 
-func (p *sqlLogPersistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
+func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
 	logID := log.ID(origin)
 	row := p.db.QueryRowContext(ctx, "SELECT origin, vkey, contact, disabled FROM logs WHERE logID = ?", logID)
 	if row.Err() != nil {
@@ -126,7 +128,7 @@ func (p *sqlLogPersistence) Log(ctx context.Context, origin string) (omniwitness
 	return c, true, nil
 }
 
-func (p *sqlLogPersistence) Latest(ctx context.Context, origin string) ([]byte, error) {
+func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error) {
 	logID := log.ID(origin)
 	return getLatestCheckpoint(ctx, p.db.QueryRowContext, logID)
 }
@@ -140,7 +142,7 @@ func handleBusyErr(err error) error {
 	return err
 }
 
-func (p *sqlLogPersistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
+func (p *Persistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	logID := log.ID(origin)
 	tx, err := p.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {

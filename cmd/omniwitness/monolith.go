@@ -31,8 +31,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/internal/persistence/inmemory"
-	psql "github.com/transparency-dev/witness/internal/persistence/sql"
+	"github.com/transparency-dev/witness/persistence/inmemory"
+	psql "github.com/transparency-dev/witness/persistence/sqlite"
 	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
@@ -148,13 +148,13 @@ func main() {
 			klog.Exitf("Failed to connect to DB: %v", err)
 		}
 		db.SetMaxOpenConns(*dbMaxConns)
-		p = psql.NewPersistence(db)
+		p = psql.New(db)
 		if err := p.Init(ctx); err != nil {
 			klog.Exitf("Failed to init SQL persistence: %v", err)
 		}
 	} else {
 		klog.Warning("No persistence configured for witness. Reboots will lose guarantees of witness correctness. Use --db_file for production deployments.")
-		p = inmemory.NewPersistence()
+		p = inmemory.New()
 	}
 	// Merge embedded configs into persisted configs
 	{

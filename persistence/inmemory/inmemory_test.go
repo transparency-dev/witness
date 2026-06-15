@@ -19,20 +19,20 @@ import (
 	"strings"
 	"testing"
 
-	ptest "github.com/transparency-dev/witness/internal/persistence/testonly"
+	ptest "github.com/transparency-dev/witness/persistence/testonly"
 	"golang.org/x/sync/errgroup"
 )
 
 var nopClose = func() error { return nil }
 
 func TestUpdate(t *testing.T) {
-	ptest.TestUpdate(t, func() (*inMemoryPersistence, func() error) {
-		return NewPersistence(), nopClose
+	ptest.TestUpdate(t, func() (*Persistence, func() error) {
+		return New(), nopClose
 	})
 }
 
 func TestUpdateConcurrent(t *testing.T) {
-	p := NewPersistence()
+	p := New()
 
 	g := errgroup.Group{}
 	origin := "foo"

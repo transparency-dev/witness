@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/transparency-dev/witness/internal/persistence/inmemory"
+	"github.com/transparency-dev/witness/persistence/inmemory"
 	"github.com/transparency-dev/witness/omniwitness"
 	"golang.org/x/sync/errgroup"
 )
@@ -22,7 +22,7 @@ func TestMainStartupShutdown(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 
-	p := inmemory.NewPersistence()
+	p := inmemory.New()
 
 	var g errgroup.Group
 	g.Go(func() error {
