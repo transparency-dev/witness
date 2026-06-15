@@ -26,9 +26,9 @@ import (
 )
 
 func TestUpdate(t *testing.T) {
-	ptest.TestUpdate(t, func() (*sqlLogPersistence, func() error) {
+	ptest.TestUpdate(t, func() (*Persistence, func() error) {
 		db, close := mustCreateDB(t)
-		return NewPersistence(db), close
+		return New(db), close
 	})
 }
 
@@ -46,7 +46,7 @@ func TestLogConfig(t *testing.T) {
 	db, cleanup := mustCreateDB(t)
 	defer func() { _ = cleanup() }()
 
-	p := NewPersistence(db)
+	p := New(db)
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
@@ -116,7 +116,7 @@ func TestDisabledLogs(t *testing.T) {
 	db, cleanup := mustCreateDB(t)
 	defer func() { _ = cleanup() }()
 
-	p := NewPersistence(db)
+	p := New(db)
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}

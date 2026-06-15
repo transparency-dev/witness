@@ -123,7 +123,7 @@ func main() {
 	}
 }
 
-func mustUpdateLogs(ctx context.Context, y []byte, p *spanner.SpannerPersistence) {
+func mustUpdateLogs(ctx context.Context, y []byte, p *spanner.Persistence) {
 	l, err := omniwitness.NewStaticLogConfig(y)
 	if err != nil {
 		klog.Exitf("Failed to parse YAML logs config: %v", err)

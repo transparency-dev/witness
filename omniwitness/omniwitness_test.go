@@ -22,7 +22,7 @@ func TestMainStartupShutdown(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 
-	p := inmemory.NewPersistence()
+	p := inmemory.New()
 
 	var g errgroup.Group
 	g.Go(func() error {

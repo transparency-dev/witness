@@ -47,9 +47,9 @@ func newSpannerServer(t *testing.T) (string, func()) {
 	return id, srv.Close
 }
 
-func mustNewPersistence(t *testing.T) func() (*SpannerPersistence, func() error) {
+func mustNewPersistence(t *testing.T) func() (*Persistence, func() error) {
 	t.Helper()
-	return func() (*SpannerPersistence, func() error) {
+	return func() (*Persistence, func() error) {
 		spanner, spannerShutdown := newSpannerServer(t)
 		p, clientShutdown, err := New(t.Context(), spanner)
 		if err != nil {

@@ -148,13 +148,13 @@ func main() {
 			klog.Exitf("Failed to connect to DB: %v", err)
 		}
 		db.SetMaxOpenConns(*dbMaxConns)
-		p = psql.NewPersistence(db)
+		p = psql.New(db)
 		if err := p.Init(ctx); err != nil {
 			klog.Exitf("Failed to init SQL persistence: %v", err)
 		}
 	} else {
 		klog.Warning("No persistence configured for witness. Reboots will lose guarantees of witness correctness. Use --db_file for production deployments.")
-		p = inmemory.NewPersistence()
+		p = inmemory.New()
 	}
 	// Merge embedded configs into persisted configs
 	{

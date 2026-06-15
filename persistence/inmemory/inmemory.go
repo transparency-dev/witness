@@ -27,15 +27,15 @@ import (
 	"github.com/transparency-dev/witness/omniwitness"
 )
 
-// NewPersistence returns a persistence object that lives only in memory.
-func NewPersistence() *inMemoryPersistence {
-	return &inMemoryPersistence{
+// New returns a persistence object that lives only in memory.
+func New() *Persistence {
+	return &Persistence{
 		checkpoints: make(map[string][]byte),
 		logs:        make(map[string]omniwitness.Log),
 	}
 }
 
-type inMemoryPersistence struct {
+type Persistence struct {
 	// mu allows checkpoints to be read concurrently, but
 	// exclusively locked for writing.
 	mu          sync.RWMutex
@@ -43,11 +43,11 @@ type inMemoryPersistence struct {
 	logs        map[string]omniwitness.Log
 }
 
-func (p *inMemoryPersistence) Init(_ context.Context) error {
+func (p *Persistence) Init(_ context.Context) error {
 	return nil
 }
 
-func (p *inMemoryPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
+func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, l := range lc {
@@ -57,7 +57,7 @@ func (p *inMemoryPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log)
 	return nil
 }
 
-func (p *inMemoryPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
+func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return func(yield func(omniwitness.Log, error) bool) {
@@ -69,7 +69,7 @@ func (p *inMemoryPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Lo
 	}
 }
 
-func (p *inMemoryPersistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
+func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	logID := log.ID(origin)
@@ -80,14 +80,14 @@ func (p *inMemoryPersistence) Log(ctx context.Context, origin string) (omniwitne
 	return lc, true, nil
 }
 
-func (p *inMemoryPersistence) Latest(_ context.Context, origin string) ([]byte, error) {
+func (p *Persistence) Latest(_ context.Context, origin string) ([]byte, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	logID := log.ID(origin)
 	return p.checkpoints[logID], nil
 }
 
-func (p *inMemoryPersistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
+func (p *Persistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	logID := log.ID(origin)

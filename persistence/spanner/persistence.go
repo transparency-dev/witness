@@ -36,7 +36,7 @@ import (
 )
 
 // New returns a persistence object that is backed by the Spanner database.
-func New(ctx context.Context, spannerURI string) (*SpannerPersistence, func() error, error) {
+func New(ctx context.Context, spannerURI string) (*Persistence, func() error, error) {
 	sc, err := spanner.NewClient(ctx, spannerURI)
 	if err != nil {
 		return nil, nil, err
@@ -45,7 +45,7 @@ func New(ctx context.Context, spannerURI string) (*SpannerPersistence, func() er
 		sc.Close()
 		return nil
 	}
-	ret := &SpannerPersistence{
+	ret := &Persistence{
 		spannerURI: spannerURI,
 		spanner:    sc,
 		batchWrite: batchWrite,
@@ -58,9 +58,9 @@ func New(ctx context.Context, spannerURI string) (*SpannerPersistence, func() er
 	return ret, shutdown, nil
 }
 
-// SpannerPersistence is a witness.Persistence implementation which knows how to use Spanner
+// Persistence is a witness.Persistence implementation which knows how to use Spanner
 // to safely store witness state.
-type SpannerPersistence struct {
+type Persistence struct {
 	spannerURI string
 	spanner    *spanner.Client
 
@@ -70,11 +70,11 @@ type SpannerPersistence struct {
 	batchWrite func(context.Context, *spanner.Client, []*spanner.MutationGroup) error
 }
 
-func (p *SpannerPersistence) Init(ctx context.Context) error {
+func (p *Persistence) Init(ctx context.Context) error {
 	return nil
 }
 
-func (p *SpannerPersistence) createTablesIfNotExist(ctx context.Context) error {
+func (p *Persistence) createTablesIfNotExist(ctx context.Context) error {
 	adminClient, err := database.NewDatabaseAdminClient(ctx)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (p *SpannerPersistence) createTablesIfNotExist(ctx context.Context) error {
 	return nil
 }
 
-func (p *SpannerPersistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
+func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	m := []*spanner.MutationGroup{}
 	for _, l := range lc {
 		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
@@ -143,7 +143,7 @@ func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGro
 	return errors.Join(errs...)
 }
 
-func (p *SpannerPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
+func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
 	return func(yield func(omniwitness.Log, error) bool) {
 		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "contact", "disabled"})
 		for {
@@ -182,7 +182,7 @@ func (p *SpannerPersistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log
 	}
 }
 
-func (p *SpannerPersistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
+func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
 	logID := logfmt.ID(origin)
 	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "contact", "disabled"})
 	if err != nil {
@@ -209,12 +209,12 @@ func (p *SpannerPersistence) Log(ctx context.Context, origin string) (omniwitnes
 	return c, true, nil
 }
 
-func (p *SpannerPersistence) Latest(ctx context.Context, origin string) ([]byte, error) {
+func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error) {
 	logID := logfmt.ID(origin)
 	return getLatestCheckpoint(ctx, p.spanner.Single().ReadRow, logID)
 }
 
-func (p *SpannerPersistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
+func (p *Persistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	logID := logfmt.ID(origin)
 	_, err := p.spanner.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		current, err := getLatestCheckpoint(ctx, txn.ReadRow, logID)
