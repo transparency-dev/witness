@@ -22,10 +22,9 @@ import (
 	"iter"
 	"net/http"
 	"net/url"
-	"sync"
 
 	f_log "github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/monitoring"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -45,18 +44,20 @@ const (
 type getLatestCheckpointFn func(ctx context.Context, logID string) ([]byte, error)
 
 var (
-	doOnce                 sync.Once
-	counterDistRestAttempt monitoring.Counter
-	counterDistRestSuccess monitoring.Counter
+	counterDistRestAttempt metric.Int64Counter
+	counterDistRestSuccess metric.Int64Counter
 )
 
-func initMetrics() {
-	doOnce.Do(func() {
-		mf := monitoring.GetMetricFactory()
-		const logIDLabel = "logid"
-		counterDistRestAttempt = mf.NewCounter("distribute_rest_attempt", "Number of attempts the RESTful distributor has made for the log ID", logIDLabel)
-		counterDistRestSuccess = mf.NewCounter("distribute_rest_success", "Number of times the RESTful distributor has succeeded for the log ID", logIDLabel)
-	})
+func init() {
+	var err error
+	counterDistRestAttempt, err = meter.Int64Counter("distribute_rest_attempt", metric.WithUnit("{call}"), metric.WithDescription("Number of attempts the RESTful distributor has made for the log ID"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
+	counterDistRestSuccess, err = meter.Int64Counter("distribute_rest_success", metric.WithUnit("{call}"), metric.WithDescription("Number of times the RESTful distributor has succeeded for the log ID"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
 }
 
 // logsFn should return the _current_ set of logs whose checkpoints should be distributed.
@@ -65,7 +66,6 @@ type logsFn func(context.Context) iter.Seq2[Log, error]
 
 // newDistributor creates a new Distributor from the given configuration.
 func newDistributor(baseURL string, client *http.Client, logs logsFn, witSigV note.Verifier, getLatest getLatestCheckpointFn, rateLimit float64) (*distributor, error) {
-	initMetrics()
 	return &distributor{
 		baseURL:     baseURL,
 		client:      client,
@@ -112,7 +112,7 @@ func (d *distributor) DistributeOnce(ctx context.Context) error {
 
 func (d *distributor) distributeForLog(ctx context.Context, l Log) error {
 	logID := f_log.ID(l.Origin)
-	counterDistRestAttempt.Inc(l.Origin)
+	counterDistRestAttempt.Add(ctx, 1, metric.WithAttributes(logKey.String(l.Origin)))
 
 	wRaw, err := d.getLatest(ctx, l.Origin)
 	if err != nil {
@@ -147,6 +147,6 @@ func (d *distributor) distributeForLog(ctx context.Context, l Log) error {
 		return fmt.Errorf("bad status response (%s): %q", resp.Status, body)
 	}
 	klog.V(1).Infof("Distributed checkpoint via REST for %q (%s)", l.Verifier.Name(), l.Origin)
-	counterDistRestSuccess.Inc(l.Origin)
+	counterDistRestSuccess.Add(ctx, 1, metric.WithAttributes(logKey.String(l.Origin)))
 	return nil
 }

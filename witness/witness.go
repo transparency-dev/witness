@@ -25,24 +25,22 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/witness/monitoring"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
 
 var (
-	doOnce                         sync.Once
-	counterUpdateAttempt           monitoring.Counter
-	counterUpdateSuccess           monitoring.Counter
-	counterInvalidConsistency      monitoring.Counter
-	counterInconsistentCheckpoints monitoring.Counter
+	counterUpdateAttempt           metric.Int64Counter
+	counterUpdateSuccess           metric.Int64Counter
+	counterInvalidConsistency      metric.Int64Counter
+	counterInconsistentCheckpoints metric.Int64Counter
 )
 
 var (
@@ -66,15 +64,24 @@ var (
 	ErrPushback = errors.New("pushback")
 )
 
-func initMetrics() {
-	doOnce.Do(func() {
-		mf := monitoring.GetMetricFactory()
-		const logOriginLabel = "log_origin"
-		counterUpdateAttempt = mf.NewCounter("witness_update_request", "Number of attempted requests made to update checkpoints for the log origin", logOriginLabel)
-		counterUpdateSuccess = mf.NewCounter("witness_update_success", "Number of successful requests made to update checkpoints for the log origin", logOriginLabel)
-		counterInvalidConsistency = mf.NewCounter("witness_update_invalid_consistency", "Number of times the witness received a bad consistency proof for the log origin", logOriginLabel)
-		counterInconsistentCheckpoints = mf.NewCounter("witness_update_inconsistent_checkpoints", "Number of times the witness received inconsistent checkpoints for the log origin", logOriginLabel)
-	})
+func init() {
+	var err error
+	counterUpdateAttempt, err = meter.Int64Counter("witness_update_request", metric.WithUnit("{call}"), metric.WithDescription("Number of attempted requests made to update checkpoints for the log origin"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
+	counterUpdateSuccess, err = meter.Int64Counter("witness_update_success", metric.WithUnit("{call}"), metric.WithDescription("Number of successful requests made to update checkpoints for the log origin"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
+	counterInvalidConsistency, err = meter.Int64Counter("witness_update_invalid_consistency", metric.WithUnit("{call}"), metric.WithDescription("Number of times the witness received a bad consistency proof for the log origin"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
+	counterInconsistentCheckpoints, err = meter.Int64Counter("witness_update_inconsistent_checkpoints", metric.WithUnit("{call}"), metric.WithDescription("Number of times the witness received inconsistent checkpoints for the log origin"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
 }
 
 // Opts is the options passed to a witness.
@@ -94,8 +101,6 @@ type Witness struct {
 
 // New creates a new witness, which initially has no logs to follow.
 func New(ctx context.Context, wo Opts) (*Witness, error) {
-	initMetrics()
-
 	// Create the chkpts table if needed.
 	if err := wo.Persistence.Init(ctx); err != nil {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
@@ -153,7 +158,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		return nil, 0, err
 	}
 
-	counterUpdateAttempt.Inc(origin)
+	counterUpdateAttempt.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 
 	var retSigs []byte
 	var retSize uint64
@@ -170,7 +175,6 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 			if err != nil {
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
-			counterUpdateSuccess.Inc(origin)
 			retSigs = sigs
 			return signed, nil
 		}
@@ -202,7 +206,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		if next.Size == prev.Size {
 			if !bytes.Equal(next.Hash, prev.Hash) {
 				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", origin, prev, next)
-				counterInconsistentCheckpoints.Inc(origin)
+				counterInconsistentCheckpoints.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 
 				retSize, retSigs = 0, nil
 				return nil, ErrRootMismatch
@@ -224,7 +228,6 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 				return nil, fmt.Errorf("couldn't sign input checkpoint: %v", err)
 			}
 			retSize, retSigs = 0, sigs
-			counterUpdateSuccess.Inc(origin)
 			return signed, nil
 		}
 
@@ -232,7 +235,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		// valid so we verify the consistency proofs.
 		if err := proof.VerifyConsistency(rfc6962.DefaultHasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
 			// Complain if the checkpoints aren't consistent.
-			counterInvalidConsistency.Inc(origin)
+			counterInvalidConsistency.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 			return nil, ErrInvalidProof
 		}
 		// If the consistency proof is good we store the witness cosigned nextRaw.
@@ -245,7 +248,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		return signed, nil
 	})
 	if err == nil {
-		counterUpdateSuccess.Inc(origin)
+		counterUpdateSuccess.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 	}
 
 	return retSigs, retSize, err

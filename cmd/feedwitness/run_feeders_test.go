@@ -26,14 +26,10 @@ import (
 	"github.com/transparency-dev/serverless-log/testdata"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/witness"
-	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
 func TestFeedOnce(t *testing.T) {
-	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
-	initFeederMetrics()
-
 	ctx := context.Background()
 	for _, test := range []struct {
 		desc     string

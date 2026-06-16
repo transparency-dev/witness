@@ -25,10 +25,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/transparency-dev/witness/monitoring"
-	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
 	"github.com/transparency-dev/witness/persistence/spanner"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/sdk/metric"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
@@ -57,10 +58,12 @@ func main() {
 
 	ctx := context.Background()
 
-	mf := prometheus.MetricFactory{
-		Prefix: "omniwitness_",
+	exporter, err := prometheus.New(prometheus.WithNamespace("omniwitness"))
+	if err != nil {
+		klog.Fatalf("failed to create prometheus exporter: %v", err)
 	}
-	monitoring.SetMetricFactory(mf)
+	provider := metric.NewMeterProvider(metric.WithReader(exporter))
+	otel.SetMeterProvider(provider)
 	mux := &http.ServeMux{}
 	mux.Handle("/metrics", promhttp.Handler())
 	klog.Infof("Prometheus configured on %s", *addr)

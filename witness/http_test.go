@@ -128,7 +128,7 @@ func TestHandler(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			a := HTTPHandler{
-				witness:      test.witness,
+				witness: test.witness,
 			}
 			sc, body, ct, err := a.handleUpdate(context.Background(), 0, []byte(testCP), [][]byte{})
 			if err != nil {

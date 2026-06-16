@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/transparency-dev/formats/log"
@@ -33,8 +32,8 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 	"github.com/transparency-dev/witness/internal/feeder/tiles"
 	"github.com/transparency-dev/witness/witness"
-	"github.com/transparency-dev/witness/monitoring"
 	"github.com/transparency-dev/witness/omniwitness"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
@@ -42,23 +41,20 @@ import (
 )
 
 var (
-	feederDoOnce        sync.Once
-	counterFeedRequest  monitoring.Counter
-	counterFeedResponse monitoring.Counter
+	counterFeedRequest  metric.Int64Counter
+	counterFeedResponse metric.Int64Counter
 )
 
-func initFeederMetrics() {
-	feederDoOnce.Do(func() {
-		mf := monitoring.GetMetricFactory()
-		const (
-			witness = "witness"
-			log     = "log"
-			status  = "status"
-		)
-
-		counterFeedRequest = mf.NewCounter("feed_request", "Number of Feed requests sent to witnesses", witness, log)
-		counterFeedResponse = mf.NewCounter("feed_response", "Witness responses", witness, log, status)
-	})
+func init() {
+	var err error
+	counterFeedRequest, err = meter.Int64Counter("feed_request", metric.WithUnit("{call}"), metric.WithDescription("Number of Feed requests sent to witnesses"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
+	counterFeedResponse, err = meter.Int64Counter("feed_response", metric.WithUnit("{call}"), metric.WithDescription("Witness responses"))
+	if err != nil {
+		klog.Errorf("failed to create counter: %v", err)
+	}
 }
 
 type feederConfig struct {
@@ -99,8 +95,6 @@ type wJob struct {
 //
 // This is a long-running function which will only return when the context is done.
 func runFeeders(ctx context.Context, opts runFeedOpts) error {
-	initFeederMetrics()
-
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = http.DefaultClient
 	}
@@ -133,7 +127,10 @@ func runFeeders(ctx context.Context, opts runFeedOpts) error {
 				case job := <-wChan:
 					var err error
 					sizeHint := logSizes[job.logOrigin]
-					counterFeedRequest.Inc(wi.Name, job.logOrigin)
+					counterFeedRequest.Add(ctx, 1, metric.WithAttributes(
+						witnessKey.String(wi.Name),
+						logKey.String(job.logOrigin),
+					))
 					sizeHint, err = job.f(sizeHint, wi)
 					if err != nil {
 						// Log this, but don't return the error as we want to continue
@@ -250,12 +247,20 @@ func submitToWitness(ctx context.Context, sizeHint uint64, cpRaw []byte, cpSubmi
 		klog.V(2).Infof("%q: Fetched proof %d -> %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
 
 		_, actualSize, err := w.Update(ctx, sizeHint, cpRaw, conP)
-		counterFeedResponse.Inc(w.Name, cpSubmit.Origin, statusForError(err))
+		counterFeedResponse.Add(ctx, 1, metric.WithAttributes(
+			witnessKey.String(w.Name),
+			logKey.String(cpSubmit.Origin),
+			statusKey.String(statusForError(err)),
+		))
 		switch {
 		case errors.Is(err, witness.ErrCheckpointStale):
 			klog.V(2).Infof("%q: %d is stale, bumping to %d: %x", cpSubmit.Origin, sizeHint, cpSubmit.Size, conP)
 			sizeHint = actualSize
-			counterFeedResponse.Inc(w.Name, cpSubmit.Origin, "stale")
+			counterFeedResponse.Add(ctx, 1, metric.WithAttributes(
+				witnessKey.String(w.Name),
+				logKey.String(cpSubmit.Origin),
+				statusKey.String("stale"),
+			))
 			return sizeHint, backoff.RetryAfter(1)
 		case err != nil:
 			e := fmt.Errorf("%q: failed to submit checkpoint to witness: %w", cpSubmit.Origin, err)
