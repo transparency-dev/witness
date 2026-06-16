@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"iter"
 
-	"github.com/mattn/go-sqlite3"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/witness"
 	"github.com/transparency-dev/witness/omniwitness"
 	"k8s.io/klog/v2"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // New returns a persistence object that is backed by the provided database.
@@ -133,10 +135,10 @@ func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error)
 	return getLatestCheckpoint(ctx, p.db.QueryRowContext, logID)
 }
 
-// handleBusyErr will return a witness.ErrPushback if the provided error is an sqlite ErrBusy,
+// handleBusyErr will return a witness.ErrPushback if the provided error code is SQLITE_BUSY,
 // or return the provided error otherwise.
 func handleBusyErr(err error) error {
-	if sqliteErr, ok := err.(sqlite3.Error); ok && sqliteErr.Code == sqlite3.ErrBusy {
+	if sqliteErr, ok := err.(*sqlite.Error); ok && sqliteErr.Code() == sqlite3.SQLITE_BUSY {
 		return witness.ErrPushback
 	}
 	return err
