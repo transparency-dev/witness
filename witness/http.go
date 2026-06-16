@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 )
 
@@ -90,6 +91,7 @@ func (a *HTTPHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []
 		case errors.Is(updateErr, ErrRootMismatch):
 			return http.StatusConflict, nil, "", nil
 		default:
+			slog.ErrorContext(ctx, "Unknown error", slog.Any("error", updateErr))
 			return http.StatusInternalServerError, nil, "", updateErr
 		}
 	}

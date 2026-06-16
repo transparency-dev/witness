@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"iter"
 
-	"github.com/mattn/go-sqlite3"
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/witness"
 	"github.com/transparency-dev/witness/omniwitness"
 	"k8s.io/klog/v2"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // New returns a persistence object that is backed by the provided database.
@@ -133,10 +135,13 @@ func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error)
 	return getLatestCheckpoint(ctx, p.db.QueryRowContext, logID)
 }
 
-// handleBusyErr will return a witness.ErrPushback if the provided error is an sqlite ErrBusy,
+// handleBusyErr will return a witness.ErrPushback if the provided error code is SQLITE_BUSY,
 // or return the provided error otherwise.
 func handleBusyErr(err error) error {
-	if sqliteErr, ok := err.(sqlite3.Error); ok && sqliteErr.Code == sqlite3.ErrBusy {
+	if sqliteErr, ok := err.(*sqlite.Error); ok && 
+	  (sqliteErr.Code() == sqlite3.SQLITE_BUSY ||
+	   sqliteErr.Code() == sqlite3.SQLITE_BUSY_SNAPSHOT ||
+	   sqliteErr.Code() == sqlite3.SQLITE_LOCKED) {
 		return witness.ErrPushback
 	}
 	return err
@@ -161,7 +166,7 @@ func (p *Persistence) Update(ctx context.Context, origin string, f func([]byte) 
 
 	updated, err := f(current)
 	if err != nil {
-		return err
+		return handleBusyErr(err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO chkpts (logID, chkpt) VALUES (?, ?)`, logID, updated); err != nil {
 		return fmt.Errorf("Exec(): %w", handleBusyErr(err))
@@ -177,14 +182,14 @@ func (p *Persistence) Update(ctx context.Context, origin string, f func([]byte) 
 func getLatestCheckpoint(ctx context.Context, queryRow func(ctx context.Context, query string, args ...interface{}) *sql.Row, logID string) ([]byte, error) {
 	row := queryRow(ctx, "SELECT chkpt FROM chkpts WHERE logID = ?", logID)
 	if err := row.Err(); err != nil {
-		return nil, err
+		return nil, handleBusyErr(err)
 	}
 	var chkpt []byte
 	if err := row.Scan(&chkpt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, handleBusyErr(err)
 	}
 	return chkpt, nil
 }

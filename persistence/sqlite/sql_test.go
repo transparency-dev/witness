@@ -19,7 +19,7 @@ import (
 
 	"database/sql"
 
-	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
+	_ "modernc.org/sqlite" // Load drivers for sqlite3
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/omniwitness"
 	ptest "github.com/transparency-dev/witness/persistence/testonly"
@@ -34,7 +34,7 @@ func TestUpdate(t *testing.T) {
 
 func mustCreateDB(t *testing.T) (*sql.DB, func() error) {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open temporary DB: %v", err)
 	}

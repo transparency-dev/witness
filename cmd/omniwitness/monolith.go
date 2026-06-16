@@ -40,7 +40,7 @@ import (
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 
-	_ "github.com/mattn/go-sqlite3" // Load drivers for sqlite3
+	_ "modernc.org/sqlite" // Load drivers for sqlite3
 )
 
 func init() {
@@ -144,7 +144,7 @@ func main() {
 		// Open database with some flags:
 		// - use WAL mode as this allows for read concurrency while writes are happening.
 		// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
-		db, err := sql.Open("sqlite3", fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=1000", *dbFile))
+		db, err := sql.Open("sqlite", fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=1000", *dbFile))
 		if err != nil {
 			klog.Exitf("Failed to connect to DB: %v", err)
 		}
