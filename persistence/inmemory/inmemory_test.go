@@ -58,3 +58,20 @@ func TestUpdateConcurrent(t *testing.T) {
 		t.Errorf("expected at least one success but got %s", string(cp))
 	}
 }
+
+func TestUpdateDeadlock(t *testing.T) {
+	p := New()
+	origin := "foo"
+	err := p.Update(t.Context(), origin, func(current []byte) (next []byte, err error) {
+		// This calls Log which tries to acquire RLock while Update holds Lock.
+		_, _, err = p.Log(t.Context(), origin)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(fmt.Sprintf("%s\nsuccess", origin)), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
