@@ -31,16 +31,14 @@ import (
 func New() *Persistence {
 	return &Persistence{
 		checkpoints: make(map[string][]byte),
-		logs:        make(map[string]omniwitness.Log),
 	}
 }
 
 type Persistence struct {
-	// mu allows checkpoints to be read concurrently, but
-	// exclusively locked for writing.
-	mu          sync.RWMutex
-	checkpoints map[string][]byte
-	logs        map[string]omniwitness.Log
+	checkpointsMu sync.RWMutex
+	checkpoints   map[string][]byte
+
+	logs sync.Map
 }
 
 func (p *Persistence) Init(_ context.Context) error {
@@ -48,48 +46,40 @@ func (p *Persistence) Init(_ context.Context) error {
 }
 
 func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	for _, l := range lc {
 		logID := log.ID(l.Origin)
-		p.logs[logID] = l
+		p.logs.Store(logID, l)
 	}
 	return nil
 }
 
 func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
 	return func(yield func(omniwitness.Log, error) bool) {
-		for _, lc := range p.logs {
-			if !yield(lc, nil) {
-				return
-			}
-		}
+		p.logs.Range(func(key, value any) bool {
+			return yield(value.(omniwitness.Log), nil)
+		})
 	}
 }
 
 func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
 	logID := log.ID(origin)
-	lc, ok := p.logs[logID]
+	val, ok := p.logs.Load(logID)
 	if !ok {
-		return lc, false, nil
+		return omniwitness.Log{}, false, nil
 	}
-	return lc, true, nil
+	return val.(omniwitness.Log), true, nil
 }
 
 func (p *Persistence) Latest(_ context.Context, origin string) ([]byte, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.checkpointsMu.RLock()
+	defer p.checkpointsMu.RUnlock()
 	logID := log.ID(origin)
 	return p.checkpoints[logID], nil
 }
 
 func (p *Persistence) Update(_ context.Context, origin string, f func([]byte) ([]byte, error)) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.checkpointsMu.Lock()
+	defer p.checkpointsMu.Unlock()
 	logID := log.ID(origin)
 	u, err := f(p.checkpoints[logID])
 	if err != nil {
