@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
 )
 
 // maxRequestBodyBytes is the limit on the number of bytes we'll read from incoming requests.
@@ -37,7 +36,6 @@ func NewHTTPHandler(w *Witness) *HTTPHandler {
 type HTTPHandler struct {
 	witness witness
 }
-
 
 // AddCheckpoint is a http.Handler which speaks the tlog-witness protocol for add-checkpoint.
 func (a *HTTPHandler) AddCheckpoint(w http.ResponseWriter, r *http.Request) {
@@ -143,4 +141,3 @@ func parseBody(r io.Reader) (uint64, [][]byte, []byte, error) {
 type witness interface {
 	Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
 }
-

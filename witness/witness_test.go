@@ -27,7 +27,6 @@ import (
 	"github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/rfc6962"
-	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -105,7 +104,6 @@ func dh(h string, expLen int) []byte {
 }
 
 func TestGetChkpt(t *testing.T) {
-	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	for _, test := range []struct {
 		desc        string
 		setOrigin   string

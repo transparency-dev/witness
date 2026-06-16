@@ -27,10 +27,9 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
-	"github.com/transparency-dev/witness/monitoring"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
 	"k8s.io/klog/v2"
@@ -48,37 +47,33 @@ type Config struct {
 // If the connection to the bastion is broken for any reason, it will be retried.
 // This function returns only once the provided context is done.
 func Register(ctx context.Context, c Config, witnessHandler http.Handler) error {
-	initMetrics()
 	klog.Infof("My bastion backend ID: %064x", sha256.Sum256(c.BastionKey.Public().(ed25519.PublicKey)))
 
 	return connectAndServe(ctx, c.Addr, witnessHandler, c.BastionKey)
 }
 
 var (
-	doOnce                        sync.Once
-	counterBastionRegisterAttempt monitoring.Counter
-	counterBastionRegisterSuccess monitoring.Counter
+	counterBastionRegisterAttempt metric.Int64Counter
+	counterBastionRegisterSuccess metric.Int64Counter
 )
 
-func initMetrics() {
-	doOnce.Do(func() {
-		mf := monitoring.GetMetricFactory()
-		const (
-			bastionID = "bastionid"
-			origin    = "origin"
-			status    = "status"
-		)
-
-		counterBastionRegisterAttempt = mf.NewCounter("bastion_register_attempt", "Number of attempts to register with bastion", bastionID)
-		counterBastionRegisterSuccess = mf.NewCounter("bastion_register_success", "Number of successful registrations with bastion", bastionID)
-	})
+func init() {
+		var err error
+		counterBastionRegisterAttempt, err = meter.Int64Counter("bastion_register_attempt", metric.WithUnit("{call}"), metric.WithDescription("Number of attempts to register with bastion"))
+		if err != nil {
+			klog.Errorf("failed to create counter: %v", err)
+		}
+		counterBastionRegisterSuccess, err = meter.Int64Counter("bastion_register_success", metric.WithUnit("{call}"), metric.WithDescription("Number of successful registrations with bastion"))
+		if err != nil {
+			klog.Errorf("failed to create counter: %v", err)
+		}
 }
 
 func connectAndServe(ctx context.Context, host string, handler http.Handler, key ed25519.PrivateKey) error {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 	for {
-		counterBastionRegisterAttempt.Inc(host)
+		counterBastionRegisterAttempt.Add(ctx, 1, metric.WithAttributes(bastionKey.String(host)))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -114,7 +109,7 @@ func connectAndServe(ctx context.Context, host string, handler http.Handler, key
 			}
 
 			klog.Infof("Connected to bastion. Serving connection...")
-			counterBastionRegisterSuccess.Inc(host)
+			counterBastionRegisterSuccess.Add(ctx, 1, metric.WithAttributes(bastionKey.String(host)))
 			(&http2.Server{
 				IdleTimeout:     300 * time.Second,
 				ReadIdleTimeout: 10 * time.Second,

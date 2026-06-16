@@ -35,9 +35,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
 	"github.com/transparency-dev/witness/witness"
-	"github.com/transparency-dev/witness/monitoring"
-	"github.com/transparency-dev/witness/monitoring/prometheus"
 	"github.com/transparency-dev/witness/omniwitness"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/sdk/metric"
 	"k8s.io/klog/v2"
 )
 
@@ -70,10 +71,12 @@ func main() {
 	}
 
 	if *metricsAddr != "" {
-		mf := prometheus.MetricFactory{
-			Prefix: "omnifeeder_",
+		exporter, err := prometheus.New(prometheus.WithNamespace("omnifeeder"))
+		if err != nil {
+			klog.Fatalf("failed to create prometheus exporter: %v", err)
 		}
-		monitoring.SetMetricFactory(mf)
+		provider := metric.NewMeterProvider(metric.WithReader(exporter))
+		otel.SetMeterProvider(provider)
 
 		http.Handle("/metrics", promhttp.Handler())
 		go func() {

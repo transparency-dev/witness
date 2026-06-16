@@ -26,7 +26,6 @@ import (
 	"github.com/gorilla/mux"
 	f_log "github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/monitoring"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -39,7 +38,6 @@ const (
 )
 
 func TestDistributeOnce(t *testing.T) {
-	monitoring.SetMetricFactory(monitoring.InertMetricFactory{})
 	fd := &fakeDistributor{}
 	r := mux.NewRouter()
 	r.HandleFunc(fmt.Sprintf(httpCheckpointByWitness, "{logid:[a-zA-Z0-9-]+}", "{witid:[^ +]+}"), fd.update).Methods(http.MethodPut)
