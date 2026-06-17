@@ -15,14 +15,19 @@
 package sqlite
 
 import (
-	"testing"
-
+	"context"
 	"database/sql"
+	"encoding/hex"
+	"testing"
+	"time"
 
-	_ "modernc.org/sqlite" // Load drivers for sqlite3
 	"github.com/transparency-dev/formats/log"
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/witness"
 	ptest "github.com/transparency-dev/witness/persistence/testonly"
+	"golang.org/x/mod/sumdb/note"
+	_ "modernc.org/sqlite" // Load drivers for sqlite3
 )
 
 func TestUpdate(t *testing.T) {
@@ -147,5 +152,81 @@ func TestDisabledLogs(t *testing.T) {
 		if l.Origin == "log3" {
 			t.Error("found disabled log3 in Logs()")
 		}
+	}
+}
+
+func TestDeadlock(t *testing.T) {
+	db, cleanup := mustCreateDB(t) // MaxOpenConns(1)
+	defer func() { _ = cleanup() }()
+
+	p := New(db)
+	if err := p.Init(t.Context()); err != nil {
+		t.Fatalf("Init(): %v", err)
+	}
+
+	mPK := "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT"
+	wSK := "PRIVATE+KEY+witness+f13a86db+AaLa/dfyBhyo/m0Z7WCi98ENVZWtrP8pxgRNrx7tIWiA"
+
+	logV, err := note.NewVerifier(mPK)
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	err = p.AddLogs(t.Context(), []omniwitness.Log{
+		{Origin: "monkeys", VKey: mPK, Verifier: logV},
+	})
+	if err != nil {
+		t.Fatalf("AddLogs: %v", err)
+	}
+
+	ns, err := f_note.NewSignerForCosignatureV1(wSK)
+	if err != nil {
+		t.Fatalf("NewSignerForCosignatureV1: %v", err)
+	}
+
+	w, err := witness.New(t.Context(), witness.Opts{
+		Persistence: p,
+		Signers:     []note.Signer{ns},
+		VerifierForLog: func(ctx context.Context, origin string) (note.Verifier, bool, error) {
+			l, ok, err := p.Log(ctx, origin)
+			if err != nil || !ok {
+				return nil, ok, err
+			}
+			return l.Verifier, true, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("witness.New: %v", err)
+	}
+
+	mInit := []byte("monkeys\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n\n— monkeys 202fftzGl3LVoqjXfwCFZZXs8I+5G22+Ek2K0AOyBuSJ/8/CZawNF+6fNlTKOCd622pbzJNkkJFWuw9DbicZCkEx9AY=\n")
+	mNext := []byte("monkeys\n8\nV8K9aklZ4EPB+RMOk1/8VsJUdFZR77GDtZUQq84vSbo=\n\n— monkeys 202ffoUEboiQYpHzICeaFmoy3RNviHTpAxYrq/eO4QQVQMvu9UebKBMX2MJC76NLthZaKsnKbCA8GxrjePZhvDCH7Ag=\n")
+
+	dh := func(h string) []byte {
+		r, err := hex.DecodeString(h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	consProof := [][]byte{
+		dh("b9e1d62618f7fee8034e4c5010f727ab24d8e4705cb296c374bf2025a87a10d2"),
+		dh("aac66cd7a79ce4012d80762fe8eec3a77f22d1ca4145c3f4cee022e7efcd599d"),
+		dh("89d0f753f66a290c483b39cd5e9eafb12021293395fad3d4a2ad053cfbcfdc9e"),
+		dh("29e40bb79c966f4c6fe96aff6f30acfce5f3e8d84c02215175d6e018a5dee833"),
+	}
+
+	// First update (TOFU) - should succeed.
+	_, _, err = w.Update(t.Context(), 0, mInit, nil)
+	if err != nil {
+		t.Fatalf("First Update (TOFU) failed: %v", err)
+	}
+
+	// Second update (consistent transition)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	_, _, err = w.Update(ctx, 5, mNext, consProof)
+	if err != nil {
+		t.Fatalf("Second Update failed (expected success with fix): %v", err)
 	}
 }
