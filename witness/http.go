@@ -54,9 +54,6 @@ func (a *HTTPHandler) AddCheckpoint(w http.ResponseWriter, r *http.Request) {
 	sc, body, contentType, err := a.handleUpdate(r.Context(), oldSize, cp, proof)
 	if err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, ErrPushback) {
-			status = http.StatusTooManyRequests
-		}
 		w.WriteHeader(status)
 		return
 	}
@@ -90,6 +87,8 @@ func (a *HTTPHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []
 			return http.StatusUnprocessableEntity, nil, "", nil
 		case errors.Is(updateErr, ErrRootMismatch):
 			return http.StatusConflict, nil, "", nil
+		case errors.Is(updateErr, ErrPushback):
+			return http.StatusTooManyRequests, nil, "", nil
 		default:
 			slog.ErrorContext(ctx, "Unknown error", slog.Any("error", updateErr))
 			return http.StatusInternalServerError, nil, "", updateErr
