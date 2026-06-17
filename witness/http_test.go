@@ -129,7 +129,6 @@ func TestHandler(t *testing.T) {
 			witness:    &testWitness{updateErr: ErrPushback},
 			wantStatus: http.StatusTooManyRequests,
 		},
-
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			a := HTTPHandler{
