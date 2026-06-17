@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"sync"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
@@ -31,20 +32,52 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
+// Opts represents options for the sqlite persistence layer.
+type Opts struct {
+	// Path is the path the location of the underlying SQLite database file.
+	Path string
+	// MaxOpenConns sets to maximum number of open connections to the database.
+	MaxOpenConns int
+}
+
 // New returns a persistence object that is backed by the provided database.
-func New(db *sql.DB) *Persistence {
+func New(opts Opts) *Persistence {
 	return &Persistence{
-		db: db,
+		opts: opts,
+		dbInit: &sync.Mutex{},
 	}
 }
 
 // Persistence is an implementation of witness.Persistence which knows how to use an sqlite
 // database to safely store witness state.
 type Persistence struct {
+	opts Opts
+
+	dbInit *sync.Mutex
 	db *sql.DB
 }
 
 func (p *Persistence) Init(ctx context.Context) error {
+	p.dbInit.Lock()
+	defer p.dbInit.Unlock()
+
+	if p.db != nil {
+		return nil
+	}
+
+	// Open database with some flags:
+	// - use WAL mode as this allows for read concurrency while writes are happening.
+	// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
+	// - set synchronous to FULL to ensure durability of commitments
+	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", p.opts.Path))
+	if err != nil {
+		return fmt.Errorf("failed to connect to DB: %v", err)
+	}
+	if p.opts.MaxOpenConns != 0 {
+		db.SetMaxOpenConns(p.opts.MaxOpenConns)
+	}
+	p.db = db
+
 	for _, ddl := range []string{
 		"CREATE TABLE IF NOT EXISTS chkpts (logID BLOB PRIMARY KEY, chkpt BLOB)",
 		"CREATE TABLE IF NOT EXISTS logs (logID BLOB PRIMARY KEY, origin STRING NOT NULL, vkey STRING NOT NULL, contact STRING, qpd FLOAT64, disabled BOOL)",

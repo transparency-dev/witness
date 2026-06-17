@@ -16,7 +16,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"testing"
 	"time"
@@ -27,34 +26,26 @@ import (
 	"github.com/transparency-dev/witness/witness"
 	ptest "github.com/transparency-dev/witness/persistence/testonly"
 	"golang.org/x/mod/sumdb/note"
-	_ "modernc.org/sqlite" // Load drivers for sqlite3
 )
 
 func TestUpdate(t *testing.T) {
 	ptest.TestUpdate(t, func() (*Persistence, func() error) {
-		db, close := mustCreateDB(t)
-		return New(db), close
+		p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
+		return p, func() error { 
+			if p.db != nil {
+				return p.db.Close()
+			}
+			return nil
+		}
 	})
 }
 
-func mustCreateDB(t *testing.T) (*sql.DB, func() error) {
-	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open temporary DB: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	return db, db.Close
-}
-
 func TestLogConfig(t *testing.T) {
-	db, cleanup := mustCreateDB(t)
-	defer func() { _ = cleanup() }()
-
-	p := New(db)
+	p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
+	defer func() { _ = p.db.Close() }()
 
 	vkey := "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
 	logs := []omniwitness.Log{
@@ -118,19 +109,17 @@ func TestLogConfig(t *testing.T) {
 }
 
 func TestDisabledLogs(t *testing.T) {
-	db, cleanup := mustCreateDB(t)
-	defer func() { _ = cleanup() }()
-
-	p := New(db)
+	p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
+	defer func() { _ = p.db.Close() }()
 
 	vkey := "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
 
 	// Test disabled logs
 	// Manually insert a disabled log
-	if _, err := db.ExecContext(t.Context(), "INSERT INTO logs (logID, origin, vkey, contact, disabled) VALUES (?, ?, ?, ?, ?)", log.ID("log3"), "log3", vkey, "", true); err != nil {
+	if _, err := p.db.ExecContext(t.Context(), "INSERT INTO logs (logID, origin, vkey, contact, disabled) VALUES (?, ?, ?, ?, ?)", log.ID("log3"), "log3", vkey, "", true); err != nil {
 		t.Fatalf("failed to insert disabled log: %v", err)
 	}
 
@@ -156,13 +145,11 @@ func TestDisabledLogs(t *testing.T) {
 }
 
 func TestDeadlock(t *testing.T) {
-	db, cleanup := mustCreateDB(t) // MaxOpenConns(1)
-	defer func() { _ = cleanup() }()
-
-	p := New(db)
+	p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
+	defer func() { _ = p.db.Close() }()
 
 	mPK := "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT"
 	wSK := "PRIVATE+KEY+witness+f13a86db+AaLa/dfyBhyo/m0Z7WCi98ENVZWtrP8pxgRNrx7tIWiA"

@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/x509"
-	"database/sql"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -31,16 +30,14 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	f_note "github.com/transparency-dev/formats/note"
+	"github.com/transparency-dev/witness/omniwitness"
 	"github.com/transparency-dev/witness/persistence/inmemory"
 	psql "github.com/transparency-dev/witness/persistence/sqlite"
-	"github.com/transparency-dev/witness/omniwitness"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
-
-	_ "modernc.org/sqlite" // Load drivers for sqlite3
 )
 
 func init() {
@@ -141,16 +138,10 @@ func main() {
 	if len(*dbFile) > 0 {
 		// Start up local database.
 		klog.Infof("Connecting to local DB at %q", *dbFile)
-		// Open database with some flags:
-		// - use WAL mode as this allows for read concurrency while writes are happening.
-		// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
-		// - set synchronous to FULL to ensure durability of commitments
-		db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", *dbFile))
-		if err != nil {
-			klog.Exitf("Failed to connect to DB: %v", err)
-		}
-		db.SetMaxOpenConns(*dbMaxConns)
-		p = psql.New(db)
+		p = psql.New(psql.Opts{
+			Path:         *dbFile,
+			MaxOpenConns: *dbMaxConns,
+		})
 		if err := p.Init(ctx); err != nil {
 			klog.Exitf("Failed to init SQL persistence: %v", err)
 		}
