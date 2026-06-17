@@ -138,13 +138,22 @@ func main() {
 	if len(*dbFile) > 0 {
 		// Start up local database.
 		klog.Infof("Connecting to local DB at %q", *dbFile)
-		p = psql.New(psql.Opts{
+		ps, shutdown, err := psql.New(ctx, psql.Opts{
 			Path:         *dbFile,
 			MaxOpenConns: *dbMaxConns,
 		})
-		if err := p.Init(ctx); err != nil {
+		if err != nil {
+			klog.Exitf("Failed to construct SQL persistence: %v", err)
+		}
+		if err := ps.Init(ctx); err != nil {
 			klog.Exitf("Failed to init SQL persistence: %v", err)
 		}
+		p = ps
+		defer func() {
+			if err := shutdown(); err != nil {
+				klog.Errorf("Persistence shutdown failed: %v", err)
+			}
+		}()
 	} else {
 		klog.Warning("No persistence configured for witness. Reboots will lose guarantees of witness correctness. Use --db_file for production deployments.")
 		p = inmemory.New()

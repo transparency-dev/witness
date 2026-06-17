@@ -20,7 +20,6 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
-	"sync"
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
@@ -41,43 +40,40 @@ type Opts struct {
 }
 
 // New returns a persistence object that is backed by the provided database.
-func New(opts Opts) *Persistence {
-	return &Persistence{
-		opts: opts,
-		dbInit: &sync.Mutex{},
+//
+// The returned shutdown func should be called once the persistence instance is no longer required.
+func New(ctx context.Context, opts Opts) (*Persistence, func() error, error) {
+	// Open database with some flags:
+	// - use WAL mode as this allows for read concurrency while writes are happening.
+	// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
+	// - set synchronous to FULL to ensure durability of commitments
+	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", opts.Path))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to connect to DB: %v", err)
 	}
+	if opts.MaxOpenConns != 0 {
+		db.SetMaxOpenConns(opts.MaxOpenConns)
+	}
+	r := &Persistence{
+		db: db,
+	}
+	if err := r.createTablesIfNotExist(ctx); err != nil {
+		return nil, nil, fmt.Errorf("failed to create tables: %v", err)
+	}
+	return r, db.Close, nil
 }
 
 // Persistence is an implementation of witness.Persistence which knows how to use an sqlite
 // database to safely store witness state.
 type Persistence struct {
-	opts Opts
-
-	dbInit *sync.Mutex
 	db *sql.DB
 }
 
 func (p *Persistence) Init(ctx context.Context) error {
-	p.dbInit.Lock()
-	defer p.dbInit.Unlock()
+	return nil
+}
 
-	if p.db != nil {
-		return nil
-	}
-
-	// Open database with some flags:
-	// - use WAL mode as this allows for read concurrency while writes are happening.
-	// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
-	// - set synchronous to FULL to ensure durability of commitments
-	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", p.opts.Path))
-	if err != nil {
-		return fmt.Errorf("failed to connect to DB: %v", err)
-	}
-	if p.opts.MaxOpenConns != 0 {
-		db.SetMaxOpenConns(p.opts.MaxOpenConns)
-	}
-	p.db = db
-
+func (p *Persistence) createTablesIfNotExist(ctx context.Context) error {
 	for _, ddl := range []string{
 		"CREATE TABLE IF NOT EXISTS chkpts (logID BLOB PRIMARY KEY, chkpt BLOB)",
 		"CREATE TABLE IF NOT EXISTS logs (logID BLOB PRIMARY KEY, origin STRING NOT NULL, vkey STRING NOT NULL, contact STRING, qpd FLOAT64, disabled BOOL)",

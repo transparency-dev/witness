@@ -29,23 +29,25 @@ import (
 )
 
 func TestUpdate(t *testing.T) {
+	t.Helper()
 	ptest.TestUpdate(t, func() (*Persistence, func() error) {
-		p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
-		return p, func() error { 
-			if p.db != nil {
-				return p.db.Close()
-			}
-			return nil
+		p, shutdown, err := New(t.Context(), Opts{Path: ":memory:", MaxOpenConns: 1})
+		if err != nil {
+			t.Fatalf("Failed to create new persistence instance: %v", err)
 		}
+		return p, shutdown
 	})
 }
 
 func TestLogConfig(t *testing.T) {
-	p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
+	p, shutdown, err := New(t.Context(), Opts{Path: ":memory:", MaxOpenConns: 1})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
-	defer func() { _ = p.db.Close() }()
+	defer func() { _ = shutdown() }()
 
 	vkey := "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
 	logs := []omniwitness.Log{
@@ -109,11 +111,14 @@ func TestLogConfig(t *testing.T) {
 }
 
 func TestDisabledLogs(t *testing.T) {
-	p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
+	p, shutdown, err := New(t.Context(), Opts{Path: ":memory:", MaxOpenConns: 1})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
-	defer func() { _ = p.db.Close() }()
+	defer func() { _ = shutdown() }()
 
 	vkey := "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
 
@@ -145,11 +150,14 @@ func TestDisabledLogs(t *testing.T) {
 }
 
 func TestDeadlock(t *testing.T) {
-	p := New(Opts{Path: ":memory:", MaxOpenConns: 1})
+	p, shutdown, err := New(t.Context(), Opts{Path: ":memory:", MaxOpenConns: 1})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	if err := p.Init(t.Context()); err != nil {
 		t.Fatalf("Init(): %v", err)
 	}
-	defer func() { _ = p.db.Close() }()
+	defer func() { _ = shutdown() }()
 
 	mPK := "monkeys+db4d9f7e+AULaJMvTtDLHPUcUrjdDad9vDlh/PTfC2VV60JUtCfWT"
 	wSK := "PRIVATE+KEY+witness+f13a86db+AaLa/dfyBhyo/m0Z7WCi98ENVZWtrP8pxgRNrx7tIWiA"
