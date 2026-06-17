@@ -144,7 +144,8 @@ func main() {
 		// Open database with some flags:
 		// - use WAL mode as this allows for read concurrency while writes are happening.
 		// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
-		db, err := sql.Open("sqlite", fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=1000", *dbFile))
+		// - set synchronous to FULL to ensure durability of commitments
+		db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", *dbFile))
 		if err != nil {
 			klog.Exitf("Failed to connect to DB: %v", err)
 		}
