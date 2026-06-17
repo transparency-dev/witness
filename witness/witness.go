@@ -177,6 +177,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		}
 
 		// The persistence layer is within the TCB so we assume that whatever we read is a valid log checkpoint.
+		// Avoiding revalidating this gives us more flexibility to support log key rotation.
 		prevOrigin, prevSize, prevHash, err := checkpointUnsafe(prevRaw)
 		if err != nil {
 			retSize, retSigs = 0, nil
@@ -333,7 +334,7 @@ func checkpointUnsafe(rawCp []byte) (string, uint64, []byte, error) {
 	hashStr := string(parts[2])
 	size, err := strconv.ParseUint(sizeStr, 10, 64)
 	if err != nil {
-		return "", 0, nil, fmt.Errorf("failed to turn checkpoint size of %q into uint64: %v", sizeStr, err)
+		return "", 0, nil, fmt.Errorf("failed to parse checkpoint size of %q into uint64: %v", sizeStr, err)
 	}
 	hash, err := base64.StdEncoding.DecodeString(hashStr)
 	if err != nil {
