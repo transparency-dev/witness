@@ -124,6 +124,10 @@ func TestHandler(t *testing.T) {
 			name:       "ErrRootMismatch",
 			witness:    &testWitness{updateErr: ErrRootMismatch},
 			wantStatus: http.StatusConflict,
+		}, {
+			name:       "ErrPushback",
+			witness:    &testWitness{updateErr: ErrPushback},
+			wantStatus: http.StatusTooManyRequests,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
