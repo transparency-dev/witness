@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -112,24 +113,6 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 	}, nil
 }
 
-// verifyCheckpoint verifies the checkpoint under the appropriate key for the origin and returns
-// the parsed checkpoint and the note itself.
-func (w *Witness) verifyCheckpoint(ctx context.Context, chkptRaw []byte) (*log.Checkpoint, *note.Note, string, error) {
-	origin, _, found := strings.Cut(string(chkptRaw), "\n")
-	if !found {
-		return nil, nil, "", errors.New("invalid checkpoint")
-	}
-	v, ok, err := w.VerifierForLog(ctx, origin)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	if !ok {
-		return nil, nil, "", ErrUnknownLog
-	}
-	cp, _, n, err := log.ParseCheckpoint(chkptRaw, origin, v)
-	return cp, n, origin, err
-}
-
 // GetCheckpoint gets a checkpoint for a given log, which is consistent with all
 // other checkpoints for the same log signed by this witness.
 //
@@ -153,7 +136,21 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	//
 	// SPEC: The witness MUST verify the checkpoint signature against the public key(s) it trusts for the
 	//       checkpoint origin, and it MUST ignore signatures from unknown keys.
-	next, nextNote, origin, err := w.verifyCheckpoint(ctx, nextRaw)
+	next, nextNote, origin, err := func() (*log.Checkpoint, *note.Note, string, error) {
+		origin, _, found := strings.Cut(string(nextRaw), "\n")
+		if !found {
+			return nil, nil, "", errors.New("invalid checkpoint")
+		}
+		v, ok, err := w.VerifierForLog(ctx, origin)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		if !ok {
+			return nil, nil, "", ErrUnknownLog
+		}
+		cp, _, n, err := log.ParseCheckpoint(nextRaw, origin, v)
+		return cp, n, origin, err
+	}()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -179,33 +176,38 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 			return signed, nil
 		}
 
-		prev, _, _, err := w.verifyCheckpoint(ctx, prevRaw)
+		// The persistence layer is within the TCB so we assume that whatever we read is a valid log checkpoint.
+		prevOrigin, prevSize, prevHash, err := checkpointUnsafe(prevRaw)
 		if err != nil {
 			retSize, retSigs = 0, nil
 			return nil, fmt.Errorf("couldn't parse stored checkpoint: %v", err)
 		}
+		if prevOrigin != origin {
+			retSize, retSigs = 0, nil
+			return nil, fmt.Errorf("origin didn't match during update. prev=%q, next=%q", prevOrigin, origin)
+		}
 
 		// SPEC: The old size MUST be equal to or lower than the (submitted) checkpoint size.
 		if oldSize > next.Size {
-			retSize, retSigs = prev.Size, nil
+			retSize, retSigs = prevSize, nil
 			return nil, ErrOldSizeInvalid
 		}
 		// SPEC: The witness MUST check that the old size matches the size of the latest checkpoint it cosigned
 		//       for the checkpoint's origin (or zero if it never cosigned a checkpoint for that origin)
-		if oldSize != prev.Size {
-			retSize, retSigs = prev.Size, nil
-			return nil, fmt.Errorf("%w (%d != %d)", ErrCheckpointStale, oldSize, prev.Size)
+		if oldSize != prevSize {
+			retSize, retSigs = prevSize, nil
+			return nil, fmt.Errorf("%w (%d != %d)", ErrCheckpointStale, oldSize, prevSize)
 		}
 		// SPEC: The old size MUST be equal to or lower than the checkpoint size.
-		if next.Size < prev.Size {
-			retSize, retSigs = prev.Size, nil
+		if next.Size < prevSize {
+			retSize, retSigs = prevSize, nil
 			return nil, ErrOldSizeInvalid
 		}
 		// SPEC:  If the old size matches the checkpoint size, the witness MUST check that the root hashes are
 		//        also identical.
-		if next.Size == prev.Size {
-			if !bytes.Equal(next.Hash, prev.Hash) {
-				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", origin, prev, next)
+		if next.Size == prevSize {
+			if !bytes.Equal(next.Hash, prevHash) {
+				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", origin, prevRaw, next)
 				counterInconsistentCheckpoints.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 
 				retSize, retSigs = 0, nil
@@ -216,7 +218,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		}
 		// Checkpoints of size 0 are really placeholders and consistency proofs can't be performed.
 		// If we initialized on a tree size of 0, then we simply ratchet forward and effectively TOFU the new checkpoint.
-		if prev.Size == 0 {
+		if prevSize == 0 {
 			// SPEC:  The proof MUST be empty if the old size is zero.
 			if len(cProof) > 0 {
 				retSize, retSigs = 0, nil
@@ -233,7 +235,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 
 		// The only remaining option is next.Size > prev.Size. This might be
 		// valid so we verify the consistency proofs.
-		if err := proof.VerifyConsistency(rfc6962.DefaultHasher, prev.Size, next.Size, cProof, prev.Hash, next.Hash); err != nil {
+		if err := proof.VerifyConsistency(rfc6962.DefaultHasher, prevSize, next.Size, cProof, prevHash, next.Hash); err != nil {
 			// Complain if the checkpoints aren't consistent.
 			counterInvalidConsistency.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 			return nil, ErrInvalidProof
@@ -316,4 +318,26 @@ func (w *Witness) signChkpt(n *note.Note) ([]byte, []byte, error) {
 // It must be non-empty and not have any Unicode spaces or pluses.
 func isValidSignerName(name string) bool {
 	return name != "" && utf8.ValidString(name) && strings.IndexFunc(name, unicode.IsSpace) < 0 && !strings.Contains(name, "+")
+}
+
+// checkpointUnsafe parses a checkpoint without performing any signature verification.
+// This is intended to be as fast as possible, but sacrifices safety because it skips verifying
+// the note signature.
+func checkpointUnsafe(rawCp []byte) (string, uint64, []byte, error) {
+	parts := bytes.SplitN(rawCp, []byte{'\n'}, 4)
+	if want, got := 4, len(parts); want != got {
+		return "", 0, nil, fmt.Errorf("invalid checkpoint: %q", rawCp)
+	}
+	origin := string(parts[0])
+	sizeStr := string(parts[1])
+	hashStr := string(parts[2])
+	size, err := strconv.ParseUint(sizeStr, 10, 64)
+	if err != nil {
+		return "", 0, nil, fmt.Errorf("failed to turn checkpoint size of %q into uint64: %v", sizeStr, err)
+	}
+	hash, err := base64.StdEncoding.DecodeString(hashStr)
+	if err != nil {
+		return "", 0, nil, fmt.Errorf("failed to decode hash: %v", err)
+	}
+	return origin, size, hash, nil
 }
