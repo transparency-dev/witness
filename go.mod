@@ -9,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/mux v1.8.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/transparency-dev/formats v0.1.1-0.20260505144013-1e3a4ad78464
+	github.com/transparency-dev/formats v0.1.2-0.20260629100010-fa283eb7462a
 	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
 	github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10
 	github.com/transparency-dev/tessera v1.0.3-0.20260303172654-b64a6fdf82f4
@@ -17,9 +17,9 @@ require (
 	go.opentelemetry.io/otel/exporters/prometheus v0.66.0
 	go.opentelemetry.io/otel/metric v1.44.0
 	go.opentelemetry.io/otel/sdk/metric v1.44.0
-	golang.org/x/mod v0.36.0
-	golang.org/x/net v0.54.0
-	golang.org/x/sync v0.20.0
+	golang.org/x/mod v0.37.0
+	golang.org/x/net v0.55.0
+	golang.org/x/sync v0.21.0
 	golang.org/x/time v0.15.0
 	google.golang.org/api v0.279.0
 	google.golang.org/grpc v1.81.1
@@ -72,10 +72,10 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
