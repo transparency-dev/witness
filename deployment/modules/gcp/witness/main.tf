@@ -57,18 +57,21 @@ resource "google_project_service" "cloudrun_api" {
 }
 
 data "google_secret_manager_secret" "witness_secret" {
-  secret_id = var.witness_secret_name
+  for_each  = toset(var.witness_secret_names)
+  secret_id = each.value
 }
 
 data "google_secret_manager_secret_version" "witness_secret_data" {
-  secret            = data.google_secret_manager_secret.witness_secret.id
+  for_each          = toset(var.witness_secret_names)
+  secret            = data.google_secret_manager_secret.witness_secret[each.value].id
   version           = 1
   fetch_secret_data = false
 }
 
 # Update service accounts to allow secret access
 resource "google_secret_manager_secret_iam_member" "secretaccess_compute_witness" {
-  secret_id = data.google_secret_manager_secret.witness_secret.id
+  for_each  = toset(var.witness_secret_names)
+  secret_id = data.google_secret_manager_secret.witness_secret[each.value].id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com" # Project's compute service account
 }
@@ -114,7 +117,7 @@ resource "google_artifact_registry_repository" "witness" {
   format        = "DOCKER"
   mode          = "REMOTE_REPOSITORY"
   remote_repository_config {
-    description = "Pull-through cache of witness repository"
+    description                 = "Pull-through cache of witness repository"
     disable_upstream_validation = true
     docker_repository {
       custom_repository {
@@ -158,7 +161,8 @@ resource "google_cloud_run_v2_service" "default" {
     service_account = var.witness_service_account
 
     max_instance_request_concurrency = 1000
-    timeout = "1s"
+    timeout                          = "1s"
+
 
     containers {
       # Access the witness docker image via our "pull-through" cache artifact registry.
@@ -168,9 +172,9 @@ resource "google_cloud_run_v2_service" "default" {
         "--logtostderr",
         "--v=1",
         "--listen=:8080",
-        "--spanner=${local.spanner_db_full}",
-        "--signer_private_key_secret_name=${data.google_secret_manager_secret_version.witness_secret_data.name}"
+        "--spanner=${local.spanner_db_full}"
         ],
+        formatlist("--signer_private_key_secret_name=%s", values(data.google_secret_manager_secret_version.witness_secret_data)[*].name),
         local.public_witness_config_args,
       var.extra_args)
       ports {

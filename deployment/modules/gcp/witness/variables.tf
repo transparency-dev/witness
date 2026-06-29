@@ -72,7 +72,7 @@ variable "witness_service_account" {
   type        = string
 }
 
-variable "witness_secret_name" {
-  description = "Secret Manager secret name containing the note-formatted key to use for signing checkpoints."
-  type        = string
+variable "witness_secret_names" {
+  description = "Secret Manager secret names containing the note-formatted key to use for signing checkpoints."
+  type        = list(string)
 }
