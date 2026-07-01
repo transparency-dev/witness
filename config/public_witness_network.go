@@ -50,6 +50,9 @@ func FetchPublicConfig(ctx context.Context, opts PublicFetchOpts) ([]Log, error)
 	if err != nil {
 		return nil, fmt.Errorf("http.Do: %w", err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("got status %q", resp.Status)
+	}
 	defer func() {
 		_, _ = io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
@@ -68,7 +71,11 @@ func ParsePublicWitnessConfig(r io.Reader) ([]Log, error) {
 	scanner := bufio.NewScanner(r)
 	for l := range filteringScan(scanner) {
 		bits := strings.SplitN(l, " ", 2)
-		switch keyword := strings.ToLower(strings.TrimSpace(bits[0])); keyword {
+		keyword := strings.ToLower(strings.TrimSpace(bits[0]))
+		if !foundHeader && keyword != "logs/v0" {
+				return nil, fmt.Errorf("invalid config, 'logs/v0' header should be the first non-comment line")
+		}
+		switch keyword {
 		case "logs/v0":
 			if foundHeader {
 				return nil, fmt.Errorf("invalid config, multiple 'logs/v0' headers found")
@@ -106,18 +113,18 @@ func ParsePublicWitnessConfig(r io.Reader) ([]Log, error) {
 			}
 			candidate.Origin = strings.TrimSpace(bits[1])
 		case "qpd":
-			// qpd is the number of queries the log is permitted to send to the witness per dat.
+			// qpd is the number of queries the log is permitted to send to the witness per day.
 			// The value is interpreted as a float64.
 			if candidate == nil {
 				return nil, fmt.Errorf("invalid config")
 			}
 			if len(bits) != 2 {
-				return nil, fmt.Errorf("invalid qps line %q", l)
+				return nil, fmt.Errorf("invalid qpd line %q", l)
 			}
 			v := strings.TrimSpace(bits[1])
 			qpd, err := strconv.ParseFloat(v, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid qps value %q: %v", v, err)
+				return nil, fmt.Errorf("invalid qpd value %q: %v", v, err)
 			}
 			candidate.QPD = qpd
 		case "contact":
