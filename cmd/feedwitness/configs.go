@@ -22,7 +22,7 @@ import (
 	"maps"
 
 	logfmt "github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/config"
 	"github.com/transparency-dev/formats/note"
 	"gopkg.in/yaml.v3"
 )
@@ -56,7 +56,7 @@ func newStaticFeederConfig(yamlCfg []byte) (*staticFeederConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
 		}
-		logCfg := omniwitness.Log{
+		logCfg := config.Log{
 			VKey:     log.PublicKey,
 			Verifier: logV,
 			Origin:   log.Origin,

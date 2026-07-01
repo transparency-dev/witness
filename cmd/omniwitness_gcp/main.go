@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/transparency-dev/witness/config"
 	"github.com/transparency-dev/witness/omniwitness"
 	"github.com/transparency-dev/witness/persistence/spanner"
 	"go.opentelemetry.io/otel"
@@ -131,7 +132,7 @@ func mustUpdateLogs(ctx context.Context, y []byte, p *spanner.Persistence) {
 	if err != nil {
 		klog.Exitf("Failed to parse YAML logs config: %v", err)
 	}
-	logs := []omniwitness.Log{}
+	logs := []config.Log{}
 	for log, err := range l.Logs(ctx) {
 		if err != nil {
 			klog.Exitf("Error iterating over logs: %v", err)

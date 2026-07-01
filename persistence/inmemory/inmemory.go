@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/config"
 )
 
 // New returns a persistence object that lives only in memory.
@@ -45,7 +45,7 @@ func (p *Persistence) Init(_ context.Context) error {
 	return nil
 }
 
-func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
+func (p *Persistence) AddLogs(ctx context.Context, lc []config.Log) error {
 	for _, l := range lc {
 		logID := log.ID(l.Origin)
 		p.logs.Store(logID, l)
@@ -53,21 +53,21 @@ func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
 	return nil
 }
 
-func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
-	return func(yield func(omniwitness.Log, error) bool) {
+func (p *Persistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
+	return func(yield func(config.Log, error) bool) {
 		p.logs.Range(func(key, value any) bool {
-			return yield(value.(omniwitness.Log), nil)
+			return yield(value.(config.Log), nil)
 		})
 	}
 }
 
-func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
+func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
 	logID := log.ID(origin)
 	val, ok := p.logs.Load(logID)
 	if !ok {
-		return omniwitness.Log{}, false, nil
+		return config.Log{}, false, nil
 	}
-	return val.(omniwitness.Log), true, nil
+	return val.(config.Log), true, nil
 }
 
 func (p *Persistence) Latest(_ context.Context, origin string) ([]byte, error) {
