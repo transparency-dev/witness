@@ -22,7 +22,7 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/config"
 	"github.com/transparency-dev/witness/witness"
 	ptest "github.com/transparency-dev/witness/persistence/testonly"
 	"golang.org/x/mod/sumdb/note"
@@ -50,7 +50,7 @@ func TestLogConfig(t *testing.T) {
 	defer func() { _ = shutdown() }()
 
 	vkey := "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
-	logs := []omniwitness.Log{
+	logs := []config.Log{
 		{Origin: "log1", VKey: vkey},
 		{Origin: "log2", VKey: vkey},
 	}
@@ -62,7 +62,7 @@ func TestLogConfig(t *testing.T) {
 
 	// Test Logs (list)
 	sc := p.Logs(t.Context())
-	gotLogs := make(map[string]omniwitness.Log)
+	gotLogs := make(map[string]config.Log)
 	for l, err := range sc {
 		if err != nil {
 			t.Fatalf("Logs() error: %v", err)
@@ -166,7 +166,7 @@ func TestDeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewVerifier: %v", err)
 	}
-	err = p.AddLogs(t.Context(), []omniwitness.Log{
+	err = p.AddLogs(t.Context(), []config.Log{
 		{Origin: "monkeys", VKey: mPK, Verifier: logV},
 	})
 	if err != nil {

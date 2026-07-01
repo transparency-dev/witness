@@ -28,7 +28,7 @@ import (
 	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	logfmt "github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/config"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -102,7 +102,7 @@ func (p *Persistence) createTablesIfNotExist(ctx context.Context) error {
 	return nil
 }
 
-func (p *Persistence) AddLogs(ctx context.Context, lc []omniwitness.Log) error {
+func (p *Persistence) AddLogs(ctx context.Context, lc []config.Log) error {
 	m := []*spanner.MutationGroup{}
 	for _, l := range lc {
 		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
@@ -143,8 +143,8 @@ func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGro
 	return errors.Join(errs...)
 }
 
-func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error] {
-	return func(yield func(omniwitness.Log, error) bool) {
+func (p *Persistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
+	return func(yield func(config.Log, error) bool) {
 		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "contact", "disabled"})
 		for {
 			row, err := r.Next()
@@ -152,15 +152,15 @@ func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error
 				if err == iterator.Done {
 					return
 				}
-				if !yield(omniwitness.Log{}, fmt.Errorf("failed to read row: %v", err)) {
+				if !yield(config.Log{}, fmt.Errorf("failed to read row: %v", err)) {
 					return
 				}
 			}
-			c := omniwitness.Log{}
+			c := config.Log{}
 			var disabled spanner.NullBool
 			var contact spanner.NullString
 			if err := row.Columns(&c.Origin, &c.VKey, &contact, &disabled); err != nil {
-				if !yield(omniwitness.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
+				if !yield(config.Log{}, fmt.Errorf("failed to read columns: %v", err)) {
 					return
 				}
 			}
@@ -171,7 +171,7 @@ func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error
 			c.Contact = contact.StringVal
 			c.Verifier, err = note.NewVerifier(c.VKey)
 			if err != nil {
-				if !yield(omniwitness.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
+				if !yield(config.Log{}, fmt.Errorf("failed to create verifier: %v", err)) {
 					return
 				}
 			}
@@ -182,20 +182,20 @@ func (p *Persistence) Logs(ctx context.Context) iter.Seq2[omniwitness.Log, error
 	}
 }
 
-func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, bool, error) {
+func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
 	logID := logfmt.ID(origin)
 	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "contact", "disabled"})
 	if err != nil {
 		if errors.Is(err, spanner.ErrRowNotFound) {
-			return omniwitness.Log{}, false, nil
+			return config.Log{}, false, nil
 		}
-		return omniwitness.Log{}, false, fmt.Errorf("failed to read row: %v", err)
+		return config.Log{}, false, fmt.Errorf("failed to read row: %v", err)
 	}
-	c := omniwitness.Log{}
+	c := config.Log{}
 	var disabled spanner.NullBool
 	var contact spanner.NullString
 	if err := row.Columns(&c.Origin, &c.VKey, &contact, &disabled); err != nil {
-		return omniwitness.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
+		return config.Log{}, false, fmt.Errorf("failed to read columns: %v", err)
 	}
 	if disabled.Bool {
 		klog.V(1).Infof("Ignoring disabled log %q", c.Origin)
@@ -204,7 +204,7 @@ func (p *Persistence) Log(ctx context.Context, origin string) (omniwitness.Log, 
 	c.Contact = contact.StringVal
 	c.Verifier, err = note.NewVerifier(c.VKey)
 	if err != nil {
-		return omniwitness.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
+		return config.Log{}, false, fmt.Errorf("failed to create verifier: %v", err)
 	}
 	return c, true, nil
 }

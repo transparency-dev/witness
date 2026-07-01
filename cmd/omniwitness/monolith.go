@@ -30,6 +30,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	f_note "github.com/transparency-dev/formats/note"
+	"github.com/transparency-dev/witness/config"
 	"github.com/transparency-dev/witness/omniwitness"
 	"github.com/transparency-dev/witness/persistence/inmemory"
 	psql "github.com/transparency-dev/witness/persistence/sqlite"
@@ -160,7 +161,7 @@ func main() {
 	}
 	// Merge embedded configs into persisted configs
 	{
-		lc := []omniwitness.Log{}
+		lc := []config.Log{}
 		for c, err := range l.Logs(ctx) {
 			if err != nil {
 				klog.Exitf("Failed to read embedded log config: %v", err)

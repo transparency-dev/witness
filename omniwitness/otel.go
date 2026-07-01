@@ -22,9 +22,9 @@ import (
 const name = "github.com/transparency-dev/witness/omniwitness"
 
 var (
-	meter  = otel.Meter(name)
+	meter = otel.Meter(name)
 )
 
 var (
-	logKey           = attribute.Key("witness.log_origin")
+	logKey = attribute.Key("witness.log_origin")
 )

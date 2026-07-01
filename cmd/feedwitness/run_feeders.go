@@ -32,7 +32,7 @@ import (
 	"github.com/transparency-dev/witness/internal/feeder/sumdb"
 	"github.com/transparency-dev/witness/internal/feeder/tiles"
 	"github.com/transparency-dev/witness/witness"
-	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/config"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
@@ -58,7 +58,7 @@ func init() {
 }
 
 type feederConfig struct {
-	Log    omniwitness.Log
+	Log    config.Log
 	Feeder logFeeder
 }
 

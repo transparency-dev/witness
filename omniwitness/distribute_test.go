@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/transparency-dev/witness/config"
 	f_log "github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
 	"golang.org/x/mod/sumdb/note"
@@ -45,7 +46,7 @@ func TestDistributeOnce(t *testing.T) {
 	defer ts.Close()
 
 	lc := &singleLogConfig{
-		lc: Log{
+		lc: config.Log{
 			Origin:   "Log Checkpoint v0",
 			Verifier: mustVerifier(t, lPK),
 			URL:      "http://example.com/log62",
@@ -128,11 +129,11 @@ func mustVerifier(t *testing.T, v string) note.Verifier {
 }
 
 type singleLogConfig struct {
-	lc Log
+	lc config.Log
 }
 
-func (l *singleLogConfig) Logs(_ context.Context) iter.Seq2[Log, error] {
-	return func(yield func(Log, error) bool) {
+func (l *singleLogConfig) Logs(_ context.Context) iter.Seq2[config.Log, error] {
+	return func(yield func(config.Log, error) bool) {
 		yield(l.lc, nil)
 	}
 }

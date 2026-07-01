@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/transparency-dev/witness/config"
 	"github.com/transparency-dev/witness/witness"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
@@ -40,26 +41,13 @@ import (
 // in order to persist its view of log state
 type Persistence = witness.LogStatePersistence
 
+//go:fix inline
+type Log = config.Log
+
 const (
 	defaultDistributeInterval = 1 * time.Minute
 	defaultProvisionInterval  = 10 * time.Minute
 )
-
-// Log describes a verifiable log.
-type Log struct {
-	// VKey is the serialised note-compliant vkey for the log.
-	VKey string
-	// Verifier is a signature verifier for log checkpoints.
-	Verifier note.Verifier
-	// Origin is the expected first line of checkpoints from the log.
-	Origin string
-	// QPD is the expected number of witness requests per day from the log.
-	QPD float64
-	// Contact is an arbitrary string with contact information for the log operator.
-	Contact string
-	// URL is the URL of the root of the log.
-	URL string
-}
 
 // OperatorConfig allows the bare minimum operator-specific configuration.
 // This should only contain configuration details that are custom per-operator.
@@ -107,12 +95,12 @@ type OperatorConfig struct {
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
 type LogConfig interface {
 	// Logs returns an iterator of all known logs.
-	Logs(ctx context.Context) iter.Seq2[Log, error]
+	Logs(ctx context.Context) iter.Seq2[config.Log, error]
 	// Log returns the configuration info of the log with the specified log ID, if it exists.
-	Log(ctx context.Context, id string) (Log, bool, error)
+	Log(ctx context.Context, id string) (config.Log, bool, error)
 	// AddLogs should attempt to merge the provided logs into the current config.
 	// The merge must be additive only with respect to the logs.
-	AddLogs(ctx context.Context, cfg []Log) error
+	AddLogs(ctx context.Context, cfg []config.Log) error
 }
 
 // Main runs the omniwitness, with the witness listening using the listener, and all
@@ -235,10 +223,9 @@ func runRestDistributors(ctx context.Context, g *errgroup.Group, httpClient *htt
 func rateLimit(limiter *rate.Limiter, delegate func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if limiter != nil && !limiter.Allow() {
-            http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
-            return
-        }
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			return
+		}
 		delegate(w, r)
 	}
 }
-

@@ -24,6 +24,7 @@ import (
 	"net/url"
 
 	f_log "github.com/transparency-dev/formats/log"
+	"github.com/transparency-dev/witness/config"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/time/rate"
@@ -62,7 +63,7 @@ func init() {
 
 // logsFn should return the _current_ set of logs whose checkpoints should be distributed.
 // This may be called repeatedly by the implementation in order to ensure that changes to the underlying config are reflected in the distribution operation.
-type logsFn func(context.Context) iter.Seq2[Log, error]
+type logsFn func(context.Context) iter.Seq2[config.Log, error]
 
 // newDistributor creates a new Distributor from the given configuration.
 func newDistributor(baseURL string, client *http.Client, logs logsFn, witSigV note.Verifier, getLatest getLatestCheckpointFn, rateLimit float64) (*distributor, error) {
@@ -110,7 +111,7 @@ func (d *distributor) DistributeOnce(ctx context.Context) error {
 	return nil
 }
 
-func (d *distributor) distributeForLog(ctx context.Context, l Log) error {
+func (d *distributor) distributeForLog(ctx context.Context, l config.Log) error {
 	logID := f_log.ID(l.Origin)
 	counterDistRestAttempt.Add(ctx, 1, metric.WithAttributes(logKey.String(l.Origin)))
 
