@@ -123,7 +123,7 @@ func TestHandler(t *testing.T) {
 		}, {
 			name:       "ErrRootMismatch",
 			witness:    &testWitness{updateErr: ErrRootMismatch},
-			wantStatus: http.StatusConflict,
+			wantStatus: http.StatusUnprocessableEntity,
 		}, {
 			name:       "ErrPushback",
 			witness:    &testWitness{updateErr: ErrPushback},
