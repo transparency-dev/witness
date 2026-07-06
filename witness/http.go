@@ -86,7 +86,7 @@ func (a *HTTPHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []
 		case errors.Is(updateErr, ErrInvalidProof):
 			return http.StatusUnprocessableEntity, nil, "", nil
 		case errors.Is(updateErr, ErrRootMismatch):
-			return http.StatusConflict, nil, "", nil
+			return http.StatusUnprocessableEntity, nil, "", nil
 		case errors.Is(updateErr, ErrPushback):
 			return http.StatusTooManyRequests, nil, "", nil
 		default:

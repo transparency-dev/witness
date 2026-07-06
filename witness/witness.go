@@ -155,6 +155,13 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		return nil, 0, err
 	}
 
+	// SPEC: A checkpoint of size zero MUST have the root hash of the empty tree, which
+	//		RFC 6962, Section 2.1 defines as the hash of the empty string. Otherwise,
+	//		the witness MUST respond with a "422 Unprocessable Entity" HTTP status code.
+	if next.Size == 0 && !bytes.Equal(next.Hash, rfc6962.DefaultHasher.EmptyRoot()) {
+		return nil, 0, ErrRootMismatch
+	}
+
 	counterUpdateAttempt.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 
 	var retSigs []byte
