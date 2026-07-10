@@ -90,6 +90,13 @@ type OperatorConfig struct {
 	// WitnessNetworkConfigInterval is the time between attempts to fetch and merge configs from the
 	// URLs provided above.
 	WitnessNetworkConfigInterval time.Duration
+
+	// EnableSubtreeSigning allows the omniwitness to sign subtrees.
+	//
+	// This is only possible if the witness has subtree signers configured and
+	// EnableSubtreeSigning is true.  If EnableSubtreeSigning is true, the
+	// omniwitness will expose an endpoint for signing subtrees.
+	EnableSubtreeSigning bool
 }
 
 // LogConfig is the contract of something which knows how to provide log configuration info for the witness.
@@ -151,6 +158,9 @@ func Main(ctx context.Context, operatorConfig OperatorConfig, p Persistence, htt
 	}
 	h := witness.NewHTTPHandler(w)
 	operatorConfig.ServeMux.HandleFunc("POST /add-checkpoint", rateLimit(limiter, h.AddCheckpoint))
+	if w.SupportsSubtreeSigning() {
+		operatorConfig.ServeMux.HandleFunc("POST /sign-subtree", rateLimit(limiter, h.SignSubtree))
+	}
 
 	if operatorConfig.BastionAddr != "" && operatorConfig.BastionKey != nil {
 		klog.Infof("My bastion backend ID: %064x", sha256.Sum256(operatorConfig.BastionKey.Public().(ed25519.PublicKey)))

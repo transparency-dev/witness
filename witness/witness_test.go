@@ -17,9 +17,11 @@ package witness
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -225,14 +227,14 @@ func TestUpdate(t *testing.T) {
 			origin:  "monkeys",
 			initC:   mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
 			oldSize: 0,
-			newC:   mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
+			newC:    mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
 			isGood:  true,
-	}, {
-			desc:    "invalid zero size hash",
-			origin:  "monkeys",
-			initC:   mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
-			oldSize: 0,
-			newC:   mustCreateCheckpoint(t, mSK, "monkeys", 0, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
+		}, {
+			desc:      "invalid zero size hash",
+			origin:    "monkeys",
+			initC:     mustCreateCheckpoint(t, mSK, "monkeys", 0, rfc6962.DefaultHasher.EmptyRoot()),
+			oldSize:   0,
+			newC:      mustCreateCheckpoint(t, mSK, "monkeys", 0, dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)),
 			wantError: ErrRootMismatch,
 		}, {
 			desc:      "oldSize doesn't match current state",
@@ -375,4 +377,203 @@ func (p *testPersistence) Update(_ context.Context, origin string, f func([]byte
 
 	p.checkpoints[logID] = u
 	return nil
+}
+
+func TestSignSubtree(t *testing.T) {
+	ctx := t.Context()
+
+	const signerPrefix = "witness-mldsa"
+	ns1 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-1", signerPrefix))
+	ns2 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-2", signerPrefix))
+
+	// Setup log verifier.
+	logMap := make(cfg)
+	logV, err := note.NewVerifier(mPK)
+	if err != nil {
+		t.Fatalf("failed to create log verifier: %v", err)
+	}
+	logMap[log.ID("monkeys")] = logV
+
+	w, err := New(ctx, Opts{
+		Persistence:          newPersistence(),
+		EnableSubtreeSigning: true,
+		Signers:              []note.Signer{ns1, ns2},
+		VerifierForLog:       logMap.Log,
+	})
+	if err != nil {
+		t.Fatalf("failed to create witness: %v", err)
+	}
+
+	// Create a log checkpoint of size 2.
+	d0 := make([]byte, 32)
+	d0[0] = 0xaa
+	d1 := make([]byte, 32)
+	d1[0] = 0xbb
+	root := rfc6962.DefaultHasher.HashChildren(d0, d1)
+
+	logCp := mustCreateCheckpoint(t, mSK, "monkeys", 2, root)
+
+	// Let the witness sign it (update to size 2).
+	sigs, _, err := w.Update(ctx, 0, logCp, nil)
+	if err != nil {
+		t.Fatalf("failed to update witness checkpoint: %v", err)
+	}
+	cosignedCp := append(bytes.Clone(logCp), sigs...)
+
+	// Prepare unknown-log checkpoint signed by witness.
+	unknownLogCp := mustCreateCheckpoint(t, mSK, "unknown-log", 2, root)
+	n, err := note.Open(unknownLogCp, note.VerifierList(logV))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wSigned, _, err := w.signChkpt(n)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		start   uint64
+		end     uint64
+		subRoot []byte
+		proof   [][]byte
+		chkpt   []byte
+		wantErr error
+	}{
+		{
+			name:    "success",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   cosignedCp,
+			wantErr: nil,
+		}, {
+			name:    "success - multi subtree-signers",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   cosignedCp,
+			wantErr: nil,
+		}, {
+			name:    "unknown log",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   wSigned,
+			wantErr: ErrUnknownLog,
+		}, {
+			name:    "no witness signature",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   logCp,
+			wantErr: ErrNoWitnessSignature,
+		},
+		{
+			name:    "invalid subtree range (start >= end)",
+			start:   1,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   cosignedCp,
+			wantErr: ErrSubtreeRangeInvalid,
+		}, {
+			name:    "invalid subtree range (end > cp.Size)",
+			start:   0,
+			end:     3,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   cosignedCp,
+			wantErr: ErrSubtreeRangeInvalid,
+		}, {
+			name:    "invalid proof",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{make([]byte, 32)},
+			chkpt:   cosignedCp,
+			wantErr: ErrInvalidProof,
+		}, {
+			name:    "too many proof lines",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   make([][]byte, 64),
+			chkpt:   cosignedCp,
+			wantErr: ErrInvalidProof,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sigs, err := w.SignSubtree(ctx, tc.start, tc.end, tc.subRoot, tc.proof, tc.chkpt)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+			}
+			if tc.wantErr != nil {
+				return
+			}
+
+			// Returned signatures should be note signatures.
+			lines := bytes.Split(bytes.TrimSpace(sigs), []byte("\n"))
+			if len(lines) == 0 {
+				t.Fatalf("expected at least one signature line and a trailing newline, got: %q", sigs)
+			}
+
+			vs := make(map[string]f_note.SubtreeVerifier)
+			for _, s := range w.subtreeSigners {
+				vs[s.Name()] = s.Verifier()
+			}
+			// Verify the returned subtree signature(s)
+			for _, s := range lines {
+				sigLine := string(s)
+				bits := strings.Split(sigLine, " ")
+				if len(bits) != 3 {
+					t.Fatalf("unexpected signature line format: %q, want 3 parts", sigLine)
+				}
+				if bits[0] != "—" {
+					t.Fatalf("unexpected signature line format: %q, want prefix %q", sigLine, "—")
+				}
+				signerName := bits[1]
+				b64sig := bits[2]
+				sigBytes, err := base64.StdEncoding.DecodeString(b64sig)
+				if err != nil {
+					t.Fatalf("failed to decode base64 signature: %v", err)
+				}
+				// The signature bytes contain keyHash (4 bytes) + sig.
+				if len(sigBytes) < 4 {
+					t.Fatalf("signature too short: %d bytes", len(sigBytes))
+				}
+				// Ignore the hash.
+				actualSig := sigBytes[4:]
+
+				// Now verify the subtree signature.
+				verifier, ok := vs[signerName]
+				if !ok {
+					t.Fatalf("no verifier found for name %q", signerName)
+				}
+				// SPEC: If the cosignature format supports timestamps, the timestamp MUST be zero.
+				if !verifier.VerifySubtree(0, "monkeys", tc.start, tc.end, tc.subRoot, actualSig) {
+					t.Fatalf("subtree signature verification failed")
+				}
+			}
+		})
+	}
+}
+
+func mustCreateMLDSACosigner(t *testing.T, name string) f_note.SubtreeSigner {
+	skey, _, err := f_note.GenerateMLDSAKey(name)
+	if err != nil {
+		t.Fatalf("failed to generate MLDSA key: %v", err)
+	}
+
+	// Create subtree signer.
+	ns, err := f_note.NewMLDSASigner(skey)
+	if err != nil {
+		t.Fatalf("failed to create MLDSA signer: %v", err)
+	}
+
+	return ns
 }

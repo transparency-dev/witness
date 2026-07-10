@@ -98,6 +98,61 @@ func (a *HTTPHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []
 	return http.StatusOK, sigs, "", nil
 }
 
+// SignSubtree is a http.Handler which speaks the tlog-witness protocol for sign-subtree.
+func (a *HTTPHandler) SignSubtree(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		_, _ = io.ReadAll(r.Body)
+		_ = r.Body.Close()
+	}()
+
+	start, end, subRoot, proof, cp, err := parseSubtreeBody(http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	sc, body, contentType, err := a.handleSignSubtree(r.Context(), start, end, subRoot, proof, cp)
+	if err != nil {
+		status := http.StatusInternalServerError
+		w.WriteHeader(status)
+		return
+	}
+
+	if contentType != "" {
+		w.Header().Add("Content-Type", contentType)
+	}
+	w.WriteHeader(sc)
+	if len(body) > 0 {
+		_, _ = w.Write(body)
+	}
+}
+
+// handleSignSubtree submits the sign-subtree request to the witness and interprets any errors.
+func (a *HTTPHandler) handleSignSubtree(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) (int, []byte, string, error) {
+	sigs, err := a.witness.SignSubtree(ctx, start, end, subRoot, proof, cp)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrUnknownLog):
+			return http.StatusNotFound, nil, "", nil
+		case errors.Is(err, ErrNoWitnessSignature):
+			return http.StatusForbidden, nil, "", nil
+		case errors.Is(err, ErrSubtreeRangeInvalid):
+			return http.StatusBadRequest, nil, "", nil
+		case errors.Is(err, ErrInvalidProof):
+			return http.StatusUnprocessableEntity, nil, "", nil
+		case errors.Is(err, ErrNotImplemented):
+			return http.StatusNotImplemented, nil, "", nil
+		case errors.Is(err, ErrPushback):
+			return http.StatusTooManyRequests, nil, "", nil
+		default:
+			slog.ErrorContext(ctx, "Unknown error", slog.Any("error", err))
+			return http.StatusInternalServerError, nil, "", err
+		}
+	}
+
+	return http.StatusOK, sigs, "", nil
+}
+
 // parseBody reads the incoming request and parses into constituent parts.
 //
 // The request body MUST be a sequence of
@@ -137,8 +192,52 @@ func parseBody(r io.Reader) (uint64, [][]byte, []byte, error) {
 	return size, proof, cp, nil
 }
 
+// parseSubtreeBody reads the incoming request and parses into constituent parts.
+func parseSubtreeBody(r io.Reader) (uint64, uint64, []byte, [][]byte, []byte, error) {
+	b := bufio.NewReader(r)
+	rangeLine, _, err := b.ReadLine()
+	if err != nil {
+		return 0, 0, nil, nil, nil, err
+	}
+	var start, end uint64
+	if n, err := fmt.Sscanf(string(rangeLine), "subtree %d %d", &start, &end); err != nil || n != 2 {
+		return 0, 0, nil, nil, nil, err
+	}
+
+	hashLine, _, err := b.ReadLine()
+	if err != nil {
+		return 0, 0, nil, nil, nil, err
+	}
+	subRoot, err := base64.StdEncoding.DecodeString(string(hashLine))
+	if err != nil {
+		return 0, 0, nil, nil, nil, err
+	}
+
+	proof := [][]byte{}
+	for {
+		l, _, err := b.ReadLine()
+		if err != nil {
+			return 0, 0, nil, nil, nil, err
+		}
+		if len(l) == 0 {
+			break
+		}
+		hash, err := base64.StdEncoding.DecodeString(string(l))
+		if err != nil {
+			return 0, 0, nil, nil, nil, err
+		}
+		proof = append(proof, hash)
+	}
+	cp, err := io.ReadAll(b)
+	if err != nil {
+		return 0, 0, nil, nil, nil, err
+	}
+	return start, end, subRoot, proof, cp, nil
+}
+
 // witness is the contract expected of the backend for HTTPHandler.
 // This interface only really exists to make testing easier.
 type witness interface {
 	Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
+	SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) ([]byte, error)
 }
