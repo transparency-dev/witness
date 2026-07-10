@@ -28,7 +28,7 @@ import (
 
 // NewSecretManagerSigner creates a new signer that uses a note-formated Ed25519 signer stored in
 // Google Cloud Secret Manager.
-func NewSecretManagerSigner(ctx context.Context, privateKeySecretName string) (*f_note.Signer, error) {
+func NewSecretManagerSigner(ctx context.Context, privateKeySecretName string) (f_note.Signer, error) {
 	client, err := secretmanager.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create secret manager client: %w", err)

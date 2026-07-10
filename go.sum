@@ -151,6 +151,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/transparency-dev/formats v0.1.2-0.20260629100010-fa283eb7462a h1:xpTogZtf8jrUmeob4cGJ6qVZHXE1KlHxX+/WM3im9SQ=
 github.com/transparency-dev/formats v0.1.2-0.20260629100010-fa283eb7462a/go.mod h1:8vp6vMDg/v+6K7aAbF4ccndYCcbAO/627+yYfX2UNnM=
+github.com/transparency-dev/formats v0.1.2-0.20260710124811-af9e607161b6 h1:Cjch7pytQosuWS2c7u7ytdkZZMmnG0NvS7DoYP5GYZk=
+github.com/transparency-dev/formats v0.1.2-0.20260710124811-af9e607161b6/go.mod h1:8vp6vMDg/v+6K7aAbF4ccndYCcbAO/627+yYfX2UNnM=
 github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14 h1:K8JqF1HyGDXfTdDHtHe7VsIzeuFEcfLhioOXaupKB+Q=
 github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14/go.mod h1:EoKPjljyIALg1rldsJwRQVKOJO7sLd6eUqki19ruI80=
 github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10 h1:mQ9ZzYoywyFZ4Cvm7PtbFQHm/cnKgWvUUJHQlHG608I=
