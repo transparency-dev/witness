@@ -201,7 +201,10 @@ func parseSubtreeBody(r io.Reader) (uint64, uint64, []byte, [][]byte, []byte, er
 	}
 	var start, end uint64
 	if n, err := fmt.Sscanf(string(rangeLine), "subtree %d %d", &start, &end); err != nil || n != 2 {
-		return 0, 0, nil, nil, nil, err
+		if err == nil {
+			err = fmt.Errorf("expected 2 arguments, got %d", n)
+		}
+		return 0, 0, nil, nil, nil, fmt.Errorf("failed to parse subtree range line %q: %v", string(rangeLine), err)
 	}
 
 	hashLine, _, err := b.ReadLine()

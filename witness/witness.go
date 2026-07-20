@@ -104,10 +104,11 @@ type Opts struct {
 // Witness consists of a database for storing checkpoints, a signer, and a list
 // of logs for which it stores and verifies checkpoints.
 type Witness struct {
-	lsp            LogStatePersistence
-	Signers        []note.Signer
-	subtreeSigners []f_note.SubtreeSigner
-	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
+	lsp              LogStatePersistence
+	Signers          []note.Signer
+	subtreeSigners   []f_note.SubtreeSigner
+	subtreeVerifiers []note.Verifier
+	VerifierForLog   func(ctx context.Context, origin string) (note.Verifier, bool, error)
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -118,11 +119,13 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 	}
 
 	subtreeSigners := make([]f_note.SubtreeSigner, 0, len(wo.Signers))
+	subtreeVerifiers := make([]note.Verifier, 0, len(wo.Signers))
 	// Ensure we can handle subtree signing, if it is enabled.
 	if wo.EnableSubtreeSigning {
 		for _, s := range wo.Signers {
 			if ss, ok := s.(f_note.SubtreeSigner); ok {
 				subtreeSigners = append(subtreeSigners, ss)
+				subtreeVerifiers = append(subtreeVerifiers, ss.Verifier())
 			}
 		}
 		if len(subtreeSigners) == 0 {
@@ -131,10 +134,11 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 	}
 
 	return &Witness{
-		lsp:            wo.Persistence,
-		Signers:        wo.Signers,
-		subtreeSigners: subtreeSigners,
-		VerifierForLog: wo.VerifierForLog,
+		lsp:              wo.Persistence,
+		Signers:          wo.Signers,
+		subtreeSigners:   subtreeSigners,
+		subtreeVerifiers: subtreeVerifiers,
+		VerifierForLog:   wo.VerifierForLog,
 	}, nil
 }
 
@@ -380,14 +384,6 @@ func (w *Witness) SupportsSubtreeSigning() bool {
 	return len(w.subtreeSigners) > 0
 }
 
-func (w *Witness) subtreeVerifiers() []note.Verifier {
-	r := make([]note.Verifier, 0, len(w.subtreeSigners))
-	for _, ss := range w.subtreeSigners {
-		r = append(r, ss.Verifier())
-	}
-	return r
-}
-
 // SignSubtree validates the checkpoint was signed by the witness, verifies the subtree
 // consistency proof from the subtree to the checkpoint, and returns a subtree cosignature.
 func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, cProof [][]byte, chkptRaw []byte) ([]byte, error) {
@@ -401,7 +397,7 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 	//
 	// We're a bit tighter here - we'll only proceed if the checkpoint was signed by one of our
 	// *subtree-capable* signers.
-	n, err := note.Open(chkptRaw, note.VerifierList(w.subtreeVerifiers()...))
+	n, err := note.Open(chkptRaw, note.VerifierList(w.subtreeVerifiers...))
 	if err != nil {
 		return nil, ErrNoWitnessSignature
 	}
@@ -450,6 +446,9 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 
 		name := s.Name()
 		hash := s.KeyHash()
+		if !isValidSignerName(name) {
+			return nil, errors.New("invalid signer")
+		}
 
 		var hbuf [4]byte
 		binary.BigEndian.PutUint32(hbuf[:], hash)
@@ -467,7 +466,7 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 }
 
 // isSubtreeValid returns whether a subtree covers a valid range.
-// A subtree is valid if there exist a parent tree node to:
+// A subtree is valid if there exists a parent tree node to:
 // - all the subtree nodes
 // - no extra node to the left of the subtree
 // - potentially extra nodes to the right of the subtree
@@ -486,7 +485,7 @@ func isSubtreeValid(start, end uint64) error {
 		return fmt.Errorf("start %d must be 0 when subtree length %d > 1<<63", start, l)
 	}
 	if bc := bitCeil(l); start&(bc-1) != 0 {
-		return fmt.Errorf("start %d not a multiple of bit_ceil(end - start) = %d", start, bc)
+		return fmt.Errorf("start %d not a multiple of bitCeil(end - start) = %d", start, bc)
 	}
 
 	return nil
