@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/transparency-dev/formats v0.1.2-0.20260710124811-af9e607161b6
-	github.com/transparency-dev/merkle v0.0.3-0.20240919113952-3c979d16ee14
+	github.com/transparency-dev/merkle v0.0.3-0.20260707140218-77df88e508fa
 	github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10
 	github.com/transparency-dev/tessera v1.0.3-0.20260303172654-b64a6fdf82f4
 	go.opentelemetry.io/otel v1.44.0

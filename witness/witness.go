@@ -24,12 +24,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/bits"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/transparency-dev/formats/log"
+	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/merkle/proof"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"go.opentelemetry.io/otel/metric"
@@ -63,6 +65,12 @@ var (
 	ErrRootMismatch = errors.New("roots do not match")
 	// ErrPushback is returned if the witness is overloaded.
 	ErrPushback = errors.New("pushback")
+	// ErrNoWitnessSignature is returned by calls to SignSubtree if the provided checkpoint has no valid signature by the witness.
+	ErrNoWitnessSignature = errors.New("no witness signature")
+	// ErrSubtreeRangeInvalid is returned by calls to SignSubtree if the subtree range is invalid.
+	ErrSubtreeRangeInvalid = errors.New("subtree range invalid")
+	// ErrNotImplemented is returned if the operation is not supported by the witness's signers.
+	ErrNotImplemented = errors.New("not implemented")
 )
 
 func init() {
@@ -87,17 +95,20 @@ func init() {
 
 // Opts is the options passed to a witness.
 type Opts struct {
-	Persistence    LogStatePersistence
-	Signers        []note.Signer
-	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
+	Persistence          LogStatePersistence
+	Signers              []note.Signer
+	VerifierForLog       func(ctx context.Context, origin string) (note.Verifier, bool, error)
+	EnableSubtreeSigning bool
 }
 
 // Witness consists of a database for storing checkpoints, a signer, and a list
 // of logs for which it stores and verifies checkpoints.
 type Witness struct {
-	lsp            LogStatePersistence
-	Signers        []note.Signer
-	VerifierForLog func(ctx context.Context, origin string) (note.Verifier, bool, error)
+	lsp              LogStatePersistence
+	Signers          []note.Signer
+	subtreeSigners   []f_note.SubtreeSigner
+	subtreeVerifiers []note.Verifier
+	VerifierForLog   func(ctx context.Context, origin string) (note.Verifier, bool, error)
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -106,10 +117,28 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 	if err := wo.Persistence.Init(ctx); err != nil {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
 	}
+
+	subtreeSigners := make([]f_note.SubtreeSigner, 0, len(wo.Signers))
+	subtreeVerifiers := make([]note.Verifier, 0, len(wo.Signers))
+	// Ensure we can handle subtree signing, if it is enabled.
+	if wo.EnableSubtreeSigning {
+		for _, s := range wo.Signers {
+			if ss, ok := s.(f_note.SubtreeSigner); ok {
+				subtreeSigners = append(subtreeSigners, ss)
+				subtreeVerifiers = append(subtreeVerifiers, ss.Verifier())
+			}
+		}
+		if len(subtreeSigners) == 0 {
+			return nil, errors.New("EnableSubtreeSigning is true but no subtree signer provided")
+		}
+	}
+
 	return &Witness{
-		lsp:            wo.Persistence,
-		Signers:        wo.Signers,
-		VerifierForLog: wo.VerifierForLog,
+		lsp:              wo.Persistence,
+		Signers:          wo.Signers,
+		subtreeSigners:   subtreeSigners,
+		subtreeVerifiers: subtreeVerifiers,
+		VerifierForLog:   wo.VerifierForLog,
 	}, nil
 }
 
@@ -215,7 +244,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		//        also identical.
 		if next.Size == prevSize {
 			if !bytes.Equal(next.Hash, prevHash) {
-				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\n%v\n%v", origin, prevRaw, next)
+				klog.Errorf("%s: INCONSISTENT CHECKPOINTS!:\nPrevious:\n%s\nNext:\n%s", origin, string(prevRaw), string(nextRaw))
 				counterInconsistentCheckpoints.Add(ctx, 1, metric.WithAttributes(originKey.String(origin)))
 
 				retSize, retSigs = 0, nil
@@ -348,4 +377,125 @@ func checkpointUnsafe(rawCp []byte) (string, uint64, []byte, error) {
 		return "", 0, nil, fmt.Errorf("failed to decode hash: %v", err)
 	}
 	return origin, size, hash, nil
+}
+
+// SupportsSubtreeSigning returns true if the witness is configured to sign subtrees.
+func (w *Witness) SupportsSubtreeSigning() bool {
+	return len(w.subtreeSigners) > 0
+}
+
+// SignSubtree validates the checkpoint was signed by the witness, verifies the subtree
+// consistency proof from the subtree to the checkpoint, and returns a subtree cosignature.
+func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, cProof [][]byte, chkptRaw []byte) ([]byte, error) {
+	// If none of our keys support subtree signing, then bail.
+	if len(w.subtreeSigners) == 0 {
+		return nil, ErrNotImplemented
+	}
+
+	// SPEC: The witness MUST verify that the checkpoint includes a valid cosignature from
+	//       one of its own keys.
+	//
+	// We're a bit tighter here - we'll only proceed if the checkpoint was signed by one of our
+	// *subtree-capable* signers.
+	n, err := note.Open(chkptRaw, note.VerifierList(w.subtreeVerifiers...))
+	if err != nil {
+		return nil, ErrNoWitnessSignature
+	}
+
+	var cp log.Checkpoint
+	if _, err := cp.Unmarshal([]byte(n.Text)); err != nil {
+		return nil, fmt.Errorf("failed to parse checkpoint: %w", err)
+	}
+
+	// SPEC: If the checkpoint origin is unknown, the witness MUST respond with a "404 Not Found" HTTP status code.
+	_, ok, err := w.VerifierForLog(ctx, cp.Origin)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrUnknownLog
+	}
+
+	// SPEC: The half-open interval [start, end) MUST be a valid subtree per draft-ietf-plants-merkle-tree-certs-03, Section 4.1,
+	//       and end MUST be less than or equal to the checkpoint size.
+	if end > cp.Size {
+		return nil, fmt.Errorf("%w: end %d is greater than checkpoint size %d", ErrSubtreeRangeInvalid, end, cp.Size)
+	}
+	if err := isSubtreeValid(start, end); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrSubtreeRangeInvalid, err)
+	}
+
+	// SPEC: The client MUST NOT send more than 63 consistency proof lines
+	if len(cProof) > 63 {
+		return nil, ErrInvalidProof
+	}
+
+	// SPEC: The consistency proof lines MUST encode a Subtree Consistency Proof from the subtree to the checkpoint
+	//       according to draft-ietf-plants-merkle-tree-certs-03, Section 4.4.
+	if err := proof.VerifySubtreeConsistency(rfc6962.DefaultHasher, start, end, cp.Size, cProof, subRoot, cp.Hash); err != nil {
+		return nil, ErrInvalidProof
+	}
+
+	var sigs bytes.Buffer
+	for _, s := range w.subtreeSigners {
+		// SPEC: If the cosignature format supports timestamps, the timestamp MUST be zero.
+		sig, err := s.SignSubtree(0, cp.Origin, start, end, subRoot)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't sign subtree: %v", err)
+		}
+
+		name := s.Name()
+		hash := s.KeyHash()
+		if !isValidSignerName(name) {
+			return nil, errors.New("invalid signer")
+		}
+
+		var hbuf [4]byte
+		binary.BigEndian.PutUint32(hbuf[:], hash)
+		b64 := base64.StdEncoding.EncodeToString(append(hbuf[:], sig...))
+		_, _ = sigs.WriteString("— ")
+		_, _ = sigs.WriteString(name)
+		_, _ = sigs.WriteString(" ")
+		_, _ = sigs.WriteString(b64)
+		_, _ = sigs.WriteString("\n")
+	}
+	if sigs.Len() == 0 {
+		return nil, ErrNotImplemented
+	}
+	return sigs.Bytes(), nil
+}
+
+// isSubtreeValid returns whether a subtree covers a valid range.
+// A subtree is valid if there exists a parent tree node to:
+// - all the subtree nodes
+// - no extra node to the left of the subtree
+// - potentially extra nodes to the right of the subtree
+func isSubtreeValid(start, end uint64) error {
+	if start >= end {
+		return fmt.Errorf("start %d must be strictly less than end %d", start, end)
+	}
+	if start == 0 {
+		return nil
+	}
+
+	l := end - start
+
+	// special-case large subtree to avoid panic
+	if l > uint64(1)<<63 {
+		return fmt.Errorf("start %d must be 0 when subtree length %d > 1<<63", start, l)
+	}
+	if bc := bitCeil(l); start&(bc-1) != 0 {
+		return fmt.Errorf("start %d not a multiple of bitCeil(end - start) = %d", start, bc)
+	}
+
+	return nil
+}
+
+// bitCeil returns the smallest power of 2 larger than or equal to n.
+// MUST NOT be used with n larger than uint64(1)<<63.
+func bitCeil(n uint64) uint64 {
+	if n <= 1 {
+		return 1
+	}
+	return uint64(1) << bits.Len64(n-1)
 }
