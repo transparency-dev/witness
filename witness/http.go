@@ -30,48 +30,67 @@ import (
 var MaxRequestBodyBytes int64 = 16 << 10
 
 func NewHTTPHandler(w *Witness) *HTTPHandler {
-	return &HTTPHandler{witness: w}
+	return &HTTPHandler{
+		addCheckpointHandler: NewAddCheckpointHandler(w.Update),
+		signSubtreeHandler:   NewSignSubtreeHandler(w.SignSubtree),
+	}
 }
 
 // HTTPHandler provides tlog-witness compatible handlers intended to be used with the stdlib http server.
 type HTTPHandler struct {
-	witness witness
+	addCheckpointHandler http.HandlerFunc
+	signSubtreeHandler   http.HandlerFunc
 }
 
-// AddCheckpoint is a http.Handler which speaks the tlog-witness protocol for add-checkpoint.
+// AddCheckpoint handles HTTP requests conforming to the tlog-witness add-checkpoint protocol.
 func (a *HTTPHandler) AddCheckpoint(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		_, _ = io.ReadAll(r.Body)
-		_ = r.Body.Close()
-	}()
+	a.addCheckpointHandler(w, r)
+}
 
-	oldSize, proof, cp, err := parseBody(http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+// SignSubtree is a http.Handler which speaks the tlog-witness protocol for sign-subtree.
+func (a *HTTPHandler) SignSubtree(w http.ResponseWriter, r *http.Request) {
+	a.signSubtreeHandler(w, r)
+}
 
-	sc, body, contentType, err := a.handleUpdate(r.Context(), oldSize, cp, proof)
-	if err != nil {
-		status := http.StatusInternalServerError
-		w.WriteHeader(status)
-		return
-	}
+// UpdateFunc knows how to update a log's checkpoint given an old size, a new checkpoint, and a Merkle proof.
+type UpdateFunc func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
 
-	if contentType != "" {
-		w.Header().Add("Content-Type", contentType)
-	}
-	w.WriteHeader(sc)
-	if len(body) > 0 {
-		_, _ = w.Write(body)
+// NewAddCheckpointHandler returns an http.Handler for the tlog-witness add-checkpoint protocol.
+func NewAddCheckpointHandler(update UpdateFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			_, _ = io.ReadAll(r.Body)
+			_ = r.Body.Close()
+		}()
+
+		oldSize, proof, cp, err := parseBody(http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		sc, body, contentType, err := handleUpdate(r.Context(), update, oldSize, cp, proof)
+		if err != nil {
+			status := http.StatusInternalServerError
+			w.WriteHeader(status)
+			return
+		}
+
+		if contentType != "" {
+			w.Header().Add("Content-Type", contentType)
+		}
+		w.WriteHeader(sc)
+		if len(body) > 0 {
+			_, _ = w.Write(body)
+		}
 	}
 }
 
 // handleUpdate submits the provided checkpoint to the witness and interprets any errors which may result.
 //
 // Returns an appropriate HTTP status code, response body, and Content Type representing the outcome.
-func (a *HTTPHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
-	sigs, trustedSize, updateErr := a.witness.Update(ctx, oldSize, newCP, proof)
+func handleUpdate(ctx context.Context, update UpdateFunc, oldSize uint64, newCP []byte, proof [][]byte) (int, []byte, string, error) {
+	sigs, trustedSize, updateErr := update(ctx, oldSize, newCP, proof)
 	// Finally, handle any "soft" error from the update:
 	if updateErr != nil {
 		switch {
@@ -98,38 +117,43 @@ func (a *HTTPHandler) handleUpdate(ctx context.Context, oldSize uint64, newCP []
 	return http.StatusOK, sigs, "", nil
 }
 
-// SignSubtree is a http.Handler which speaks the tlog-witness protocol for sign-subtree.
-func (a *HTTPHandler) SignSubtree(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		_, _ = io.ReadAll(r.Body)
-		_ = r.Body.Close()
-	}()
+// SignSubtreeFunc knows how to verify and sign a subtree.
+type SignSubtreeFunc func(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) ([]byte, error)
 
-	start, end, subRoot, proof, cp, err := parseSubtreeBody(http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+// NewSignSubtreeHandler returns an http.Handler for the tlog-witness sign-subtree protocol.
+func NewSignSubtreeHandler(signSubtree SignSubtreeFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			_, _ = io.ReadAll(r.Body)
+			_ = r.Body.Close()
+		}()
 
-	sc, body, contentType, err := a.handleSignSubtree(r.Context(), start, end, subRoot, proof, cp)
-	if err != nil {
-		status := http.StatusInternalServerError
-		w.WriteHeader(status)
-		return
-	}
+		start, end, subRoot, proof, cp, err := parseSubtreeBody(http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
-	if contentType != "" {
-		w.Header().Add("Content-Type", contentType)
-	}
-	w.WriteHeader(sc)
-	if len(body) > 0 {
-		_, _ = w.Write(body)
+		sc, body, contentType, err := handleSignSubtree(r.Context(), signSubtree, start, end, subRoot, proof, cp)
+		if err != nil {
+			status := http.StatusInternalServerError
+			w.WriteHeader(status)
+			return
+		}
+
+		if contentType != "" {
+			w.Header().Add("Content-Type", contentType)
+		}
+		w.WriteHeader(sc)
+		if len(body) > 0 {
+			_, _ = w.Write(body)
+		}
 	}
 }
 
 // handleSignSubtree submits the sign-subtree request to the witness and interprets any errors.
-func (a *HTTPHandler) handleSignSubtree(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) (int, []byte, string, error) {
-	sigs, err := a.witness.SignSubtree(ctx, start, end, subRoot, proof, cp)
+func handleSignSubtree(ctx context.Context, signSubtree SignSubtreeFunc, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) (int, []byte, string, error) {
+	sigs, err := signSubtree(ctx, start, end, subRoot, proof, cp)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUnknownLog):
@@ -236,11 +260,4 @@ func parseSubtreeBody(r io.Reader) (uint64, uint64, []byte, [][]byte, []byte, er
 		return 0, 0, nil, nil, nil, err
 	}
 	return start, end, subRoot, proof, cp, nil
-}
-
-// witness is the contract expected of the backend for HTTPHandler.
-// This interface only really exists to make testing easier.
-type witness interface {
-	Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
-	SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) ([]byte, error)
 }
