@@ -142,7 +142,6 @@ func TestParseSubtreeBody(t *testing.T) {
 	}
 }
 
-
 func TestHandler(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -191,10 +190,7 @@ func TestHandler(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			a := HTTPHandler{
-				witness: test.witness,
-			}
-			sc, body, ct, err := a.handleUpdate(context.Background(), 0, []byte(testCP), [][]byte{})
+			sc, body, ct, err := handleUpdate(context.Background(), test.witness.Update, 0, []byte(testCP), [][]byte{})
 			if err != nil {
 				t.Fatalf("handleUpdate: %v", err)
 			}
@@ -253,10 +249,7 @@ func TestSubtreeHandler(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			a := HTTPHandler{
-				witness: test.witness,
-			}
-			sc, body, ct, err := a.handleSignSubtree(context.Background(), 0, 1, []byte{}, [][]byte{}, []byte(testCP))
+			sc, body, ct, err := handleSignSubtree(context.Background(), test.witness.SignSubtree, 0, 1, []byte{}, [][]byte{}, []byte(testCP))
 			if err != nil {
 				t.Fatalf("handleSignSubtree: %v", err)
 			}
@@ -272,7 +265,6 @@ func TestSubtreeHandler(t *testing.T) {
 		})
 	}
 }
-
 
 type testWitness struct {
 	latestCPErr         error
