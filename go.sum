@@ -155,8 +155,6 @@ github.com/transparency-dev/merkle v0.0.3-0.20260707140218-77df88e508fa h1:thPHs
 github.com/transparency-dev/merkle v0.0.3-0.20260707140218-77df88e508fa/go.mod h1:E+iHk6bS+tIgIJGD4TMeAjSjhQ9wPfL/ST4pXyITjdU=
 github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10 h1:mQ9ZzYoywyFZ4Cvm7PtbFQHm/cnKgWvUUJHQlHG608I=
 github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10/go.mod h1:CSzJNqTKoCDILXByuUcqXtmmvxpTwHSY5g5jq5LSouI=
-github.com/transparency-dev/tessera v1.0.4 h1:IXjGowubcLR0T3zUQrysSMKgtTh9KGKQ0iajUiubyP4=
-github.com/transparency-dev/tessera v1.0.4/go.mod h1:WD/EMM6RXWRyImk9yyJ2hrs8xdknN/lpwUrFR2GemfU=
 go.opencensus.io v0.24.0 h1:y73uSU6J157QMP2kn2r30vwW1A2W2WFwSCGnAVxeaD0=
 go.opencensus.io v0.24.0/go.mod h1:vNK8G9p7aAivkbmorf4v+7Hgx+Zs0yY+0fOtgBfjQKo=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
@@ -190,8 +188,6 @@ golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPh
 golang.org/x/crypto v0.54.0 h1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw=
 golang.org/x/crypto v0.54.0/go.mod h1:KWL8ny2AZdGR2cWmzeHrp2azQPGogOv+HeQaVEXC2dk=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
-golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 h1:aAcj0Da7eBAtrTp03QXWvm88pSyOt+UgdZw2BFZ+lEw=
-golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8/go.mod h1:CQ1k9gNrJ50XIzaKCRR2hssIjF07kZFEiieALBM/ARQ=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
 golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961/go.mod h1:wehouNa3lNwaWXcvxsM5YxQ5yQlVC4a0KAMCusXpPoU=
 golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3/go.mod h1:6SW0HCj/g11FgYtHlgUYUwCkIfeOF89ocIRzGO/8vkc=

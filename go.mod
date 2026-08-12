@@ -8,11 +8,11 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/mux v1.8.1
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/prometheus/client_golang v1.24.1
 	github.com/transparency-dev/formats v0.1.2-0.20260710124811-af9e607161b6
 	github.com/transparency-dev/merkle v0.0.3-0.20260707140218-77df88e508fa
 	github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10
-	github.com/transparency-dev/tessera v1.0.4
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.67.0
 	go.opentelemetry.io/otel/metric v1.45.0
@@ -50,6 +50,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.17 // indirect
