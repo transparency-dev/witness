@@ -22,7 +22,6 @@ import (
 	"net/url"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/tessera/client"
 	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -33,7 +32,7 @@ func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http
 	if err != nil {
 		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
-	f, err := client.NewHTTPFetcher(lURL, c)
+	f, err := newHTTPFetcher(lURL, c)
 	if err != nil {
 		return feeder.Source{}, fmt.Errorf("failed to create fetcher: %v", err)
 	}
@@ -42,7 +41,7 @@ func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http
 		if from == 0 {
 			return [][]byte{}, nil
 		}
-		pb, err := client.NewProofBuilder(ctx, to.Size, f.ReadTile)
+		pb, err := newProofBuilder(ctx, to.Size, f.ReadTile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create proof builder for %q: %v", origin, err)
 		}
