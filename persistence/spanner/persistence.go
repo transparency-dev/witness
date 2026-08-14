@@ -70,6 +70,7 @@ type Persistence struct {
 	batchWrite func(context.Context, *spanner.Client, []*spanner.MutationGroup) error
 }
 
+// Init initialises the persistence layer.
 func (p *Persistence) Init(ctx context.Context) error {
 	return nil
 }
@@ -102,6 +103,7 @@ func (p *Persistence) createTablesIfNotExist(ctx context.Context) error {
 	return nil
 }
 
+// AddLogs adds the provided log configs to the database.
 func (p *Persistence) AddLogs(ctx context.Context, lc []config.Log) error {
 	m := []*spanner.MutationGroup{}
 	for _, l := range lc {
@@ -143,6 +145,9 @@ func batchWrite(ctx context.Context, s *spanner.Client, m []*spanner.MutationGro
 	return errors.Join(errs...)
 }
 
+// Logs returns an iterator over the set of known and enabled log configs.
+// Disabled logs will be skipped.
+// An error is returned only if there was an error while attempting to read from the storage.
 func (p *Persistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 	return func(yield func(config.Log, error) bool) {
 		r := p.spanner.Single().Read(ctx, "logs", spanner.AllKeys(), []string{"origin", "vkey", "contact", "disabled"})
@@ -182,6 +187,9 @@ func (p *Persistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 	}
 }
 
+// Log returns the configuration info for the provided log, if it exists.
+// Returns the config and true if found, false and no error if not found.
+// An error is returned only if there was an error while attempting to read from the storage.
 func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
 	logID := logfmt.ID(origin)
 	row, err := p.spanner.Single().ReadRow(ctx, "logs", spanner.Key{logID}, []string{"origin", "vkey", "contact", "disabled"})
@@ -209,11 +217,13 @@ func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool,
 	return c, true, nil
 }
 
+// Latest returns the latest checkpoint for the given log, if it exists, and nil otherwise.
 func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error) {
 	logID := logfmt.ID(origin)
 	return getLatestCheckpoint(ctx, p.spanner.Single().ReadRow, logID)
 }
 
+// Update attempts to atomically update the latest checkpoint for the given log.
 func (p *Persistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	logID := logfmt.ID(origin)
 	_, err := p.spanner.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
