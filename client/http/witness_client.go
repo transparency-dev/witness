@@ -32,6 +32,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// maxResponseBodyBytes is the limit on the number of bytes we'll read from incoming responses.
+// 16 should be more than enough, even in a PQ world.
+const maxResponseBodyBytes int64 = 16 << 10
+
 // NewWitness returns a Witness accessed over http at the given URL
 // using the client provided.
 func NewWitness(url *url.URL, c *http.Client) Witness {
@@ -65,11 +69,11 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 	_, _ = fmt.Fprintln(reqBody)
 	_, _ = reqBody.Write(newCP)
 
-	req, err := http.NewRequest(http.MethodPost, w.url.JoinPath(api.HTTPAddCheckpoint).String(), reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url.JoinPath(api.HTTPAddCheckpoint).String(), reqBody)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to create request: %v", err)
 	}
-	resp, err := w.client.Do(req.WithContext(ctx))
+	resp, err := w.client.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to do http request: %v", err)
 	}
@@ -83,7 +87,7 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 		return nil, 0, fmt.Errorf("POST request to %q was converted to %s request to %q", w.url.String(), resp.Request.Method, resp.Request.URL)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes))
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read body: %v", err)
 	}
@@ -112,5 +116,67 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 		return nil, 0, witness.ErrPushback
 	default:
 		return nil, 0, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+}
+
+// SignSubtree attempts to request a subtree cosignature from the witness,
+// by providing a checkpoint signed by the witness and a subtree consistency
+// proof.
+func (w Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) ([]byte, error) {
+	if l := len(proof); l > 63 {
+		return nil, errors.New("too many proof lines")
+	}
+
+	// bytes.Buffer cannot return an error for writes, so we can omit error checking on writes below.
+	reqBody := &bytes.Buffer{}
+
+	_, _ = fmt.Fprintf(reqBody, "subtree %d %d\n", start, end)
+	_, _ = fmt.Fprintln(reqBody, base64.StdEncoding.EncodeToString(subRoot))
+	for _, p := range proof {
+		_, _ = fmt.Fprintln(reqBody, base64.StdEncoding.EncodeToString(p))
+	}
+	_, _ = fmt.Fprintln(reqBody)
+	_, _ = reqBody.Write(cp)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url.JoinPath(api.HTTPSignSubtree).String(), reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to do http request: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			klog.Errorf("Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.Request.Method != http.MethodPost {
+		return nil, fmt.Errorf("POST request to %q was converted to %s request to %q", w.url.String(), resp.Request.Method, resp.Request.URL)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %v", err)
+	}
+
+	switch resp.StatusCode {
+	case http.StatusOK, 0:
+		return body, nil
+	case http.StatusBadRequest:
+		return nil, witness.ErrSubtreeRangeInvalid
+	case http.StatusForbidden:
+		return nil, witness.ErrNoWitnessSignature
+	case http.StatusNotFound:
+		return nil, witness.ErrUnknownLog
+	case http.StatusUnprocessableEntity:
+		return nil, witness.ErrInvalidProof
+	case http.StatusNotImplemented:
+		return nil, witness.ErrNotImplemented
+	case http.StatusTooManyRequests:
+		return nil, witness.ErrPushback
+	default:
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 }
