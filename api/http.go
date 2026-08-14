@@ -19,4 +19,9 @@ const (
 	// HTTPAddCheckpoint is the path of the URL to update to a new checkpoint.
 	// This endpoint expects a https://c2sp.org/tlog-witness compliant request.
 	HTTPAddCheckpoint = "/add-checkpoint"
+
+	// HTTPSignSubtree is the path of the URL to request a subtree cosignature from the witness,
+	// by providing a checkpoint signed by the witness and a subtree consistency proof.
+	// This endpoint expects a https://c2sp.org/tlog-witness compliant request.
+	HTTPSignSubtree = "/sign-subtree"
 )
