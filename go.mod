@@ -2,6 +2,8 @@ module github.com/transparency-dev/witness
 
 go 1.25.0
 
+toolchain go1.25.13
+
 require (
 	cloud.google.com/go/secretmanager v1.21.0
 	cloud.google.com/go/spanner v1.94.0
