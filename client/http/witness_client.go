@@ -34,7 +34,7 @@ import (
 
 // maxResponseBodyBytes is the limit on the number of bytes we'll read from incoming responses.
 // 16 should be more than enough, even in a PQ world.
-var maxResponseBodyBytes int64 = 16 << 10
+const maxResponseBodyBytes int64 = 16 << 10
 
 // NewWitness returns a Witness accessed over http at the given URL
 // using the client provided.
@@ -83,7 +83,7 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 		}
 	}()
 
-	if resp.Request != nil && resp.Request.Method != http.MethodPost {
+	if resp.Request.Method != http.MethodPost {
 		return nil, 0, fmt.Errorf("POST request to %q was converted to %s request to %q", w.url.String(), resp.Request.Method, resp.Request.URL)
 	}
 
@@ -152,7 +152,7 @@ func (w Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []b
 		}
 	}()
 
-	if resp.Request != nil && resp.Request.Method != http.MethodPost {
+	if resp.Request.Method != http.MethodPost {
 		return nil, fmt.Errorf("POST request to %q was converted to %s request to %q", w.url.String(), resp.Request.Method, resp.Request.URL)
 	}
 
