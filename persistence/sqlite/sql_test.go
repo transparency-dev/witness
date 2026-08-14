@@ -15,6 +15,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"testing"
@@ -23,8 +24,8 @@ import (
 	"github.com/transparency-dev/formats/log"
 	f_note "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/witness/config"
-	"github.com/transparency-dev/witness/witness"
 	ptest "github.com/transparency-dev/witness/persistence/testonly"
+	"github.com/transparency-dev/witness/witness"
 	"golang.org/x/mod/sumdb/note"
 )
 
@@ -223,5 +224,141 @@ func TestDeadlock(t *testing.T) {
 	_, _, err = w.Update(ctx, 5, mNext, consProof)
 	if err != nil {
 		t.Fatalf("Second Update failed (expected success with fix): %v", err)
+	}
+}
+
+func TestLatest(t *testing.T) {
+	for _, test := range []struct {
+		desc   string
+		setup  func(ctx context.Context, t *testing.T, p *Persistence)
+		origin string
+		wantCp []byte
+	}{
+		{
+			desc:   "no checkpoint exists (empty DB)",
+			origin: "log1",
+			wantCp: nil,
+		},
+		{
+			desc: "no checkpoint exists for requested log when another log has checkpoint",
+			setup: func(ctx context.Context, t *testing.T, p *Persistence) {
+				if err := p.Update(ctx, "other_log", func(current []byte) ([]byte, error) {
+					return []byte("other_checkpoint"), nil
+				}); err != nil {
+					t.Fatalf("Update(other_log): %v", err)
+				}
+			},
+			origin: "log1",
+			wantCp: nil,
+		},
+		{
+			desc: "checkpoint exists for requested log",
+			setup: func(ctx context.Context, t *testing.T, p *Persistence) {
+				if err := p.Update(ctx, "log1", func(current []byte) ([]byte, error) {
+					return []byte("checkpoint_content"), nil
+				}); err != nil {
+					t.Fatalf("Update(log1): %v", err)
+				}
+			},
+			origin: "log1",
+			wantCp: []byte("checkpoint_content"),
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			p, shutdown, err := New(t.Context(), Opts{Path: ":memory:", MaxOpenConns: 1})
+			if err != nil {
+				t.Fatalf("New(): %v", err)
+			}
+			if err := p.Init(t.Context()); err != nil {
+				t.Fatalf("Init(): %v", err)
+			}
+			defer func() { _ = shutdown() }()
+
+			if test.setup != nil {
+				test.setup(t.Context(), t, p)
+			}
+
+			got, err := p.Latest(t.Context(), test.origin)
+			if err != nil {
+				t.Fatalf("Latest(%q): %v", test.origin, err)
+			}
+			if !bytes.Equal(got, test.wantCp) {
+				t.Errorf("Latest(%q) = %q, want %q", test.origin, got, test.wantCp)
+			}
+		})
+	}
+}
+
+func TestLog(t *testing.T) {
+	vkey := "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
+	for _, test := range []struct {
+		desc       string
+		setup      func(ctx context.Context, t *testing.T, p *Persistence)
+		origin     string
+		wantFound  bool
+		wantOrigin string
+	}{
+		{
+			desc:      "log does not exist on empty DB",
+			origin:    "nonexistent",
+			wantFound: false,
+		},
+		{
+			desc: "log does not exist when other logs exist",
+			setup: func(ctx context.Context, t *testing.T, p *Persistence) {
+				if err := p.AddLogs(ctx, []config.Log{{Origin: "log1", VKey: vkey}}); err != nil {
+					t.Fatalf("AddLogs: %v", err)
+				}
+			},
+			origin:    "nonexistent",
+			wantFound: false,
+		},
+		{
+			desc: "log exists and is enabled",
+			setup: func(ctx context.Context, t *testing.T, p *Persistence) {
+				if err := p.AddLogs(ctx, []config.Log{{Origin: "log1", VKey: vkey}}); err != nil {
+					t.Fatalf("AddLogs: %v", err)
+				}
+			},
+			origin:     "log1",
+			wantFound:  true,
+			wantOrigin: "log1",
+		},
+		{
+			desc: "log exists but is disabled",
+			setup: func(ctx context.Context, t *testing.T, p *Persistence) {
+				if _, err := p.db.ExecContext(ctx, "INSERT INTO logs (logID, origin, vkey, contact, disabled) VALUES (?, ?, ?, ?, ?)", log.ID("disabled_log"), "disabled_log", vkey, "", true); err != nil {
+					t.Fatalf("insert disabled log: %v", err)
+				}
+			},
+			origin:    "disabled_log",
+			wantFound: false,
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			p, shutdown, err := New(t.Context(), Opts{Path: ":memory:", MaxOpenConns: 1})
+			if err != nil {
+				t.Fatalf("New(): %v", err)
+			}
+			if err := p.Init(t.Context()); err != nil {
+				t.Fatalf("Init(): %v", err)
+			}
+			defer func() { _ = shutdown() }()
+
+			if test.setup != nil {
+				test.setup(t.Context(), t, p)
+			}
+
+			l, found, err := p.Log(t.Context(), test.origin)
+			if err != nil {
+				t.Fatalf("Log(%q) unexpected error: %v", test.origin, err)
+			}
+			if found != test.wantFound {
+				t.Errorf("Log(%q) found = %v, want %v", test.origin, found, test.wantFound)
+			}
+			if test.wantFound && l.Origin != test.wantOrigin {
+				t.Errorf("Log(%q) origin = %q, want %q", test.origin, l.Origin, test.wantOrigin)
+			}
+		})
 	}
 }

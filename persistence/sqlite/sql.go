@@ -23,8 +23,8 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/formats/note"
-	"github.com/transparency-dev/witness/witness"
 	"github.com/transparency-dev/witness/config"
+	"github.com/transparency-dev/witness/witness"
 	"k8s.io/klog/v2"
 
 	"modernc.org/sqlite"
@@ -69,6 +69,7 @@ type Persistence struct {
 	db *sql.DB
 }
 
+// Init initialises the persistence layer.
 func (p *Persistence) Init(ctx context.Context) error {
 	return nil
 }
@@ -85,6 +86,7 @@ func (p *Persistence) createTablesIfNotExist(ctx context.Context) error {
 	return nil
 }
 
+// AddLogs adds the provided log configs to the database.
 func (p *Persistence) AddLogs(ctx context.Context, lc []config.Log) error {
 	for _, l := range lc {
 		// Note that it's a deliberate choice here to use Insert so as to guarantee that we will not
@@ -100,6 +102,9 @@ func (p *Persistence) AddLogs(ctx context.Context, lc []config.Log) error {
 	return nil
 }
 
+// Logs returns an iterator over the set of known and enabled log configs.
+// Disabled logs will be skipped.
+// An error is returned only if there was an error while attempting to read from the storage.
 func (p *Persistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 	return func(yield func(config.Log, error) bool) {
 		rows, err := p.db.QueryContext(ctx, "SELECT origin, vkey, contact, disabled FROM logs")
@@ -133,9 +138,17 @@ func (p *Persistence) Logs(ctx context.Context) iter.Seq2[config.Log, error] {
 				return
 			}
 		}
+		if err := rows.Err(); err != nil {
+			if !yield(config.Log{}, fmt.Errorf("rows.Err(): %v", err)) {
+				return
+			}
+		}
 	}
 }
 
+// Log returns the configuration info for the provided log, if it exists.
+// Returns the config and true if found, false and no error if not found.
+// An error is returned only if there was an error while attempting to read from the storage.
 func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool, error) {
 	logID := log.ID(origin)
 	row := p.db.QueryRowContext(ctx, "SELECT origin, vkey, contact, disabled FROM logs WHERE logID = ?", logID)
@@ -145,6 +158,9 @@ func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool,
 	c := config.Log{}
 	disabled := false
 	if err := row.Scan(&c.Origin, &c.VKey, &c.Contact, &disabled); err != nil {
+		if err == sql.ErrNoRows {
+			return config.Log{}, false, nil
+		}
 		return config.Log{}, false, fmt.Errorf("failed to scan columns: %v", err)
 	}
 	if disabled {
@@ -159,6 +175,7 @@ func (p *Persistence) Log(ctx context.Context, origin string) (config.Log, bool,
 	return c, true, nil
 }
 
+// Latest returns the latest checkpoint for the given log, if it exists, and nil otherwise.
 func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error) {
 	logID := log.ID(origin)
 	return getLatestCheckpoint(ctx, p.db.QueryRowContext, logID)
@@ -167,15 +184,16 @@ func (p *Persistence) Latest(ctx context.Context, origin string) ([]byte, error)
 // handleBusyErr will return a witness.ErrPushback if the provided error code is SQLITE_BUSY,
 // or return the provided error otherwise.
 func handleBusyErr(err error) error {
-	if sqliteErr, ok := err.(*sqlite.Error); ok && 
-	  (sqliteErr.Code() == sqlite3.SQLITE_BUSY ||
-	   sqliteErr.Code() == sqlite3.SQLITE_BUSY_SNAPSHOT ||
-	   sqliteErr.Code() == sqlite3.SQLITE_LOCKED) {
+	if sqliteErr, ok := err.(*sqlite.Error); ok &&
+		(sqliteErr.Code() == sqlite3.SQLITE_BUSY ||
+			sqliteErr.Code() == sqlite3.SQLITE_BUSY_SNAPSHOT ||
+			sqliteErr.Code() == sqlite3.SQLITE_LOCKED) {
 		return witness.ErrPushback
 	}
 	return err
 }
 
+// Update attempts to atomically update the latest checkpoint for the given log.
 func (p *Persistence) Update(ctx context.Context, origin string, f func([]byte) ([]byte, error)) error {
 	logID := log.ID(origin)
 	tx, err := p.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
