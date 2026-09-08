@@ -14,6 +14,9 @@ a single executable that bundles all of the components. Instructions for deployi
 1. Create a `.env` file in this new directory, populated as described in [configuration](#configuration)
 1. From that directory, run `docker compose up -d`
 
+The image is hardened. It runs as uid 65532, read-only, with no capabilities.
+Docker gives the `data` volume the right ownership, so host-mounted paths need `chown 65532`.
+
 ### .env File
 
 The `.env` file required for the Docker service is a key-value format with this template:

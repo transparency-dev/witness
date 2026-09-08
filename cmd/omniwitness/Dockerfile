@@ -1,26 +1,35 @@
 FROM golang:1.27-alpine@sha256:4cb7ac979db5fcc41cae44b2227ba5ab8a51e8807f40d9ba4dee20a0ad960b5b AS builder
-RUN apk add --no-cache gcc musl-dev
 
 ARG GOFLAGS=""
 ENV GOFLAGS=$GOFLAGS
-ENV GO111MODULE=on
+ENV CGO_ENABLED=0
 
 # Move to working directory /build
 WORKDIR /build
 
 # Copy and download dependency using go mod
-COPY go.mod .
-COPY go.sum .
+COPY go.mod go.sum .
 RUN go mod download
 
 # Copy the code into the container
 COPY . .
 
 # Build the application
-RUN go build -o bin/omniwitness ./cmd/omniwitness
+RUN go build -trimpath -ldflags="-s -w" -o bin/omniwitness ./cmd/omniwitness
 
-# Build release image
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+# Created here: the release image has no shell to mkdir with.
+RUN mkdir -p /build/data
 
+# Build release image.
+# No shell, no package manager, uid/gid 65532, ships CA certificates.
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7
+
+COPY --from=builder --chown=65532:65532 /build/data /data
 COPY --from=builder /build/bin/omniwitness /bin/omniwitness
+
+USER 65532:65532
+
+# Defaults of --listen and --metrics_listen; both >1024.
+EXPOSE 8080 8081
+
 ENTRYPOINT ["/bin/omniwitness"]
