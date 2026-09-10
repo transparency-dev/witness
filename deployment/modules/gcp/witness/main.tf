@@ -64,7 +64,7 @@ data "google_secret_manager_secret" "witness_secret" {
 data "google_secret_manager_secret_version" "witness_secret_data" {
   for_each          = toset(var.witness_secret_names)
   secret            = data.google_secret_manager_secret.witness_secret[each.value].id
-  version           = 1
+  version           = var.witness_secret_version
   fetch_secret_data = false
 }
 

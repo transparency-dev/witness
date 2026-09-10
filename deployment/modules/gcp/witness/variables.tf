@@ -76,3 +76,9 @@ variable "witness_secret_names" {
   description = "Secret Manager secret names containing the note-formatted key to use for signing checkpoints."
   type        = list(string)
 }
+
+variable "witness_secret_version" {
+  description = "Secret Manager secret version to use for signing checkpoints. IMPORTANT: This version will be used for ALL secrets provided in witness_secret_names."
+  type        = int
+  default     = 1
+}
