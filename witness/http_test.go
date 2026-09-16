@@ -180,6 +180,10 @@ func TestHandler(t *testing.T) {
 			witness:    &testWitness{updateErr: ErrOldSizeInvalid},
 			wantStatus: http.StatusBadRequest,
 		}, {
+			name:       "ErrInvalidCheckpoint",
+			witness:    &testWitness{updateErr: ErrInvalidCheckpoint},
+			wantStatus: http.StatusBadRequest,
+		}, {
 			name:       "ErrRootMismatch",
 			witness:    &testWitness{updateErr: ErrRootMismatch},
 			wantStatus: http.StatusUnprocessableEntity,
@@ -202,6 +206,60 @@ func TestHandler(t *testing.T) {
 			}
 			if got, want := string(body), test.wantBody; got != want {
 				t.Errorf("handleUpdate got body %q, %q", got, want)
+			}
+		})
+	}
+}
+
+// TestHandlerAgainstRealWitness drives handleUpdate with a real Witness rather than a fake.
+//
+// TestHandler above injects sentinels directly, so it verifies the switch statement but cannot detect
+// a sentinel that Update never actually returns. These cases pin the status codes the spec mandates
+// to the errors the witness genuinely produces.
+func TestHandlerAgainstRealWitness(t *testing.T) {
+	testRoot := dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)
+	goodCP := mustCreateCheckpoint(t, mSK, "monkeys", 5, testRoot)
+
+	for _, test := range []struct {
+		name       string
+		cp         []byte
+		wantStatus int
+	}{
+		{
+			name:       "valid checkpoint",
+			cp:         goodCP,
+			wantStatus: http.StatusOK,
+		}, {
+			// SPEC: If none of the signatures verify against any of the trusted public keys, the
+			//       witness MUST respond with a "403 Forbidden" HTTP status code.
+			name:       "signature doesn't verify",
+			cp:         mustCorruptSignature(t, goodCP),
+			wantStatus: http.StatusForbidden,
+		}, {
+			name:       "signed only by an untrusted key",
+			cp:         mustCreateCheckpoint(t, bSK, "monkeys", 5, testRoot),
+			wantStatus: http.StatusForbidden,
+		}, {
+			// SPEC: If the checkpoint origin is unknown, the witness MUST respond with a "404 Not
+			//       Found" HTTP status code.
+			name:       "unknown origin",
+			cp:         mustCreateCheckpoint(t, bSK, "bananas", 5, testRoot),
+			wantStatus: http.StatusNotFound,
+		}, {
+			name:       "malformed checkpoint",
+			cp:         []byte("monkeys\nthis is not a checkpoint\n"),
+			wantStatus: http.StatusBadRequest,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			w := newWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
+
+			sc, _, _, err := handleUpdate(t.Context(), w.Update, 0, test.cp, nil)
+			if err != nil {
+				t.Fatalf("handleUpdate: %v", err)
+			}
+			if got, want := sc, test.wantStatus; got != want {
+				t.Errorf("handleUpdate got status %d, want %d", got, want)
 			}
 		})
 	}

@@ -102,6 +102,8 @@ func handleUpdate(ctx context.Context, update UpdateFunc, oldSize uint64, newCP 
 			return http.StatusForbidden, nil, "", nil
 		case errors.Is(updateErr, ErrOldSizeInvalid):
 			return http.StatusBadRequest, nil, "", nil
+		case errors.Is(updateErr, ErrInvalidCheckpoint):
+			return http.StatusBadRequest, nil, "", nil
 		case errors.Is(updateErr, ErrInvalidProof):
 			return http.StatusUnprocessableEntity, nil, "", nil
 		case errors.Is(updateErr, ErrRootMismatch):

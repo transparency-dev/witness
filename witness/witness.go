@@ -49,6 +49,9 @@ var (
 var (
 	// ErrNoValidSignature is returned by calls to Update if the provided checkpoint has no valid signature by the expected key.
 	ErrNoValidSignature = errors.New("no valid signatures")
+	// ErrInvalidCheckpoint is returned by calls to Update if the provided checkpoint is malformed, e.g. it is not a
+	// well-formed note, or its contents cannot be parsed as a checkpoint.
+	ErrInvalidCheckpoint = errors.New("invalid checkpoint")
 	// ErrUnknownLog is returned by calls to Update if the provided checkpoint carries an Origin which is unknown to the
 	// witness.
 	ErrUnknownLog = errors.New("unknown log")
@@ -158,6 +161,8 @@ func (w *Witness) GetCheckpoint(ctx context.Context, origin string) ([]byte, err
 //
 // - no error: The checkpoint was accepted, and a serialised note-signature is returned.
 // - ErrCheckpointStale or ErrOldSizeInvalid: the presented checkpoint is out of date, the size of the current checkpoint is returned.
+// - ErrNoValidSignature: none of the signatures on the presented checkpoint verify against the key(s) trusted for its origin.
+// - ErrInvalidCheckpoint: the presented checkpoint is not a well-formed signed checkpoint.
 // - Any other error, no supporting values are returned.
 func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cProof [][]byte) ([]byte, uint64, error) {
 	// Check the signatures on the raw checkpoint and parse it
@@ -168,7 +173,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	next, nextNote, origin, err := func() (*log.Checkpoint, *note.Note, string, error) {
 		origin, _, found := strings.Cut(string(nextRaw), "\n")
 		if !found {
-			return nil, nil, "", errors.New("invalid checkpoint")
+			return nil, nil, "", fmt.Errorf("%w: no newline in checkpoint", ErrInvalidCheckpoint)
 		}
 		v, ok, err := w.VerifierForLog(ctx, origin)
 		if err != nil {
@@ -177,8 +182,36 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		if !ok {
 			return nil, nil, "", ErrUnknownLog
 		}
-		cp, _, n, err := log.ParseCheckpoint(nextRaw, origin, v)
-		return cp, n, origin, err
+
+		// SPEC: If none of the signatures verify against any of the trusted public keys, the witness MUST
+		//       respond with a "403 Forbidden" HTTP status code.
+		//
+		// note.Open drops signatures made by keys we don't know about into n.UnverifiedSigs, which satisfies
+		// the "MUST ignore signatures from unknown keys" requirement above. Since the only verifier we hand it
+		// is the one we trust for this origin, a successful Open guarantees the log itself signed nextRaw, so
+		// there's no need for the additional log-signature check that log.ParseCheckpoint would perform.
+		//
+		// We deliberately don't use log.ParseCheckpoint here: it flattens every failure mode into an opaque
+		// error, which leaves us unable to distinguish "bad signature" (403) from "malformed input" (400).
+		n, err := note.Open(nextRaw, note.VerifierList(v))
+		if err != nil {
+			var invalidSig *note.InvalidSignatureError
+			var unverified *note.UnverifiedNoteError
+			if errors.As(err, &invalidSig) || errors.As(err, &unverified) {
+				return nil, nil, origin, fmt.Errorf("%w: %v", ErrNoValidSignature, err)
+			}
+			// Anything else (e.g. a malformed note) is a bad request rather than a signature failure.
+			return nil, nil, origin, fmt.Errorf("%w: %v", ErrInvalidCheckpoint, err)
+		}
+
+		cp := &log.Checkpoint{}
+		if _, err := cp.Unmarshal([]byte(n.Text)); err != nil {
+			return nil, nil, origin, fmt.Errorf("%w: %v", ErrInvalidCheckpoint, err)
+		}
+		if cp.Origin != origin {
+			return nil, nil, origin, fmt.Errorf("%w: got origin %q but expected %q", ErrInvalidCheckpoint, cp.Origin, origin)
+		}
+		return cp, n, origin, nil
 	}()
 	if err != nil {
 		return nil, 0, err

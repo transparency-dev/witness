@@ -336,6 +336,114 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+// mustCorruptSignature returns cp with the signature bytes on its last signature line replaced by
+// garbage, leaving the signer name and key hash prefix intact.
+//
+// The result is a structurally valid note which routes to the same verifier but fails verification,
+// i.e. it provokes a note.InvalidSignatureError rather than a note.UnverifiedNoteError.
+func mustCorruptSignature(t *testing.T, cp []byte) []byte {
+	t.Helper()
+	i := bytes.LastIndex(cp, []byte("— "))
+	if i < 0 {
+		t.Fatalf("no signature line found in %q", cp)
+	}
+	parts := bytes.SplitN(bytes.TrimSuffix(cp[i:], []byte("\n")), []byte(" "), 3)
+	if len(parts) != 3 {
+		t.Fatalf("malformed signature line %q", cp[i:])
+	}
+	sig, err := base64.StdEncoding.DecodeString(string(parts[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Flip a bit in the signature itself, leaving the leading 4 byte key hash alone.
+	sig[len(sig)-1] ^= 0xff
+
+	out := append([]byte{}, cp[:i]...)
+	return append(out, fmt.Sprintf("— %s %s\n", parts[1], base64.StdEncoding.EncodeToString(sig))...)
+}
+
+// mustSignText signs an arbitrary note body, which lets us build a correctly signed note whose
+// contents are not a parseable checkpoint.
+func mustSignText(t *testing.T, sk string, text string) []byte {
+	t.Helper()
+	signer, err := note.NewSigner(sk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, err := note.Sign(&note.Note{Text: text}, signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return msg
+}
+
+// TestUpdateSignatureVerification exercises the real Update signature/parse paths.
+//
+// SPEC (https://c2sp.org/tlog-witness@v1.0.0): "If the checkpoint origin is unknown, the witness MUST
+// respond with a 404 Not Found HTTP status code. If none of the signatures verify against any of the
+// trusted public keys, the witness MUST respond with a 403 Forbidden HTTP status code."
+//
+// These cases must map onto the sentinels the HTTP layer translates into those codes, rather than
+// falling through to a 500.
+func TestUpdateSignatureVerification(t *testing.T) {
+	testRoot := dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)
+	goodCP := mustCreateCheckpoint(t, mSK, "monkeys", 5, testRoot)
+
+	for _, test := range []struct {
+		desc    string
+		cp      []byte
+		wantErr error
+	}{
+		{
+			desc: "valid signature is accepted",
+			cp:   goodCP,
+		}, {
+			desc:    "signature from trusted key doesn't verify",
+			cp:      mustCorruptSignature(t, goodCP),
+			wantErr: ErrNoValidSignature,
+		}, {
+			desc:    "signed only by an untrusted key",
+			cp:      mustCreateCheckpoint(t, bSK, "monkeys", 5, testRoot),
+			wantErr: ErrNoValidSignature,
+		}, {
+			desc:    "unsigned checkpoint",
+			cp:      []byte("monkeys\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "not a note",
+			cp:      []byte("monkeys\nthis is not a checkpoint\n"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "no newline",
+			cp:      []byte("monkeys"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "well signed but unparseable body",
+			cp:      mustSignText(t, mSK, "monkeys\nnot-a-size\nnot-a-hash\n"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "unknown origin",
+			cp:      mustCreateCheckpoint(t, bSK, "bananas", 5, testRoot),
+			wantErr: ErrUnknownLog,
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			w := newWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
+
+			_, _, err := w.Update(t.Context(), 0, test.cp, nil)
+			if test.wantErr == nil {
+				if err != nil {
+					t.Fatalf("Update: %v, want no error", err)
+				}
+				return
+			}
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("Update: got %v, want %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func newPersistence() *testPersistence {
 	return &testPersistence{
 		checkpoints: make(map[string][]byte),
