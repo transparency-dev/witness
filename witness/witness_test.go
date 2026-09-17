@@ -516,11 +516,16 @@ func TestSignSubtree(t *testing.T) {
 				return
 			}
 
-			// Returned signatures should be note signatures.
-			lines := bytes.Split(bytes.TrimSpace(sigs), []byte("\n"))
+			// Returned signatures should be note signatures, so split on newlines but keep them attached.
+			lines := bytes.SplitAfter(sigs, []byte("\n"))
 			if len(lines) == 0 {
 				t.Fatalf("expected at least one signature line and a trailing newline, got: %q", sigs)
 			}
+			// Final element MUST be empty, or the final signature was invalid.
+			if len(lines[len(lines)-1]) != 0 {
+				t.Fatalf("last element is not empty, final signature was invalid: %q", lines[len(lines)-1])
+			}
+			lines = lines[:len(lines)-1]
 
 			vs := make(map[string]f_note.SubtreeVerifier)
 			for _, s := range w.subtreeSigners {
@@ -528,6 +533,7 @@ func TestSignSubtree(t *testing.T) {
 			}
 			// Verify the returned subtree signature(s)
 			for _, s := range lines {
+				// Check the returned signature is in the correct format.
 				sigLine := string(s)
 				bits := strings.Split(sigLine, " ")
 				if len(bits) != 3 {
@@ -546,17 +552,14 @@ func TestSignSubtree(t *testing.T) {
 				if len(sigBytes) < 4 {
 					t.Fatalf("signature too short: %d bytes", len(sigBytes))
 				}
-				// Ignore the hash.
-				actualSig := sigBytes[4:]
 
 				// Now verify the subtree signature.
 				verifier, ok := vs[signerName]
 				if !ok {
 					t.Fatalf("no verifier found for name %q", signerName)
 				}
-				// SPEC: If the cosignature format supports timestamps, the timestamp MUST be zero.
-				if !verifier.VerifySubtree(0, "monkeys", tc.start, tc.end, tc.subRoot, actualSig) {
-					t.Fatalf("subtree signature verification failed")
+				if !verifier.VerifySubtree("monkeys", tc.start, tc.end, tc.subRoot, s) {
+					t.Fatalf("subtree signature verification failed (signature %q)", s)
 				}
 			}
 		})

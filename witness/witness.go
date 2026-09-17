@@ -438,26 +438,11 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 
 	var sigs bytes.Buffer
 	for _, s := range w.subtreeSigners {
-		// SPEC: If the cosignature format supports timestamps, the timestamp MUST be zero.
-		sig, err := s.SignSubtree(0, cp.Origin, start, end, subRoot)
+		sig, err := s.SignSubtree(cp.Origin, start, end, subRoot)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't sign subtree: %v", err)
 		}
-
-		name := s.Name()
-		hash := s.KeyHash()
-		if !isValidSignerName(name) {
-			return nil, errors.New("invalid signer")
-		}
-
-		var hbuf [4]byte
-		binary.BigEndian.PutUint32(hbuf[:], hash)
-		b64 := base64.StdEncoding.EncodeToString(append(hbuf[:], sig...))
-		_, _ = sigs.WriteString("— ")
-		_, _ = sigs.WriteString(name)
-		_, _ = sigs.WriteString(" ")
-		_, _ = sigs.WriteString(b64)
-		_, _ = sigs.WriteString("\n")
+		_, _ = sigs.Write(sig)
 	}
 	if sigs.Len() == 0 {
 		return nil, ErrNotImplemented
