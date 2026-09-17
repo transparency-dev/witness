@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/transparency-dev/merkle/rfc6962"
 )
 
 const (
@@ -293,6 +294,10 @@ func TestSubtreeHandler(t *testing.T) {
 			witness:    &testWitness{signSubtreeErr: ErrSubtreeRangeInvalid},
 			wantStatus: http.StatusBadRequest,
 		}, {
+			name:       "ErrInvalidCheckpoint",
+			witness:    &testWitness{signSubtreeErr: ErrInvalidCheckpoint},
+			wantStatus: http.StatusBadRequest,
+		}, {
 			name:       "ErrInvalidProof",
 			witness:    &testWitness{signSubtreeErr: ErrInvalidProof},
 			wantStatus: http.StatusUnprocessableEntity,
@@ -319,6 +324,65 @@ func TestSubtreeHandler(t *testing.T) {
 			}
 			if got, want := string(body), test.wantBody; got != want {
 				t.Errorf("handleSignSubtree got body %q, %q", got, want)
+			}
+		})
+	}
+}
+
+// TestSubtreeHandlerAgainstRealWitness drives handleSignSubtree with a real Witness rather than a fake.
+//
+// As with TestHandlerAgainstRealWitness, injecting sentinels only verifies the switch statement: these
+// cases pin the status codes the spec mandates to the errors SignSubtree genuinely produces.
+func TestSubtreeHandlerAgainstRealWitness(t *testing.T) {
+	ctx := t.Context()
+	w := newSubtreeWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
+
+	// Build a size 2 log checkpoint, and have the witness cosign it.
+	d0, d1 := make([]byte, 32), make([]byte, 32)
+	d0[0], d1[0] = 0xaa, 0xbb
+	root := rfc6962.DefaultHasher.HashChildren(d0, d1)
+	logCp := mustCreateCheckpoint(t, mSK, "monkeys", 2, root)
+	sigs, _, err := w.Update(ctx, 0, logCp, nil)
+	if err != nil {
+		t.Fatalf("failed to update witness checkpoint: %v", err)
+	}
+	cosignedCp := append(bytes.Clone(logCp), sigs...)
+
+	for _, test := range []struct {
+		name       string
+		cp         []byte
+		wantStatus int
+	}{
+		{
+			name:       "witness cosigned checkpoint",
+			cp:         cosignedCp,
+			wantStatus: http.StatusOK,
+		}, {
+			// SPEC: The witness MUST verify that the checkpoint includes a valid cosignature from one
+			//       of its own keys. If the witness can't verify the checkpoint, it MUST respond with
+			//       a "403 Forbidden" HTTP status code.
+			name:       "witness cosignature doesn't verify",
+			cp:         mustCorruptSignature(t, cosignedCp),
+			wantStatus: http.StatusForbidden,
+		}, {
+			name:       "signed only by the log",
+			cp:         logCp,
+			wantStatus: http.StatusForbidden,
+		}, {
+			// SPEC: If the request is invalid according to the rules above, the witness MUST respond
+			//       with a "400 Bad Request" HTTP status code.
+			name:       "not a note",
+			cp:         []byte("monkeys\nthis is not a checkpoint\n"),
+			wantStatus: http.StatusBadRequest,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sc, _, _, err := handleSignSubtree(ctx, w.SignSubtree, 0, 1, d0, [][]byte{d1}, test.cp)
+			if err != nil {
+				t.Fatalf("handleSignSubtree: %v", err)
+			}
+			if got, want := sc, test.wantStatus; got != want {
+				t.Errorf("handleSignSubtree got status %d, want %d", got, want)
 			}
 		})
 	}

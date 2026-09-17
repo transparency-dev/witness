@@ -164,6 +164,8 @@ func handleSignSubtree(ctx context.Context, signSubtree SignSubtreeFunc, start, 
 			return http.StatusForbidden, nil, "", nil
 		case errors.Is(err, ErrSubtreeRangeInvalid):
 			return http.StatusBadRequest, nil, "", nil
+		case errors.Is(err, ErrInvalidCheckpoint):
+			return http.StatusBadRequest, nil, "", nil
 		case errors.Is(err, ErrInvalidProof):
 			return http.StatusUnprocessableEntity, nil, "", nil
 		case errors.Is(err, ErrNotImplemented):

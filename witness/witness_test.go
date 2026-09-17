@@ -487,22 +487,25 @@ func (p *testPersistence) Update(_ context.Context, origin string, f func([]byte
 	return nil
 }
 
-func TestSignSubtree(t *testing.T) {
-	ctx := t.Context()
+// newSubtreeWitness returns a witness configured with two subtree-capable ML-DSA signers.
+func newSubtreeWitness(t *testing.T, logs []logOpts) *Witness {
+	t.Helper()
 
 	const signerPrefix = "witness-mldsa"
 	ns1 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-1", signerPrefix))
 	ns2 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-2", signerPrefix))
 
-	// Setup log verifier.
+	// Setup log verifier(s).
 	logMap := make(cfg)
-	logV, err := note.NewVerifier(mPK)
-	if err != nil {
-		t.Fatalf("failed to create log verifier: %v", err)
+	for _, l := range logs {
+		logV, err := note.NewVerifier(l.PK)
+		if err != nil {
+			t.Fatalf("failed to create log verifier: %v", err)
+		}
+		logMap[log.ID(l.origin)] = logV
 	}
-	logMap[log.ID("monkeys")] = logV
 
-	w, err := New(ctx, Opts{
+	w, err := New(t.Context(), Opts{
 		Persistence:          newPersistence(),
 		EnableSubtreeSigning: true,
 		Signers:              []note.Signer{ns1, ns2},
@@ -510,6 +513,18 @@ func TestSignSubtree(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("failed to create witness: %v", err)
+	}
+	return w
+}
+
+func TestSignSubtree(t *testing.T) {
+	ctx := t.Context()
+
+	w := newSubtreeWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
+
+	logV, err := note.NewVerifier(mPK)
+	if err != nil {
+		t.Fatalf("failed to create log verifier: %v", err)
 	}
 
 	// Create a log checkpoint of size 2.
@@ -580,6 +595,38 @@ func TestSignSubtree(t *testing.T) {
 			proof:   [][]byte{d1},
 			chkpt:   logCp,
 			wantErr: ErrNoWitnessSignature,
+		}, {
+			// SPEC: The witness MUST verify that the checkpoint includes a valid cosignature from one of
+			//       its own keys. If the witness can't verify the checkpoint, it MUST respond with a
+			//       "403 Forbidden" HTTP status code.
+			name:    "witness signature doesn't verify",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   mustCorruptSignature(t, cosignedCp),
+			wantErr: ErrNoWitnessSignature,
+		}, {
+			// SPEC: If the request is invalid according to the rules above, the witness MUST respond
+			//       with a "400 Bad Request" HTTP status code.
+			name:    "unsigned checkpoint",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   fmt.Appendf(nil, "monkeys\n2\n%s\n", base64.StdEncoding.EncodeToString(root)),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			// Note that we can't exercise SignSubtree's "validly signed, but unparseable checkpoint"
+			// branch here: cosignature-v1 verifiers parse the note text as a checkpoint as part of
+			// verification, so such a note fails note.Open as an invalid signature instead.
+			name:    "not a note",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   []byte("monkeys\nthis is not a checkpoint\n"),
+			wantErr: ErrInvalidCheckpoint,
 		},
 		{
 			name:    "invalid subtree range (start >= end)",
