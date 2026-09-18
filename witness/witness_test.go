@@ -444,6 +444,39 @@ func TestUpdateSignatureVerification(t *testing.T) {
 	}
 }
 
+// TestErrBadRequestWrapping pins which errors are part of the "400 Bad Request" class.
+//
+// Callers which don't care why a request was rejected match ErrBadRequest alone, so it matters both
+// that the 400-class errors wrap it, and that errors mapping to other status codes do not.
+func TestErrBadRequestWrapping(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		want bool
+	}{
+		{err: ErrOldSizeInvalid, want: true},
+		{err: ErrInvalidCheckpoint, want: true},
+		{err: ErrSubtreeRangeInvalid, want: true},
+		{err: ErrBadRequest, want: true},
+		// These map to 409, 422, 422, 404, 403 and 403 respectively.
+		{err: ErrCheckpointStale, want: false},
+		{err: ErrInvalidProof, want: false},
+		{err: ErrRootMismatch, want: false},
+		{err: ErrUnknownLog, want: false},
+		{err: ErrNoValidSignature, want: false},
+		{err: ErrNoWitnessSignature, want: false},
+	} {
+		t.Run(test.err.Error(), func(t *testing.T) {
+			if got := errors.Is(test.err, ErrBadRequest); got != test.want {
+				t.Errorf("errors.Is(%v, ErrBadRequest) = %v, want %v", test.err, got, test.want)
+			}
+			// Wrapping must not make the specific errors interchangeable with each other.
+			if test.err != ErrOldSizeInvalid && errors.Is(test.err, ErrOldSizeInvalid) {
+				t.Errorf("errors.Is(%v, ErrOldSizeInvalid) = true, want false", test.err)
+			}
+		})
+	}
+}
+
 func newPersistence() *testPersistence {
 	return &testPersistence{
 		checkpoints: make(map[string][]byte),

@@ -100,9 +100,9 @@ func handleUpdate(ctx context.Context, update UpdateFunc, oldSize uint64, newCP 
 			return http.StatusNotFound, nil, "", nil
 		case errors.Is(updateErr, ErrNoValidSignature):
 			return http.StatusForbidden, nil, "", nil
-		case errors.Is(updateErr, ErrOldSizeInvalid):
-			return http.StatusBadRequest, nil, "", nil
-		case errors.Is(updateErr, ErrInvalidCheckpoint):
+		// ErrOldSizeInvalid and ErrInvalidCheckpoint both wrap ErrBadRequest. Matching the class means
+		// any 400-worthy error is handled here rather than falling through to a 500.
+		case errors.Is(updateErr, ErrBadRequest):
 			return http.StatusBadRequest, nil, "", nil
 		case errors.Is(updateErr, ErrInvalidProof):
 			return http.StatusUnprocessableEntity, nil, "", nil
@@ -162,9 +162,8 @@ func handleSignSubtree(ctx context.Context, signSubtree SignSubtreeFunc, start, 
 			return http.StatusNotFound, nil, "", nil
 		case errors.Is(err, ErrNoWitnessSignature):
 			return http.StatusForbidden, nil, "", nil
-		case errors.Is(err, ErrSubtreeRangeInvalid):
-			return http.StatusBadRequest, nil, "", nil
-		case errors.Is(err, ErrInvalidCheckpoint):
+		// ErrSubtreeRangeInvalid and ErrInvalidCheckpoint both wrap ErrBadRequest.
+		case errors.Is(err, ErrBadRequest):
 			return http.StatusBadRequest, nil, "", nil
 		case errors.Is(err, ErrInvalidProof):
 			return http.StatusUnprocessableEntity, nil, "", nil

@@ -185,6 +185,10 @@ func TestHandler(t *testing.T) {
 			witness:    &testWitness{updateErr: ErrInvalidCheckpoint},
 			wantStatus: http.StatusBadRequest,
 		}, {
+			name:       "ErrBadRequest",
+			witness:    &testWitness{updateErr: ErrBadRequest},
+			wantStatus: http.StatusBadRequest,
+		}, {
 			name:       "ErrRootMismatch",
 			witness:    &testWitness{updateErr: ErrRootMismatch},
 			wantStatus: http.StatusUnprocessableEntity,
@@ -296,6 +300,10 @@ func TestSubtreeHandler(t *testing.T) {
 		}, {
 			name:       "ErrInvalidCheckpoint",
 			witness:    &testWitness{signSubtreeErr: ErrInvalidCheckpoint},
+			wantStatus: http.StatusBadRequest,
+		}, {
+			name:       "ErrBadRequest",
+			witness:    &testWitness{signSubtreeErr: ErrBadRequest},
 			wantStatus: http.StatusBadRequest,
 		}, {
 			name:       "ErrInvalidProof",

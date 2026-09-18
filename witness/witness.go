@@ -49,15 +49,22 @@ var (
 var (
 	// ErrNoValidSignature is returned by calls to Update if the provided checkpoint has no valid signature by the expected key.
 	ErrNoValidSignature = errors.New("no valid signatures")
+	// ErrBadRequest is the class of error which causes the witness to respond with a "400 Bad Request"
+	// HTTP status code. The more specific errors below wrap it.
+	//
+	// The tlog-witness spec defines no response body, Content-Type or header for a 400 response, so a
+	// client which receives one cannot always determine the cause; it returns this error on its own in
+	// that case.
+	ErrBadRequest = errors.New("bad request")
 	// ErrInvalidCheckpoint is returned by calls to Update and SignSubtree if the provided checkpoint is malformed,
 	// e.g. it is not a well-formed note, or its contents cannot be parsed as a checkpoint.
-	ErrInvalidCheckpoint = errors.New("invalid checkpoint")
+	ErrInvalidCheckpoint = fmt.Errorf("%w: invalid checkpoint", ErrBadRequest)
 	// ErrUnknownLog is returned by calls to Update if the provided checkpoint carries an Origin which is unknown to the
 	// witness.
 	ErrUnknownLog = errors.New("unknown log")
 	// ErrOldSizeInvalid is returned by calls to Update if the provided oldSize parameter is larger than the size of the
 	// submitted checkpoint.
-	ErrOldSizeInvalid = errors.New("old size > current")
+	ErrOldSizeInvalid = fmt.Errorf("%w: old size > current", ErrBadRequest)
 	// ErrCheckpointStale is returned by calls to Update if the oldSize parameter does not match the size of the currently
 	// stored checkpoint for the same log.
 	ErrCheckpointStale = errors.New("old size != current")
@@ -71,7 +78,7 @@ var (
 	// ErrNoWitnessSignature is returned by calls to SignSubtree if the provided checkpoint has no valid signature by the witness.
 	ErrNoWitnessSignature = errors.New("no witness signature")
 	// ErrSubtreeRangeInvalid is returned by calls to SignSubtree if the subtree range is invalid.
-	ErrSubtreeRangeInvalid = errors.New("subtree range invalid")
+	ErrSubtreeRangeInvalid = fmt.Errorf("%w: subtree range invalid", ErrBadRequest)
 	// ErrNotImplemented is returned if the operation is not supported by the witness's signers.
 	ErrNotImplemented = errors.New("not implemented")
 )

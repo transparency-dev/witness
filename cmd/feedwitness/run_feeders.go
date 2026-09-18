@@ -291,6 +291,9 @@ func statusForError(e error) string {
 		return "unknown_log"
 	case errors.Is(e, witness.ErrOldSizeInvalid):
 		return "old_size_invalid"
+	// Must come after the specific cases above, which wrap ErrBadRequest.
+	case errors.Is(e, witness.ErrBadRequest):
+		return "bad_request"
 	case errors.Is(e, witness.ErrInvalidProof):
 		return "invalid_proof"
 	case errors.Is(e, witness.ErrRootMismatch):
