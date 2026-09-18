@@ -49,12 +49,22 @@ var (
 var (
 	// ErrNoValidSignature is returned by calls to Update if the provided checkpoint has no valid signature by the expected key.
 	ErrNoValidSignature = errors.New("no valid signatures")
+	// ErrBadRequest is the class of error which causes the witness to respond with a "400 Bad Request"
+	// HTTP status code. The more specific errors below wrap it.
+	//
+	// The tlog-witness spec defines no response body, Content-Type or header for a 400 response, so a
+	// client which receives one cannot always determine the cause; it returns this error on its own in
+	// that case.
+	ErrBadRequest = errors.New("bad request")
+	// ErrInvalidCheckpoint is returned by calls to Update and SignSubtree if the provided checkpoint is malformed,
+	// e.g. it is not a well-formed note, or its contents cannot be parsed as a checkpoint.
+	ErrInvalidCheckpoint = fmt.Errorf("%w: invalid checkpoint", ErrBadRequest)
 	// ErrUnknownLog is returned by calls to Update if the provided checkpoint carries an Origin which is unknown to the
 	// witness.
 	ErrUnknownLog = errors.New("unknown log")
 	// ErrOldSizeInvalid is returned by calls to Update if the provided oldSize parameter is larger than the size of the
 	// submitted checkpoint.
-	ErrOldSizeInvalid = errors.New("old size > current")
+	ErrOldSizeInvalid = fmt.Errorf("%w: old size > current", ErrBadRequest)
 	// ErrCheckpointStale is returned by calls to Update if the oldSize parameter does not match the size of the currently
 	// stored checkpoint for the same log.
 	ErrCheckpointStale = errors.New("old size != current")
@@ -68,7 +78,7 @@ var (
 	// ErrNoWitnessSignature is returned by calls to SignSubtree if the provided checkpoint has no valid signature by the witness.
 	ErrNoWitnessSignature = errors.New("no witness signature")
 	// ErrSubtreeRangeInvalid is returned by calls to SignSubtree if the subtree range is invalid.
-	ErrSubtreeRangeInvalid = errors.New("subtree range invalid")
+	ErrSubtreeRangeInvalid = fmt.Errorf("%w: subtree range invalid", ErrBadRequest)
 	// ErrNotImplemented is returned if the operation is not supported by the witness's signers.
 	ErrNotImplemented = errors.New("not implemented")
 )
@@ -158,6 +168,8 @@ func (w *Witness) GetCheckpoint(ctx context.Context, origin string) ([]byte, err
 //
 // - no error: The checkpoint was accepted, and a serialised note-signature is returned.
 // - ErrCheckpointStale or ErrOldSizeInvalid: the presented checkpoint is out of date, the size of the current checkpoint is returned.
+// - ErrNoValidSignature: none of the signatures on the presented checkpoint verify against the key(s) trusted for its origin.
+// - ErrInvalidCheckpoint: the presented checkpoint is not a well-formed signed checkpoint.
 // - Any other error, no supporting values are returned.
 func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cProof [][]byte) ([]byte, uint64, error) {
 	// Check the signatures on the raw checkpoint and parse it
@@ -168,7 +180,7 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 	next, nextNote, origin, err := func() (*log.Checkpoint, *note.Note, string, error) {
 		origin, _, found := strings.Cut(string(nextRaw), "\n")
 		if !found {
-			return nil, nil, "", errors.New("invalid checkpoint")
+			return nil, nil, "", fmt.Errorf("%w: no newline in checkpoint", ErrInvalidCheckpoint)
 		}
 		v, ok, err := w.VerifierForLog(ctx, origin)
 		if err != nil {
@@ -177,8 +189,36 @@ func (w *Witness) Update(ctx context.Context, oldSize uint64, nextRaw []byte, cP
 		if !ok {
 			return nil, nil, "", ErrUnknownLog
 		}
-		cp, _, n, err := log.ParseCheckpoint(nextRaw, origin, v)
-		return cp, n, origin, err
+
+		// SPEC: If none of the signatures verify against any of the trusted public keys, the witness MUST
+		//       respond with a "403 Forbidden" HTTP status code.
+		//
+		// note.Open drops signatures made by keys we don't know about into n.UnverifiedSigs, which satisfies
+		// the "MUST ignore signatures from unknown keys" requirement above. Since the only verifier we hand it
+		// is the one we trust for this origin, a successful Open guarantees the log itself signed nextRaw, so
+		// there's no need for the additional log-signature check that log.ParseCheckpoint would perform.
+		//
+		// We deliberately don't use log.ParseCheckpoint here: it flattens every failure mode into an opaque
+		// error, which leaves us unable to distinguish "bad signature" (403) from "malformed input" (400).
+		n, err := note.Open(nextRaw, note.VerifierList(v))
+		if err != nil {
+			var invalidSig *note.InvalidSignatureError
+			var unverified *note.UnverifiedNoteError
+			if errors.As(err, &invalidSig) || errors.As(err, &unverified) {
+				return nil, nil, origin, fmt.Errorf("%w: %v", ErrNoValidSignature, err)
+			}
+			// Anything else (e.g. a malformed note) is a bad request rather than a signature failure.
+			return nil, nil, origin, fmt.Errorf("%w: %v", ErrInvalidCheckpoint, err)
+		}
+
+		cp := &log.Checkpoint{}
+		if _, err := cp.Unmarshal([]byte(n.Text)); err != nil {
+			return nil, nil, origin, fmt.Errorf("%w: %v", ErrInvalidCheckpoint, err)
+		}
+		if cp.Origin != origin {
+			return nil, nil, origin, fmt.Errorf("%w: got origin %q but expected %q", ErrInvalidCheckpoint, cp.Origin, origin)
+		}
+		return cp, n, origin, nil
 	}()
 	if err != nil {
 		return nil, 0, err
@@ -386,6 +426,15 @@ func (w *Witness) SupportsSubtreeSigning() bool {
 
 // SignSubtree validates the checkpoint was signed by the witness, verifies the subtree
 // consistency proof from the subtree to the checkpoint, and returns a subtree cosignature.
+//
+// The values returned depend on whether or not the request is accepted, and if not, the reason it
+// was rejected. This can be determined through the error:
+//
+// - no error: The request was accepted, and serialised note-signature(s) over the subtree are returned.
+// - ErrNoWitnessSignature: the presented checkpoint carries no signature which verifies against the witness' subtree-capable key(s).
+// - ErrInvalidCheckpoint: the presented checkpoint is not a well-formed signed checkpoint.
+// - ErrUnknownLog: the presented checkpoint carries an Origin which is unknown to the witness.
+// - Any other error, no supporting values are returned.
 func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, cProof [][]byte, chkptRaw []byte) ([]byte, error) {
 	// If none of our keys support subtree signing, then bail.
 	if len(w.subtreeSigners) == 0 {
@@ -393,18 +442,28 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 	}
 
 	// SPEC: The witness MUST verify that the checkpoint includes a valid cosignature from
-	//       one of its own keys.
+	//       one of its own keys. If the witness can't verify the checkpoint, it MUST respond
+	//       with a "403 Forbidden" HTTP status code.
 	//
 	// We're a bit tighter here - we'll only proceed if the checkpoint was signed by one of our
 	// *subtree-capable* signers.
+	//
+	// As in Update, we distinguish "we found signature(s), but none of ours verify" from "this isn't
+	// a well-formed signed checkpoint": the former is a signature failure (403), whereas the latter
+	// is an invalid request (400), since SPEC requires the request body to be followed by a checkpoint.
 	n, err := note.Open(chkptRaw, note.VerifierList(w.subtreeVerifiers...))
 	if err != nil {
-		return nil, ErrNoWitnessSignature
+		var invalidSig *note.InvalidSignatureError
+		var unverified *note.UnverifiedNoteError
+		if errors.As(err, &invalidSig) || errors.As(err, &unverified) {
+			return nil, fmt.Errorf("%w: %v", ErrNoWitnessSignature, err)
+		}
+		return nil, fmt.Errorf("%w: %v", ErrInvalidCheckpoint, err)
 	}
 
 	var cp log.Checkpoint
 	if _, err := cp.Unmarshal([]byte(n.Text)); err != nil {
-		return nil, fmt.Errorf("failed to parse checkpoint: %w", err)
+		return nil, fmt.Errorf("%w: failed to parse checkpoint: %v", ErrInvalidCheckpoint, err)
 	}
 
 	// SPEC: If the checkpoint origin is unknown, the witness MUST respond with a "404 Not Found" HTTP status code.

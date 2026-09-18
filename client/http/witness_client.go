@@ -51,12 +51,38 @@ type Witness struct {
 	client *http.Client
 }
 
+// checkpointSize returns the size from the second line of the provided checkpoint.
+//
+// The checkpoint is otherwise opaque to this client: no signature verification is performed, and ok
+// is false if the size cannot be determined, in which case callers should make no assumptions about
+// the checkpoint and let the witness decide.
+func checkpointSize(cp []byte) (uint64, bool) {
+	parts := bytes.SplitN(cp, []byte{'\n'}, 3)
+	if len(parts) < 3 {
+		return 0, false
+	}
+	size, err := strconv.ParseUint(string(parts[1]), 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return size, true
+}
+
 // Update attempts to clock the witness forward.
 //
 // Returns the HTTP status code and the response body, or an error.
 func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error) {
 	if l := len(proof); l > 63 {
 		return nil, 0, errors.New("too many proof lines")
+	}
+	// SPEC: The old size MUST be equal to or lower than the checkpoint size. Otherwise, the witness
+	//       MUST respond with a "400 Bad Request" HTTP status code.
+	//
+	// We can determine this without asking, which saves a doomed round trip and lets us report the
+	// specific cause: a 400 from the witness carries nothing to distinguish it from any other invalid
+	// request.
+	if size, ok := checkpointSize(newCP); ok && oldSize > size {
+		return nil, 0, fmt.Errorf("%w (%d > %d)", witness.ErrOldSizeInvalid, oldSize, size)
 	}
 
 	// bytes.Buffer cannot return an error for writes, so we can omit error checking on writes below.
@@ -109,7 +135,9 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 	case http.StatusForbidden:
 		return nil, 0, witness.ErrNoValidSignature
 	case http.StatusBadRequest:
-		return nil, 0, witness.ErrOldSizeInvalid
+		// SPEC: no response body, Content-Type or header is defined for 400, so we can't tell why the
+		//       witness rejected this. The old size case is ruled out before we send.
+		return nil, 0, fmt.Errorf("%w (invalid old size, or malformed request)", witness.ErrBadRequest)
 	case http.StatusUnprocessableEntity:
 		return nil, 0, witness.ErrInvalidProof
 	case http.StatusTooManyRequests:
@@ -165,7 +193,9 @@ func (w Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []b
 	case http.StatusOK, 0:
 		return body, nil
 	case http.StatusBadRequest:
-		return nil, witness.ErrSubtreeRangeInvalid
+		// SPEC: 400 covers every invalid sign-subtree request (range line, subtree range, malformed
+		//       checkpoint), with nothing in the response to say which rule was broken.
+		return nil, fmt.Errorf("%w (invalid subtree range, or malformed request)", witness.ErrBadRequest)
 	case http.StatusForbidden:
 		return nil, witness.ErrNoWitnessSignature
 	case http.StatusNotFound:

@@ -336,6 +336,147 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+// mustCorruptSignature returns cp with the signature bytes on its last signature line replaced by
+// garbage, leaving the signer name and key hash prefix intact.
+//
+// The result is a structurally valid note which routes to the same verifier but fails verification,
+// i.e. it provokes a note.InvalidSignatureError rather than a note.UnverifiedNoteError.
+func mustCorruptSignature(t *testing.T, cp []byte) []byte {
+	t.Helper()
+	i := bytes.LastIndex(cp, []byte("— "))
+	if i < 0 {
+		t.Fatalf("no signature line found in %q", cp)
+	}
+	parts := bytes.SplitN(bytes.TrimSuffix(cp[i:], []byte("\n")), []byte(" "), 3)
+	if len(parts) != 3 {
+		t.Fatalf("malformed signature line %q", cp[i:])
+	}
+	sig, err := base64.StdEncoding.DecodeString(string(parts[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Flip a bit in the signature itself, leaving the leading 4 byte key hash alone.
+	sig[len(sig)-1] ^= 0xff
+
+	out := append([]byte{}, cp[:i]...)
+	return append(out, fmt.Sprintf("— %s %s\n", parts[1], base64.StdEncoding.EncodeToString(sig))...)
+}
+
+// mustSignText signs an arbitrary note body, which lets us build a correctly signed note whose
+// contents are not a parseable checkpoint.
+func mustSignText(t *testing.T, sk string, text string) []byte {
+	t.Helper()
+	signer, err := note.NewSigner(sk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, err := note.Sign(&note.Note{Text: text}, signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return msg
+}
+
+// TestUpdateSignatureVerification exercises the real Update signature/parse paths.
+//
+// SPEC (https://c2sp.org/tlog-witness@v1.0.0): "If the checkpoint origin is unknown, the witness MUST
+// respond with a 404 Not Found HTTP status code. If none of the signatures verify against any of the
+// trusted public keys, the witness MUST respond with a 403 Forbidden HTTP status code."
+//
+// These cases must map onto the sentinels the HTTP layer translates into those codes, rather than
+// falling through to a 500.
+func TestUpdateSignatureVerification(t *testing.T) {
+	testRoot := dh("e35b268c1522014ef412d2a54fa94838862d453631617b0307e5c77dcbeefc11", 32)
+	goodCP := mustCreateCheckpoint(t, mSK, "monkeys", 5, testRoot)
+
+	for _, test := range []struct {
+		desc    string
+		cp      []byte
+		wantErr error
+	}{
+		{
+			desc: "valid signature is accepted",
+			cp:   goodCP,
+		}, {
+			desc:    "signature from trusted key doesn't verify",
+			cp:      mustCorruptSignature(t, goodCP),
+			wantErr: ErrNoValidSignature,
+		}, {
+			desc:    "signed only by an untrusted key",
+			cp:      mustCreateCheckpoint(t, bSK, "monkeys", 5, testRoot),
+			wantErr: ErrNoValidSignature,
+		}, {
+			desc:    "unsigned checkpoint",
+			cp:      []byte("monkeys\n5\n41smjBUiAU70EtKlT6lIOIYtRTYxYXsDB+XHfcvu/BE=\n"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "not a note",
+			cp:      []byte("monkeys\nthis is not a checkpoint\n"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "no newline",
+			cp:      []byte("monkeys"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "well signed but unparseable body",
+			cp:      mustSignText(t, mSK, "monkeys\nnot-a-size\nnot-a-hash\n"),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			desc:    "unknown origin",
+			cp:      mustCreateCheckpoint(t, bSK, "bananas", 5, testRoot),
+			wantErr: ErrUnknownLog,
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			w := newWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
+
+			_, _, err := w.Update(t.Context(), 0, test.cp, nil)
+			if test.wantErr == nil {
+				if err != nil {
+					t.Fatalf("Update: %v, want no error", err)
+				}
+				return
+			}
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("Update: got %v, want %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
+// TestErrBadRequestWrapping pins which errors are part of the "400 Bad Request" class.
+//
+// Callers which don't care why a request was rejected match ErrBadRequest alone, so it matters both
+// that the 400-class errors wrap it, and that errors mapping to other status codes do not.
+func TestErrBadRequestWrapping(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		want bool
+	}{
+		{err: ErrOldSizeInvalid, want: true},
+		{err: ErrInvalidCheckpoint, want: true},
+		{err: ErrSubtreeRangeInvalid, want: true},
+		{err: ErrBadRequest, want: true},
+		// These map to 409, 422, 422, 404, 403 and 403 respectively.
+		{err: ErrCheckpointStale, want: false},
+		{err: ErrInvalidProof, want: false},
+		{err: ErrRootMismatch, want: false},
+		{err: ErrUnknownLog, want: false},
+		{err: ErrNoValidSignature, want: false},
+		{err: ErrNoWitnessSignature, want: false},
+	} {
+		t.Run(test.err.Error(), func(t *testing.T) {
+			if got := errors.Is(test.err, ErrBadRequest); got != test.want {
+				t.Errorf("errors.Is(%v, ErrBadRequest) = %v, want %v", test.err, got, test.want)
+			}
+			// Wrapping must not make the specific errors interchangeable with each other.
+			if test.err != ErrOldSizeInvalid && errors.Is(test.err, ErrOldSizeInvalid) {
+				t.Errorf("errors.Is(%v, ErrOldSizeInvalid) = true, want false", test.err)
+			}
+		})
+	}
+}
+
 func newPersistence() *testPersistence {
 	return &testPersistence{
 		checkpoints: make(map[string][]byte),
@@ -379,22 +520,25 @@ func (p *testPersistence) Update(_ context.Context, origin string, f func([]byte
 	return nil
 }
 
-func TestSignSubtree(t *testing.T) {
-	ctx := t.Context()
+// newSubtreeWitness returns a witness configured with two subtree-capable ML-DSA signers.
+func newSubtreeWitness(t *testing.T, logs []logOpts) *Witness {
+	t.Helper()
 
 	const signerPrefix = "witness-mldsa"
 	ns1 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-1", signerPrefix))
 	ns2 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-2", signerPrefix))
 
-	// Setup log verifier.
+	// Setup log verifier(s).
 	logMap := make(cfg)
-	logV, err := note.NewVerifier(mPK)
-	if err != nil {
-		t.Fatalf("failed to create log verifier: %v", err)
+	for _, l := range logs {
+		logV, err := note.NewVerifier(l.PK)
+		if err != nil {
+			t.Fatalf("failed to create log verifier: %v", err)
+		}
+		logMap[log.ID(l.origin)] = logV
 	}
-	logMap[log.ID("monkeys")] = logV
 
-	w, err := New(ctx, Opts{
+	w, err := New(t.Context(), Opts{
 		Persistence:          newPersistence(),
 		EnableSubtreeSigning: true,
 		Signers:              []note.Signer{ns1, ns2},
@@ -402,6 +546,18 @@ func TestSignSubtree(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("failed to create witness: %v", err)
+	}
+	return w
+}
+
+func TestSignSubtree(t *testing.T) {
+	ctx := t.Context()
+
+	w := newSubtreeWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
+
+	logV, err := note.NewVerifier(mPK)
+	if err != nil {
+		t.Fatalf("failed to create log verifier: %v", err)
 	}
 
 	// Create a log checkpoint of size 2.
@@ -472,6 +628,38 @@ func TestSignSubtree(t *testing.T) {
 			proof:   [][]byte{d1},
 			chkpt:   logCp,
 			wantErr: ErrNoWitnessSignature,
+		}, {
+			// SPEC: The witness MUST verify that the checkpoint includes a valid cosignature from one of
+			//       its own keys. If the witness can't verify the checkpoint, it MUST respond with a
+			//       "403 Forbidden" HTTP status code.
+			name:    "witness signature doesn't verify",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   mustCorruptSignature(t, cosignedCp),
+			wantErr: ErrNoWitnessSignature,
+		}, {
+			// SPEC: If the request is invalid according to the rules above, the witness MUST respond
+			//       with a "400 Bad Request" HTTP status code.
+			name:    "unsigned checkpoint",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   fmt.Appendf(nil, "monkeys\n2\n%s\n", base64.StdEncoding.EncodeToString(root)),
+			wantErr: ErrInvalidCheckpoint,
+		}, {
+			// Note that we can't exercise SignSubtree's "validly signed, but unparseable checkpoint"
+			// branch here: cosignature-v1 verifiers parse the note text as a checkpoint as part of
+			// verification, so such a note fails note.Open as an invalid signature instead.
+			name:    "not a note",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   []byte("monkeys\nthis is not a checkpoint\n"),
+			wantErr: ErrInvalidCheckpoint,
 		},
 		{
 			name:    "invalid subtree range (start >= end)",
