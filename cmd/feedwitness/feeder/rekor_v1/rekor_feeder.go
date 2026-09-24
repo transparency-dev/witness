@@ -27,7 +27,6 @@ import (
 	"os"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
@@ -60,61 +59,80 @@ type proof struct {
 }
 
 // NewFeedSource returns a populated FeedSource struct configured for Rekor v1 logs.
-func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (*Source, error) {
 	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
+		return nil, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 	treeID := lURL.Query().Get("treeID")
 	if treeID == "" {
-		return feeder.Source{}, errors.New("configured LogURL does not contain the required treeID query parameter")
+		return nil, errors.New("configured LogURL does not contain the required treeID query parameter")
 	}
 
-	fetchCP := func(ctx context.Context) ([]byte, error) {
-		// Each Rekor feeder will request the same log info.
-		// TODO: Explore if it's feasible to request this once for all Rekor feeders.
-		li := logInfo{}
-		if err := getJSON(ctx, c, lURL, "api/v1/log", &li); err != nil {
-			return nil, fmt.Errorf("failed to fetch log info: %v", err)
-		}
-		// Active shard
-		if li.TreeID == treeID {
-			return []byte(li.SignedTreeHead), nil
-		}
-		// Search inactive shards
-		for _, shard := range li.InactiveShards {
-			if shard.TreeID == treeID {
-				return []byte(shard.SignedTreeHead), nil
-			}
-		}
-		return nil, fmt.Errorf("failed to find shard that matched log ID %s from config", treeID)
-	}
-	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
-		if from == 0 {
-			return [][]byte{}, nil
-		}
-		cp := proof{}
-		if err := getJSON(ctx, c, lURL, fmt.Sprintf("api/v1/log/proof?firstSize=%d&lastSize=%d&treeID=%s", from, to.Size, treeID), &cp); err != nil {
-			return nil, fmt.Errorf("failed to fetch log info: %v", err)
-		}
-		var err error
-		p := make([][]byte, len(cp.Hashes))
-		for i := range cp.Hashes {
-			p[i], err = hex.DecodeString(cp.Hashes[i])
-			if err != nil {
-				return nil, fmt.Errorf("invalid proof element at %d: %v", i, err)
-			}
-		}
-		return p, nil
-	}
-
-	return feeder.Source{
-		LogOrigin:       origin,
-		FetchCheckpoint: fetchCP,
-		FetchProof:      fetchProof,
-		LogSigVerifier:  verifier,
+	return &Source{
+		httpClient: c,
+		logURL:     lURL,
+		v:          verifier,
+		origin:     origin,
+		treeID:     treeID,
 	}, nil
 
+}
+
+// Source is a FeederSource which knows how to interact with rekor logs.
+type Source struct {
+	httpClient *http.Client
+	logURL     *url.URL
+	v          note.Verifier
+	origin     string
+	treeID     string
+}
+
+func (s Source) FetchCheckpoint(ctx context.Context) ([]byte, error) {
+	// Each Rekor feeder will request the same log info.
+	// TODO: Explore if it's feasible to request this once for all Rekor feeders.
+	li := logInfo{}
+	if err := getJSON(ctx, s.httpClient, s.logURL, "api/v1/log", &li); err != nil {
+		return nil, fmt.Errorf("failed to fetch log info: %v", err)
+	}
+	// Active shard
+	if li.TreeID == s.treeID {
+		return []byte(li.SignedTreeHead), nil
+	}
+	// Search inactive shards
+	for _, shard := range li.InactiveShards {
+		if shard.TreeID == s.treeID {
+			return []byte(shard.SignedTreeHead), nil
+		}
+	}
+	return nil, fmt.Errorf("failed to find shard that matched log ID %s from config", s.treeID)
+}
+
+func (s Source) FetchProof(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+	if from == 0 {
+		return [][]byte{}, nil
+	}
+	cp := proof{}
+	if err := getJSON(ctx, s.httpClient, s.logURL, fmt.Sprintf("api/v1/log/proof?firstSize=%d&lastSize=%d&treeID=%s", from, to.Size, s.treeID), &cp); err != nil {
+		return nil, fmt.Errorf("failed to fetch log info: %v", err)
+	}
+	var err error
+	p := make([][]byte, len(cp.Hashes))
+	for i := range cp.Hashes {
+		p[i], err = hex.DecodeString(cp.Hashes[i])
+		if err != nil {
+			return nil, fmt.Errorf("invalid proof element at %d: %v", i, err)
+		}
+	}
+	return p, nil
+}
+
+func (s Source) LogSigVerifier() note.Verifier {
+	return s.v
+}
+
+func (s Source) LogOrigin() string {
+	return s.origin
 }
 
 func getJSON(ctx context.Context, c *http.Client, base *url.URL, path string, s interface{}) error {

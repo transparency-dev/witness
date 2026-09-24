@@ -24,7 +24,6 @@ import (
 	"os"
 
 	"github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
 	"k8s.io/klog/v2"
@@ -37,51 +36,67 @@ const (
 )
 
 // NewFeedSource returns a FeedSource configured for PixelBT logs.
-func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (*Source, error) {
 	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
+		return nil, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 
-	fetchCP := func(ctx context.Context) ([]byte, error) {
-		cpTxt, err := fetch(ctx, c, lURL, "checkpoint.txt")
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch checkpoint.txt: %v", err)
-		}
-		return cpTxt, err
-	}
-	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
-		if from == 0 {
-			return [][]byte{}, nil
-		}
-		var h [32]byte
-		copy(h[:], to.Hash)
-		tree := tlog.Tree{
-			N:    int64(to.Size),
-			Hash: h,
-		}
-		tr := tileReader{fetch: func(p string) ([]byte, error) {
-			return fetch(ctx, c, lURL, p)
-		}}
-
-		proof, err := tlog.ProveTree(int64(to.Size), int64(from), tlog.TileHashReader(tree, tr))
-		if err != nil {
-			return nil, fmt.Errorf("ProveTree: %v", err)
-		}
-		r := make([][]byte, 0, len(proof))
-		for _, h := range proof {
-			h := h
-			r = append(r, h[:])
-		}
-		return r, nil
-	}
-
-	return feeder.Source{
-		LogOrigin:       origin,
-		FetchCheckpoint: fetchCP,
-		FetchProof:      fetchProof,
-		LogSigVerifier:  verifier,
+	return &Source{
+		httpClient: c,
+		logURL:     lURL,
+		v:          verifier,
+		origin:     origin,
 	}, nil
+}
+
+// Source is a FeederSource which knows how to interact with Pixel BT logs.
+type Source struct {
+	httpClient *http.Client
+	logURL     *url.URL
+	v          note.Verifier
+	origin     string
+}
+
+func (s Source) FetchCheckpoint(ctx context.Context) ([]byte, error) {
+	cpTxt, err := fetch(ctx, s.httpClient, s.logURL, "checkpoint.txt")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch checkpoint.txt: %v", err)
+	}
+	return cpTxt, err
+}
+
+func (s Source) FetchProof(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+	if from == 0 {
+		return [][]byte{}, nil
+	}
+	var h [32]byte
+	copy(h[:], to.Hash)
+	tree := tlog.Tree{
+		N:    int64(to.Size),
+		Hash: h,
+	}
+	tr := tileReader{fetch: func(p string) ([]byte, error) {
+		return fetch(ctx, s.httpClient, s.logURL, p)
+	}}
+
+	proof, err := tlog.ProveTree(int64(to.Size), int64(from), tlog.TileHashReader(tree, tr))
+	if err != nil {
+		return nil, fmt.Errorf("ProveTree: %v", err)
+	}
+	r := make([][]byte, 0, len(proof))
+	for _, h := range proof {
+		r = append(r, h[:])
+	}
+	return r, nil
+}
+
+func (s Source) LogSigVerifier() note.Verifier {
+	return s.v
+}
+
+func (s Source) LogOrigin() string {
+	return s.origin
 }
 
 type tileReader struct {

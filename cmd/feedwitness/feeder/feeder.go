@@ -30,9 +30,9 @@ var ErrNoSignaturesAdded = errors.New("no additional signatures added")
 type FetchProofFn func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error)
 
 // Source holds parameters when calling the Feed function.
-type Source struct {
+type Source interface {
 	// FetchCheckpoint should return a recent checkpoint from the source log.
-	FetchCheckpoint func(ctx context.Context) ([]byte, error)
+	FetchCheckpoint(ctx context.Context) ([]byte, error)
 
 	// FetchProof should return a consistency proof from the source log.
 	//
@@ -40,10 +40,10 @@ type Source struct {
 	// function will be called with a default `from` value - this allows compact-range
 	// type proofs to be supported.  Implementations for non-compact-range type proofs
 	// should return an empty proof and no error.
-	FetchProof FetchProofFn
+	FetchProof(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error)
 
 	// LogSigVerifier a verifier for log checkpoint signatures.
-	LogSigVerifier note.Verifier
+	LogSigVerifier() note.Verifier
 	// LogOrigin is the expected first line of checkpoints from the source log.
-	LogOrigin string
+	LogOrigin() string
 }

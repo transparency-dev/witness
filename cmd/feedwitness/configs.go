@@ -22,8 +22,9 @@ import (
 	"maps"
 
 	logfmt "github.com/transparency-dev/formats/log"
-	"github.com/transparency-dev/witness/config"
 	"github.com/transparency-dev/formats/note"
+	"github.com/transparency-dev/witness/cmd/feedwitness/feeder"
+	"github.com/transparency-dev/witness/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,7 +40,7 @@ type logYAML struct {
 	PublicKey string `yaml:"PublicKey"`
 	URL       string `yaml:"URL"`
 
-	Feeder logFeeder `yaml:"Feeder"`
+	Feeder feeder.LogFeeder `yaml:"Feeder"`
 }
 
 // newStaticFeederConfig creates a new config based on the provided YAML data.
@@ -49,7 +50,7 @@ func newStaticFeederConfig(yamlCfg []byte) (*staticFeederConfig, error) {
 		return nil, fmt.Errorf("failed to unmarshal witness config: %v", err)
 	}
 	r := &staticFeederConfig{
-		feeders: make(map[string]feederConfig),
+		feeders: make(map[string]feeder.FeederConfig),
 	}
 	for _, log := range cfg.Logs {
 		logV, err := note.NewVerifier(log.PublicKey)
@@ -66,8 +67,8 @@ func newStaticFeederConfig(yamlCfg []byte) (*staticFeederConfig, error) {
 			log.Origin = logV.Name()
 		}
 		logID := logfmt.ID(log.Origin)
-		if log.Feeder != None {
-			f := feederConfig{
+		if log.Feeder != feeder.None {
+			f := feeder.FeederConfig{
 				Feeder: log.Feeder,
 				Log:    logCfg,
 			}
@@ -81,11 +82,11 @@ func newStaticFeederConfig(yamlCfg []byte) (*staticFeederConfig, error) {
 }
 
 type staticFeederConfig struct {
-	feeders map[string]feederConfig
+	feeders map[string]feeder.FeederConfig
 }
 
-func (s *staticFeederConfig) Feeders(_ context.Context) iter.Seq2[feederConfig, error] {
-	return func(yield func(feederConfig, error) bool) {
+func (s *staticFeederConfig) Feeders(_ context.Context) iter.Seq2[feeder.FeederConfig, error] {
+	return func(yield func(feeder.FeederConfig, error) bool) {
 		for _, v := range s.feeders {
 			if !yield(v, nil) {
 				return

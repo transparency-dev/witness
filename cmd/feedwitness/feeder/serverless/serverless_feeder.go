@@ -26,42 +26,59 @@ import (
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"github.com/transparency-dev/serverless-log/client"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
 
 // NewFeedSource returns a populated FeedSource configured for a serverless log.
-func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (*Source, error) {
 	lURL, err := url.Parse(logURL)
 	if err != nil {
-		return feeder.Source{}, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
+		return nil, fmt.Errorf("invalid LogURL %q: %v", logURL, err)
 	}
 	f := newFetcher(c, lURL)
-	h := rfc6962.DefaultHasher
 
-	fetchCP := func(ctx context.Context) ([]byte, error) {
-		return f(ctx, "checkpoint")
-	}
-	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
-		if from == 0 {
-			return [][]byte{}, nil
-		}
-		pb := client.NewProofBuilderForSize(ctx, to.Size, h.HashChildren, f)
-
-		conP, err := pb.ConsistencyProof(ctx, from, to.Size)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", origin, from, to.Size, err)
-		}
-		return conP, nil
-	}
-
-	return feeder.Source{
-		LogOrigin:       origin,
-		FetchCheckpoint: fetchCP,
-		FetchProof:      fetchProof,
-		LogSigVerifier:  verifier,
+	return &Source{
+		httpClient: c,
+		logURL:     lURL,
+		v:          verifier,
+		origin:     origin,
+		fetcher:    f,
 	}, nil
+}
+
+// Source is a FeederSource which knows how to interact with serverless logs.
+type Source struct {
+	httpClient *http.Client
+	logURL     *url.URL
+	v          note.Verifier
+	origin     string
+	fetcher    client.Fetcher
+}
+
+func (s Source) FetchCheckpoint(ctx context.Context) ([]byte, error) {
+	return s.fetcher(ctx, "checkpoint")
+}
+
+func (s Source) FetchProof(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+	if from == 0 {
+		return [][]byte{}, nil
+	}
+	pb := client.NewProofBuilderForSize(ctx, to.Size, rfc6962.DefaultHasher.HashChildren, s.fetcher)
+
+	conP, err := pb.ConsistencyProof(ctx, from, to.Size)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create proof for %q(%d -> %d): %v", s.origin, from, to.Size, err)
+	}
+	return conP, nil
+}
+
+func (s Source) LogSigVerifier() note.Verifier {
+	return s.v
+}
+
+func (s Source) LogOrigin() string {
+	return s.origin
 }
 
 // TODO(al): factor this stuff out and share between tools:
