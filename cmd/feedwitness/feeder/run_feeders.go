@@ -56,15 +56,16 @@ func init() {
 	}
 }
 
+// FeederConfig represents the config for feeding a specific log.
 type FeederConfig struct {
 	Log    config.Log
 	Feeder LogFeeder
 }
 
-// updateFn is the signature of a function which knows how to update a witness.
+// UpdateFn is the signature of a function which knows how to update a witness.
 type UpdateFn func(ctx context.Context, oldSize uint64, newCP []byte, proof [][]byte) ([]byte, uint64, error)
 
-// targetWitness represents a target witness to be fed.
+// TargetWitness represents a target witness to be fed.
 type TargetWitness struct {
 	Update UpdateFn
 	Name   string
@@ -90,7 +91,7 @@ type wJob struct {
 	f         func(sizeHint uint64, w TargetWitness) (uint64, error)
 }
 
-// runFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
+// RunFeeders continually feeds checkpoints from logs to witnesses according to the provided config.
 //
 // This is a long-running function which will only return when the context is done.
 func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
@@ -205,7 +206,7 @@ func RunFeeders(ctx context.Context, opts RunFeedOpts) error {
 	return eg.Wait()
 }
 
-// FeedOnce completes one feeding operation for the log and witness in the provided configuration.
+// feedOnce completes one feeding operation for the log and witness in the provided configuration.
 // The provided sizeHint is size of the log that the caller believes is current on the target witness.
 //
 // Returns a new hint on what the current size of the log on the target witness.
@@ -381,7 +382,7 @@ func (f LogFeeder) String() string {
 	return feederNameByID[f]
 }
 
-// ParseFeeder takes a string and returns a valid enum or an error.
+// parseFeeder takes a string and returns a valid enum or an error.
 func parseFeeder(f string) (LogFeeder, error) {
 	f = strings.TrimSpace(strings.ToLower(f))
 	value, ok := feederByName[f]

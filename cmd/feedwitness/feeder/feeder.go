@@ -17,14 +17,10 @@ package feeder
 
 import (
 	"context"
-	"errors"
 
 	"github.com/transparency-dev/formats/log"
 	"golang.org/x/mod/sumdb/note"
 )
-
-// ErrNoSignaturesAdded is returned when the witness has already signed the presented checkpoint.
-var ErrNoSignaturesAdded = errors.New("no additional signatures added")
 
 // FetchProofFn is the signature of a function which knows how to fetch a consistency proof.
 type FetchProofFn func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error)

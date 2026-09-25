@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-const name = "github.com/transparency-dev/witness/cmd/feedwitness"
+const name = "github.com/transparency-dev/witness/cmd/feedwitness/feeder"
 
 var (
 	meter = otel.Meter(name)
