@@ -17,13 +17,15 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/transparency-dev/witness/cmd/feedwitness/feeder"
 )
 
 func TestParseConfig(t *testing.T) {
 	wantOrigin := "tlog.andxor.it"
 	wantURL := "https://tlog.andxor.it"
 	wantPublicKey := "tlog.andxor.it+d5e6b3d0+AU6uJ3h8tb+RRMdGjHV4KCrrHoKfIYGbhL2A46thEhKQ"
-    cfg := fmt.Appendf(nil, "Logs:\n- Origin: %s\n  URL: %s\n  PublicKey: %s\n  Feeder: tiles", wantOrigin, wantURL, wantPublicKey)
+	cfg := fmt.Appendf(nil, "Logs:\n- Origin: %s\n  URL: %s\n  PublicKey: %s\n  Feeder: tiles", wantOrigin, wantURL, wantPublicKey)
 
 	fCfg, err := newStaticFeederConfig(cfg)
 	if err != nil {
@@ -47,7 +49,7 @@ func TestParseConfig(t *testing.T) {
 		if f.Log.Verifier == nil {
 			t.Error("got nil Verifier, want non-nil")
 		}
-		if f.Feeder != Tiles {
+		if f.Feeder != feeder.Tiles {
 			t.Errorf("got Feeder %s, want Tiles", f.Feeder)
 		}
 	}
@@ -56,4 +58,3 @@ func TestParseConfig(t *testing.T) {
 		t.Fatalf("Got %d feeders, want %d", got, want)
 	}
 }
-

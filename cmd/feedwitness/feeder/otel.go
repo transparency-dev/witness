@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package feeder
 
 import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
 
-const name = "github.com/transparency-dev/witness/cmd/feedwitness"
+const name = "github.com/transparency-dev/witness/cmd/feedwitness/feeder"
 
 var (
-	meter  = otel.Meter(name)
+	meter = otel.Meter(name)
 )
 
 var (

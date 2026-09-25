@@ -34,8 +34,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	w_http "github.com/transparency-dev/witness/client/http"
-	"github.com/transparency-dev/witness/witness"
+	"github.com/transparency-dev/witness/cmd/feedwitness/feeder"
 	"github.com/transparency-dev/witness/omniwitness"
+	"github.com/transparency-dev/witness/witness"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -89,7 +90,7 @@ func main() {
 
 	httpClient := httpClientFromFlags()
 
-	witnesses := []targetWitness{}
+	witnesses := []feeder.TargetWitness{}
 	for _, wu := range witnessURL {
 		u, err := url.Parse(wu)
 		if err != nil {
@@ -99,21 +100,21 @@ func main() {
 			witness: w_http.NewWitness(u, httpClient),
 			url:     wu,
 		}
-		witness := targetWitness{
+		witness := feeder.TargetWitness{
 			Name:   wu,
 			Update: lc.Update,
 		}
 		witnesses = append(witnesses, witness)
 	}
 
-	rOpts := runFeedOpts{
+	rOpts := feeder.RunFeedOpts{
 		Witnesses:     witnesses,
 		HTTPClient:    httpClient,
 		MaxWitnessQPS: *rateLimit,
 		MatchLogs:     *feed,
 		FeederConfigs: cfg.Feeders,
 	}
-	if err := runFeeders(ctx, rOpts); err != nil {
+	if err := feeder.RunFeeders(ctx, rOpts); err != nil {
 		klog.Errorf("%v", err)
 	}
 }

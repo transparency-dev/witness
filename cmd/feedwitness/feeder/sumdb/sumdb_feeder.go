@@ -22,7 +22,6 @@ import (
 
 	"github.com/transparency-dev/formats/log"
 	"github.com/transparency-dev/witness/internal/client"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
 	"k8s.io/klog/v2"
@@ -34,46 +33,60 @@ const (
 )
 
 // NewFeedSource returns a populated NewFeedSource configured for a sumdb log.
-func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (feeder.Source, error) {
+func NewFeedSource(origin string, verifier note.Verifier, logURL string, c *http.Client) (*Source, error) {
 	sdb := client.NewSumDB(tileHeight, verifier, logURL, c)
 
-	fetchProof := func(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
-		if from == 0 {
-			return [][]byte{}, nil
-		}
-		tr := tileReader{c: sdb}
-		tree := tlog.Tree{
-			N:    int64(to.Size),
-			Hash: tlog.Hash(to.Hash),
-		}
-		proof, err := tlog.ProveTree(int64(to.Size), int64(from), tlog.TileHashReader(tree, tr))
-		if err != nil {
-			return nil, fmt.Errorf("ProveTree: %v", err)
-		}
-		r := make([][]byte, 0, len(proof))
-		for _, h := range proof {
-			h := h
-			r = append(r, h[:])
-		}
-		klog.V(1).Infof("Fetched proof from %d -> %d", from, to.Size)
-		return r, nil
-	}
-
-	fetchCheckpoint := func(_ context.Context) ([]byte, error) {
-		sdbcp, err := sdb.LatestCheckpoint()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get latest checkpoint: %v", err)
-		}
-		return sdbcp.Raw, nil
-
-	}
-
-	return feeder.Source{
-		LogOrigin:       origin,
-		FetchCheckpoint: fetchCheckpoint,
-		FetchProof:      fetchProof,
-		LogSigVerifier:  verifier,
+	return &Source{
+		v:      verifier,
+		origin: origin,
+		client: sdb,
 	}, nil
+}
+
+// Source is a FeederSource which knows how to interact with sumDB logs.
+type Source struct {
+	v      note.Verifier
+	origin string
+	client *client.SumDBClient
+}
+
+func (s Source) FetchProof(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+	if from == 0 {
+		return [][]byte{}, nil
+	}
+	tr := tileReader{c: s.client}
+	tree := tlog.Tree{
+		N:    int64(to.Size),
+		Hash: tlog.Hash(to.Hash),
+	}
+	proof, err := tlog.ProveTree(int64(to.Size), int64(from), tlog.TileHashReader(tree, tr))
+	if err != nil {
+		return nil, fmt.Errorf("ProveTree: %v", err)
+	}
+	r := make([][]byte, 0, len(proof))
+	for _, h := range proof {
+		h := h
+		r = append(r, h[:])
+	}
+	klog.V(1).Infof("Fetched proof from %d -> %d", from, to.Size)
+	return r, nil
+}
+
+func (s Source) FetchCheckpoint(_ context.Context) ([]byte, error) {
+	sdbcp, err := s.client.LatestCheckpoint()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest checkpoint: %v", err)
+	}
+	return sdbcp.Raw, nil
+
+}
+
+func (s Source) LogSigVerifier() note.Verifier {
+	return s.v
+}
+
+func (s Source) LogOrigin() string {
+	return s.origin
 }
 
 type tileReader struct {

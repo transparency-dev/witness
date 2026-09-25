@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package feeder
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"github.com/transparency-dev/merkle/rfc6962"
 	sclient "github.com/transparency-dev/serverless-log/client"
 	"github.com/transparency-dev/serverless-log/testdata"
-	"github.com/transparency-dev/witness/internal/feeder"
 	"github.com/transparency-dev/witness/witness"
 	"golang.org/x/mod/sumdb/note"
 )
@@ -34,7 +33,7 @@ func TestFeedOnce(t *testing.T) {
 	for _, test := range []struct {
 		desc     string
 		submitCP []byte
-		update   updateFn
+		update   UpdateFn
 		wantErr  bool
 	}{
 		{
@@ -79,19 +78,41 @@ func TestFeedOnce(t *testing.T) {
 			return conP, nil
 		}
 
-		src := feeder.Source{
-			FetchProof:     fetchProof,
-			LogOrigin:      testdata.TestLogOrigin,
-			LogSigVerifier: testdata.LogSigVerifier(t),
+		src := &testSource{
+			fetchProof: fetchProof,
+			origin:     testdata.TestLogOrigin,
+			v:          testdata.LogSigVerifier(t),
 		}
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := feedOnce(ctx, 0, targetWitness{Update: test.update}, test.submitCP, src)
+			_, err := feedOnce(ctx, 0, TargetWitness{Update: test.update}, test.submitCP, src)
 			gotErr := err != nil
 			if test.wantErr != gotErr {
 				t.Fatalf("Got err %v, want err %t", err, test.wantErr)
 			}
 		})
 	}
+}
+
+type testSource struct {
+	fetchProof FetchProofFn
+	origin     string
+	v          note.Verifier
+}
+
+func (s testSource) FetchProof(ctx context.Context, from uint64, to log.Checkpoint) ([][]byte, error) {
+	return s.fetchProof(ctx, from, to)
+}
+
+func (s testSource) FetchCheckpoint(ctx context.Context) ([]byte, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s testSource) LogSigVerifier() note.Verifier {
+	return s.v
+}
+
+func (s testSource) LogOrigin() string {
+	return s.origin
 }
 
 type slowWitness struct {
