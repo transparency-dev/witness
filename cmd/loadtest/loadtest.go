@@ -323,6 +323,10 @@ func (l *inMemoryLog) next() (cpSigned []byte, cpSize uint64, consProof [][]byte
 		klog.Exitf("Failed to sign checkpoint: %v", err)
 	}
 
+	// The proof must be empty if the witness has no previous state for this log.
+	if l.witnessedSize == 0 {
+		return cpSigned, l.size, nil
+	}
 	nodes, err := proof.Consistency(l.witnessedSize, l.size)
 	if err != nil {
 		klog.Exitf("Failed to determine consistency proof: %v", err)
