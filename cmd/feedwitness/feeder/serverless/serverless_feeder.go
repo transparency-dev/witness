@@ -107,6 +107,14 @@ func newFetcher(c *http.Client, root *url.URL) client.Fetcher {
 					klog.Errorf("Failed to close response body: %v", err)
 				}
 			}()
+			switch resp.StatusCode {
+			case http.StatusOK:
+			case http.StatusNotFound:
+				// Need to return ErrNotExist here, by contract.
+				return nil, fmt.Errorf("get(%q): %w", u.String(), os.ErrNotExist)
+			default:
+				return nil, fmt.Errorf("get(%q): %s", u.String(), resp.Status)
+			}
 			return io.ReadAll(resp.Body)
 		}
 	case "file":
