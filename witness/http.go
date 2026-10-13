@@ -155,7 +155,7 @@ func NewSignSubtreeHandler(signSubtree SignSubtreeFunc) http.HandlerFunc {
 
 // handleSignSubtree submits the sign-subtree request to the witness and interprets any errors.
 func handleSignSubtree(ctx context.Context, signSubtree SignSubtreeFunc, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) (int, []byte, string, error) {
-	sigs, err := signSubtree(ctx, start, end, subRoot, proof, cp)
+	sig, err := signSubtree(ctx, start, end, subRoot, proof, cp)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUnknownLog):
@@ -177,7 +177,7 @@ func handleSignSubtree(ctx context.Context, signSubtree SignSubtreeFunc, start, 
 		}
 	}
 
-	return http.StatusOK, sigs, "", nil
+	return http.StatusOK, append(base64.StdEncoding.AppendEncode(nil, sig), '\n'), "", nil
 }
 
 // parseBody reads the incoming request and parses into constituent parts.

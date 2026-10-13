@@ -271,6 +271,8 @@ func TestHandlerAgainstRealWitness(t *testing.T) {
 }
 
 func TestSubtreeHandler(t *testing.T) {
+	subtreeSig := []byte("This is a signature..")
+
 	for _, test := range []struct {
 		name string
 		// fake witness control
@@ -282,9 +284,9 @@ func TestSubtreeHandler(t *testing.T) {
 	}{
 		{
 			name:       "Accepted by witness",
-			witness:    &testWitness{signSubtreeResponse: []byte(testCPSig)},
+			witness:    &testWitness{signSubtreeResponse: subtreeSig},
 			wantStatus: 200,
-			wantBody:   testCPSig,
+			wantBody:   base64.StdEncoding.EncodeToString(subtreeSig) + "\n",
 		}, {
 			name:       "ErrUnknownLog",
 			witness:    &testWitness{signSubtreeErr: ErrUnknownLog},
@@ -354,7 +356,8 @@ func TestSubtreeHandlerAgainstRealWitness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to update witness checkpoint: %v", err)
 	}
-	cosignedCp := append(bytes.Clone(logCp), sigs...)
+	// Spec requires that the _ONLY_ signature sent to the handler is the witness's.
+	cosignedCp := stripOtherSignatures(t, append(bytes.Clone(logCp), sigs...), w.subtreeVerifiers...)
 
 	for _, test := range []struct {
 		name       string
@@ -385,12 +388,17 @@ func TestSubtreeHandlerAgainstRealWitness(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			sc, _, _, err := handleSignSubtree(ctx, w.SignSubtree, 0, 1, d0, [][]byte{d1}, test.cp)
+			sc, body, _, err := handleSignSubtree(ctx, w.SignSubtree, 0, 1, d0, [][]byte{d1}, test.cp)
 			if err != nil {
 				t.Fatalf("handleSignSubtree: %v", err)
 			}
 			if got, want := sc, test.wantStatus; got != want {
 				t.Errorf("handleSignSubtree got status %d, want %d", got, want)
+			}
+			if body != nil {
+				if _, err := base64.StdEncoding.DecodeString(string(body)); err != nil {
+					t.Errorf("handleSignSubtree returned invalid base64 %q: %v", body, err)
+				}
 			}
 		})
 	}

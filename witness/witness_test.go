@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 
@@ -520,13 +519,12 @@ func (p *testPersistence) Update(_ context.Context, origin string, f func([]byte
 	return nil
 }
 
-// newSubtreeWitness returns a witness configured with two subtree-capable ML-DSA signers.
+// newSubtreeWitness returns a witness configured with a subtree-capable ML-DSA signer.
 func newSubtreeWitness(t *testing.T, logs []logOpts) *Witness {
 	t.Helper()
 
 	const signerPrefix = "witness-mldsa"
 	ns1 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-1", signerPrefix))
-	ns2 := mustCreateMLDSACosigner(t, fmt.Sprintf("%s-2", signerPrefix))
 
 	// Setup log verifier(s).
 	logMap := make(cfg)
@@ -541,7 +539,7 @@ func newSubtreeWitness(t *testing.T, logs []logOpts) *Witness {
 	w, err := New(t.Context(), Opts{
 		Persistence:          newPersistence(),
 		EnableSubtreeSigning: true,
-		Signers:              []note.Signer{ns1, ns2},
+		Signers:              []note.Signer{ns1},
 		VerifierForLog:       logMap.Log,
 	})
 	if err != nil {
@@ -555,11 +553,6 @@ func TestSignSubtree(t *testing.T) {
 
 	w := newSubtreeWitness(t, []logOpts{{origin: "monkeys", PK: mPK}})
 
-	logV, err := note.NewVerifier(mPK)
-	if err != nil {
-		t.Fatalf("failed to create log verifier: %v", err)
-	}
-
 	// Create a log checkpoint of size 2.
 	d0 := make([]byte, 32)
 	d0[0] = 0xaa
@@ -570,21 +563,16 @@ func TestSignSubtree(t *testing.T) {
 	logCp := mustCreateCheckpoint(t, mSK, "monkeys", 2, root)
 
 	// Let the witness sign it (update to size 2).
-	sigs, _, err := w.Update(ctx, 0, logCp, nil)
+	sig, _, err := w.Update(ctx, 0, logCp, nil)
 	if err != nil {
 		t.Fatalf("failed to update witness checkpoint: %v", err)
 	}
-	cosignedCp := append(bytes.Clone(logCp), sigs...)
+	// Spec requires that the _ONLY_ signature sent to the handler is the witness's.
+	cosignedCp := stripOtherSignatures(t, append(bytes.Clone(logCp), sig...), w.subtreeVerifiers...)
 
-	// Prepare unknown-log checkpoint signed by witness.
-	unknownLogCp := mustCreateCheckpoint(t, mSK, "unknown-log", 2, root)
-	n, err := note.Open(unknownLogCp, note.VerifierList(logV))
+	unknownCp, _, err := w.signChkpt(&note.Note{Text: fmt.Sprintf("unknown-log\n2\n%s\n", base64.StdEncoding.EncodeToString(root))})
 	if err != nil {
-		t.Fatal(err)
-	}
-	wSigned, _, err := w.signChkpt(n)
-	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to create unknown log checkpoint: %v", err)
 	}
 
 	for _, tc := range []struct {
@@ -605,22 +593,7 @@ func TestSignSubtree(t *testing.T) {
 			chkpt:   cosignedCp,
 			wantErr: nil,
 		}, {
-			name:    "success - multi subtree-signers",
-			start:   0,
-			end:     1,
-			subRoot: d0,
-			proof:   [][]byte{d1},
-			chkpt:   cosignedCp,
-			wantErr: nil,
-		}, {
-			name:    "unknown log",
-			start:   0,
-			end:     1,
-			subRoot: d0,
-			proof:   [][]byte{d1},
-			chkpt:   wSigned,
-			wantErr: ErrUnknownLog,
-		}, {
+			// SPEC: The checkpoint MUST include exactly one note signature. That signature MUST be from one of the witness's keys.
 			name:    "no witness signature",
 			start:   0,
 			end:     1,
@@ -628,6 +601,23 @@ func TestSignSubtree(t *testing.T) {
 			proof:   [][]byte{d1},
 			chkpt:   logCp,
 			wantErr: ErrNoWitnessSignature,
+		}, {
+			// SPEC: The checkpoint MUST include exactly one note signature.
+			name:    "too many signatures",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   append(bytes.Clone(logCp), sig...),
+			wantErr: ErrBadRequest,
+		}, {
+			name:    "unknown log",
+			start:   0,
+			end:     1,
+			subRoot: d0,
+			proof:   [][]byte{d1},
+			chkpt:   unknownCp,
+			wantErr: ErrUnknownLog,
 		}, {
 			// SPEC: The witness MUST verify that the checkpoint includes a valid cosignature from one of
 			//       its own keys. If the witness can't verify the checkpoint, it MUST respond with a
@@ -692,11 +682,11 @@ func TestSignSubtree(t *testing.T) {
 			subRoot: d0,
 			proof:   make([][]byte, 64),
 			chkpt:   cosignedCp,
-			wantErr: ErrInvalidProof,
+			wantErr: ErrBadRequest,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sigs, err := w.SignSubtree(ctx, tc.start, tc.end, tc.subRoot, tc.proof, tc.chkpt)
+			sig, err := w.SignSubtree(ctx, tc.start, tc.end, tc.subRoot, tc.proof, tc.chkpt)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("expected error %v, got %v", tc.wantErr, err)
 			}
@@ -704,51 +694,9 @@ func TestSignSubtree(t *testing.T) {
 				return
 			}
 
-			// Returned signatures should be note signatures, so split on newlines but keep them attached.
-			lines := bytes.SplitAfter(sigs, []byte("\n"))
-			if len(lines) == 0 {
-				t.Fatalf("expected at least one signature line and a trailing newline, got: %q", sigs)
-			}
-			// Final element MUST be empty, or the final signature was invalid.
-			if len(lines[len(lines)-1]) != 0 {
-				t.Fatalf("last element is not empty, final signature was invalid: %q", lines[len(lines)-1])
-			}
-			lines = lines[:len(lines)-1]
-
-			vs := make(map[string]f_note.SubtreeVerifier)
-			for _, s := range w.subtreeSigners {
-				vs[s.Name()] = s.Verifier()
-			}
-			// Verify the returned subtree signature(s)
-			for _, s := range lines {
-				// Check the returned signature is in the correct format.
-				sigLine := string(s)
-				bits := strings.Split(sigLine, " ")
-				if len(bits) != 3 {
-					t.Fatalf("unexpected signature line format: %q, want 3 parts", sigLine)
-				}
-				if bits[0] != "—" {
-					t.Fatalf("unexpected signature line format: %q, want prefix %q", sigLine, "—")
-				}
-				signerName := bits[1]
-				b64sig := bits[2]
-				sigBytes, err := base64.StdEncoding.DecodeString(b64sig)
-				if err != nil {
-					t.Fatalf("failed to decode base64 signature: %v", err)
-				}
-				// The signature bytes contain keyHash (4 bytes) + sig.
-				if len(sigBytes) < 4 {
-					t.Fatalf("signature too short: %d bytes", len(sigBytes))
-				}
-
-				// Now verify the subtree signature.
-				verifier, ok := vs[signerName]
-				if !ok {
-					t.Fatalf("no verifier found for name %q", signerName)
-				}
-				if !verifier.VerifySubtree("monkeys", tc.start, tc.end, tc.subRoot, s) {
-					t.Fatalf("subtree signature verification failed (signature %q)", s)
-				}
+			v := w.subtreeVerifiers[0].(f_note.SubtreeVerifier)
+			if !v.VerifySubtree("monkeys", tc.start, tc.end, tc.subRoot, sig) {
+				t.Fatalf("subtree signature verification failed (signature %x)", sig)
 			}
 		})
 	}
@@ -767,4 +715,26 @@ func mustCreateMLDSACosigner(t *testing.T, name string) f_note.SubtreeSigner {
 	}
 
 	return ns
+}
+
+// stripOtherSignatures removes any signatures from a serialized note.
+func stripOtherSignatures(t *testing.T, n []byte, verifiers ...note.Verifier) []byte {
+	t.Helper()
+
+	cp, err := note.Open(n, note.VerifierList(verifiers...))
+	if err != nil {
+		err2, ok := err.(*note.UnverifiedNoteError)
+		if !ok {
+			t.Fatalf("note open failed with unexpected error: %v", err)
+		}
+		cp = err2.Note
+	}
+
+	// Remove all unverified sigs, and "sign" with no key.
+	cp.UnverifiedSigs = nil
+	r, err := note.Sign(cp)
+	if err != nil {
+		t.Fatalf("failed to sign note: %v", err)
+	}
+	return r
 }
