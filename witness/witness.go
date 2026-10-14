@@ -461,8 +461,10 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 	if err != nil {
 		var invalidSig *note.InvalidSignatureError
 		var unverified *note.UnverifiedNoteError
+		// Even though we don't recognise the signature (which is why we're here), if we got more than
+		// one signature in the note, we must return Bad Request as per the spec.
 		if errors.As(err, &unverified) && len(unverified.Note.UnverifiedSigs) != 1 {
-			return nil, ErrBadRequest
+			return nil, fmt.Errorf("%w: %v", ErrBadRequest, err)
 		}
 		if errors.As(err, &invalidSig) || errors.As(err, &unverified) {
 			return nil, fmt.Errorf("%w: %v", ErrNoWitnessSignature, err)
@@ -513,7 +515,8 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 	k := nameHash{name: n.Sigs[0].Name, hash: n.Sigs[0].Hash}
 	signer, ok := w.subtreeSigners[k]
 	if !ok {
-		return nil, ErrBadRequest
+		klog.Warningf("LOGIC ERROR: no corresponding subtreeSigner found for configured subtreeVerifier %+v", k)
+		return nil, fmt.Errorf("no signer for key %+v", k)
 	}
 
 	sig, err := signer.SignSubtree(cp.Origin, start, end, subRoot)
