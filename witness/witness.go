@@ -116,9 +116,15 @@ type Opts struct {
 type Witness struct {
 	lsp              LogStatePersistence
 	Signers          []note.Signer
-	subtreeSigners   []f_note.SubtreeSigner
+	subtreeSigners   map[nameHash]f_note.SubtreeSigner
 	subtreeVerifiers []note.Verifier
 	VerifierForLog   func(ctx context.Context, origin string) (note.Verifier, bool, error)
+}
+
+// nameHash represents a witness key's name+keyhash tuple.
+type nameHash struct {
+	name string
+	hash uint32
 }
 
 // New creates a new witness, which initially has no logs to follow.
@@ -128,13 +134,13 @@ func New(ctx context.Context, wo Opts) (*Witness, error) {
 		return nil, fmt.Errorf("Persistence.Init(): %v", err)
 	}
 
-	subtreeSigners := make([]f_note.SubtreeSigner, 0, len(wo.Signers))
+	subtreeSigners := make(map[nameHash]f_note.SubtreeSigner, len(wo.Signers))
 	subtreeVerifiers := make([]note.Verifier, 0, len(wo.Signers))
 	// Ensure we can handle subtree signing, if it is enabled.
 	if wo.EnableSubtreeSigning {
 		for _, s := range wo.Signers {
 			if ss, ok := s.(f_note.SubtreeSigner); ok {
-				subtreeSigners = append(subtreeSigners, ss)
+				subtreeSigners[nameHash{name: ss.Name(), hash: ss.KeyHash()}] = ss
 				subtreeVerifiers = append(subtreeVerifiers, ss.Verifier())
 			}
 		}
@@ -430,7 +436,7 @@ func (w *Witness) SupportsSubtreeSigning() bool {
 // The values returned depend on whether or not the request is accepted, and if not, the reason it
 // was rejected. This can be determined through the error:
 //
-// - no error: The request was accepted, and serialised note-signature(s) over the subtree are returned.
+// - no error: The request was accepted, and the raw cosignature over the subtree is returned.
 // - ErrNoWitnessSignature: the presented checkpoint carries no signature which verifies against the witness' subtree-capable key(s).
 // - ErrInvalidCheckpoint: the presented checkpoint is not a well-formed signed checkpoint.
 // - ErrUnknownLog: the presented checkpoint carries an Origin which is unknown to the witness.
@@ -455,10 +461,21 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 	if err != nil {
 		var invalidSig *note.InvalidSignatureError
 		var unverified *note.UnverifiedNoteError
+		// Even though we don't recognise the signature (which is why we're here), if we got more than
+		// one signature in the note, we must return Bad Request as per the spec.
+		if errors.As(err, &unverified) && len(unverified.Note.UnverifiedSigs) != 1 {
+			return nil, fmt.Errorf("%w: %v", ErrBadRequest, err)
+		}
 		if errors.As(err, &invalidSig) || errors.As(err, &unverified) {
 			return nil, fmt.Errorf("%w: %v", ErrNoWitnessSignature, err)
 		}
 		return nil, fmt.Errorf("%w: %v", ErrInvalidCheckpoint, err)
+	}
+
+	// SPEC: The checkpoint MUST include exactly one note signature. That signature MUST be from one of the witness's keys.
+	if len(n.Sigs) != 1 || len(n.UnverifiedSigs) != 0 {
+		// SPEC: If the request is invalid according to the rules above, the witness MUST respond with a "400 Bad Request" HTTP status code.
+		return nil, ErrBadRequest
 	}
 
 	var cp log.Checkpoint
@@ -486,7 +503,7 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 
 	// SPEC: The client MUST NOT send more than 63 consistency proof lines
 	if len(cProof) > 63 {
-		return nil, ErrInvalidProof
+		return nil, ErrBadRequest
 	}
 
 	// SPEC: The consistency proof lines MUST encode a Subtree Consistency Proof from the subtree to the checkpoint
@@ -495,18 +512,18 @@ func (w *Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []
 		return nil, ErrInvalidProof
 	}
 
-	var sigs bytes.Buffer
-	for _, s := range w.subtreeSigners {
-		sig, err := s.SignSubtree(cp.Origin, start, end, subRoot)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't sign subtree: %v", err)
-		}
-		_, _ = sigs.Write(sig)
+	k := nameHash{name: n.Sigs[0].Name, hash: n.Sigs[0].Hash}
+	signer, ok := w.subtreeSigners[k]
+	if !ok {
+		klog.Warningf("LOGIC ERROR: no corresponding subtreeSigner found for configured subtreeVerifier %+v", k)
+		return nil, fmt.Errorf("no signer for key %+v", k)
 	}
-	if sigs.Len() == 0 {
-		return nil, ErrNotImplemented
+
+	sig, err := signer.SignSubtree(cp.Origin, start, end, subRoot)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't sign subtree: %v", err)
 	}
-	return sigs.Bytes(), nil
+	return sig, nil
 }
 
 // isSubtreeValid returns whether a subtree covers a valid range.

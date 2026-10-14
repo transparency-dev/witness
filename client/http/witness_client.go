@@ -150,6 +150,9 @@ func (w Witness) Update(ctx context.Context, oldSize uint64, newCP []byte, proof
 // SignSubtree attempts to request a subtree cosignature from the witness,
 // by providing a checkpoint signed by the witness and a subtree consistency
 // proof.
+//
+// The checkpoint MUST carry exactly one signature, and it MUST be from the same
+// witness this request is being sent to.
 func (w Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []byte, proof [][]byte, cp []byte) ([]byte, error) {
 	if l := len(proof); l > 63 {
 		return nil, errors.New("too many proof lines")
@@ -191,7 +194,11 @@ func (w Witness) SignSubtree(ctx context.Context, start, end uint64, subRoot []b
 
 	switch resp.StatusCode {
 	case http.StatusOK, 0:
-		return body, nil
+		sig, err := base64.StdEncoding.AppendDecode(nil, bytes.TrimSuffix(body, []byte("\n")))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode body: %v", err)
+		}
+		return sig, nil
 	case http.StatusBadRequest:
 		// SPEC: 400 covers every invalid sign-subtree request (range line, subtree range, malformed
 		//       checkpoint), with nothing in the response to say which rule was broken.

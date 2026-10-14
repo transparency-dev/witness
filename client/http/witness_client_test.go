@@ -46,7 +46,7 @@ func TestSignSubtree(t *testing.T) {
 		[]byte("0123456789abcdef0123456789abcdef"),
 	}
 	cp := []byte(testCP)
-	wantSig := []byte("— witness.example/w1 GuvvwNqqDmhh5OoDEJyEWiNUB2F1vR\n")
+	subtreeSig := []byte("This is a signature")
 
 	for _, tc := range []struct {
 		name       string
@@ -56,7 +56,7 @@ func TestSignSubtree(t *testing.T) {
 		proof      [][]byte
 		cp         []byte
 		handler    http.HandlerFunc
-		wantBody   []byte
+		wantSig    []byte
 		wantErr    error
 		wantErrMsg string
 	}{
@@ -88,9 +88,10 @@ func TestSignSubtree(t *testing.T) {
 					t.Errorf("request body mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 				}
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write(wantSig)
+				_, _ = w.Write(base64.StdEncoding.AppendEncode(nil, subtreeSig))
+				_, _ = w.Write([]byte("\n"))
 			},
-			wantBody: wantSig,
+			wantSig: subtreeSig,
 		},
 		{
 			name:       "too many proof lines",
@@ -201,7 +202,7 @@ func TestSignSubtree(t *testing.T) {
 			}
 
 			client := NewWitness(u, http.DefaultClient)
-			gotBody, err := client.SignSubtree(t.Context(), tc.start, tc.end, tc.subRoot, tc.proof, tc.cp)
+			gotSig, err := client.SignSubtree(t.Context(), tc.start, tc.end, tc.subRoot, tc.proof, tc.cp)
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) {
 					t.Errorf("got error %v, want %v", err, tc.wantErr)
@@ -217,8 +218,8 @@ func TestSignSubtree(t *testing.T) {
 			if err != nil {
 				t.Fatalf("SignSubtree unexpected error: %v", err)
 			}
-			if !cmp.Equal(gotBody, tc.wantBody) {
-				t.Errorf("SignSubtree got body %q, want %q", gotBody, tc.wantBody)
+			if !cmp.Equal(gotSig, tc.wantSig) {
+				t.Errorf("SignSubtree got body %q, want %q", gotSig, tc.wantSig)
 			}
 		})
 	}

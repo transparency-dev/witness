@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/prometheus/client_golang v1.24.1
-	github.com/transparency-dev/formats v0.1.2-0.20260916152522-091ce41666c0
+	github.com/transparency-dev/formats v0.1.2-0.20261013130728-340a9e55b2b7
 	github.com/transparency-dev/merkle v0.0.3-0.20260707140218-77df88e508fa
 	github.com/transparency-dev/serverless-log v0.0.0-20250425165558-64e1d2007a10
 	go.opentelemetry.io/otel v1.46.0
@@ -37,7 +37,7 @@ require (
 	cloud.google.com/go/iam v1.12.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
-	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e // indirect
+	filippo.io/mldsa v1.0.0 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
