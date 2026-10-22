@@ -51,6 +51,7 @@ var (
 	metricsAddr = flag.String("metrics_listen", ":8081", "Address to listen on for metrics")
 	dbFile      = flag.String("db_file", "", "path to a file to be used as sqlite3 storage for checkpoints, e.g. /tmp/chkpts.db")
 	dbMaxConns  = flag.Int("db_max_conns", 1000, "Maximum number of connections to sqlite3 database")
+	dbBeginImm  = flag.Bool("db_begin_immediate", false, "sqlite3 writes allow concurrent updates to wait up to busy_timeout. Ignored without --db_file")
 
 	signingKey                  = flag.String("private_key", "", "The note-compatible signing key to use. DEPRECATED: please use --private_key_path")
 	signingKeyPaths             multiStringFlag
@@ -140,8 +141,9 @@ func main() {
 		// Start up local database.
 		klog.Infof("Connecting to local DB at %q", *dbFile)
 		ps, shutdown, err := psql.New(ctx, psql.Opts{
-			Path:         *dbFile,
-			MaxOpenConns: *dbMaxConns,
+			Path:           *dbFile,
+			MaxOpenConns:   *dbMaxConns,
+			BeginImmediate: *dbBeginImm,
 		})
 		if err != nil {
 			klog.Exitf("Failed to construct SQL persistence: %v", err)
