@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Temporary MPTCP fix, needs to be above package declaration:
+//go:debug multipathtcp=0
+
 // omniwitness_gcp is a single executable that runs a witness using GCP services.
 package main
 
