@@ -2,21 +2,26 @@ services:
   witness:
     image: gcr.io/trillian-opensource-ci/omniwitness:${WITNESS_VERSION}
     volumes:
-        - type: volume
-          source: data
-          target: /data
-          volume:
-            nocopy: true
-        - type: bind
-          source: ${WITNESS_PRIVATE_KEY_PATH}
-          target: /private_key
-          read_only: true
+      - type: volume
+        source: data
+        target: /data
+      - type: bind
+        source: ${WITNESS_PRIVATE_KEY_PATH}
+        target: /private_key
+        read_only: true
     command:
       - "--listen=:8100"
       - "--db_file=/data/witness.sqlite"
       - "--private_key_path=/private_key"
       - "--logtostderr"
       - "--v=2"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: always
     ports:
       - "8100:8100"
