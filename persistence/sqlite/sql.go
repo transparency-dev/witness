@@ -37,6 +37,11 @@ type Opts struct {
 	Path string
 	// MaxOpenConns sets to maximum number of open connections to the database.
 	MaxOpenConns int
+	// BeginImmediate starts write transactions with BEGIN IMMEDIATE rather than the default
+	// BEGIN DEFERRED. Concurrent updates then wait up to busy_timeout for the write lock,
+	// rather than failing immediately with SQLITE_BUSY_SNAPSHOT (returned as ErrPushback)
+	// when a deferred transaction's read is upgraded to a write after another writer committed.
+	BeginImmediate bool
 }
 
 // New returns a persistence object that is backed by the provided database.
@@ -47,7 +52,12 @@ func New(ctx context.Context, opts Opts) (*Persistence, func() error, error) {
 	// - use WAL mode as this allows for read concurrency while writes are happening.
 	// - set a busy_timeout so that sqlite will queue write transactions rather than immediately return ErrBusy
 	// - set synchronous to FULL to ensure durability of commitments
-	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", opts.Path))
+	// - optionally begin write transactions IMMEDIATE, see Opts.BeginImmediate
+	dsn := fmt.Sprintf("%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(1000)&_pragma=synchronous(FULL)", opts.Path)
+	if opts.BeginImmediate {
+		dsn += "&_txlock=immediate"
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to DB: %v", err)
 	}
