@@ -66,14 +66,22 @@ func init() {
 type logsFn func(context.Context) iter.Seq2[config.Log, error]
 
 // newDistributor creates a new Distributor from the given configuration.
+//
+// A rateLimit of zero or less disables rate limiting.
 func newDistributor(baseURL string, client *http.Client, logs logsFn, witSigV note.Verifier, getLatest getLatestCheckpointFn, rateLimit float64) (*distributor, error) {
+	// A zero rate.Limit allows no events beyond the initial burst, which would block
+	// distribution forever after the first request, so map it to rate.Inf instead.
+	limit := rate.Limit(rateLimit)
+	if rateLimit <= 0 {
+		limit = rate.Inf
+	}
 	return &distributor{
 		baseURL:     baseURL,
 		client:      client,
 		logs:        logs,
 		getLatest:   getLatest,
 		witnessName: witSigV.Name(),
-		rateLimiter: rate.NewLimiter(rate.Limit(rateLimit), max(1, int(rateLimit))),
+		rateLimiter: rate.NewLimiter(limit, max(1, int(rateLimit))),
 	}, nil
 }
 
