@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/transparency-dev/witness/config"
@@ -73,21 +74,31 @@ func TestDistributeOnce(t *testing.T) {
 
 	wit := &silentWitness{}
 	wit.result = msg
-	d, err := newDistributor(ts.URL, http.DefaultClient, lc.Logs, wV, wit.GetLatestCheckpoint, 10.0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := d.DistributeOnce(context.Background()); err != nil {
-		t.Error(err)
-	}
-	if got, want := fd.lastCheckpoint, wit.result; !bytes.Equal(got, want) {
-		t.Errorf("got %v != want %v", got, want)
-	}
-	if got, want := fd.lastLogID, f_log.ID(lc.lc.Origin); got != want {
-		t.Errorf("got %q != want %q", got, want)
-	}
-	if got, want := fd.lastWitID, "witness"; got != want {
-		t.Errorf("got %q != want %q", got, want)
+
+	// A rate limit of zero means unlimited, so it must not block after the first request.
+	for _, rateLimit := range []float64{10.0, 0} {
+		t.Run(fmt.Sprintf("rateLimit=%v", rateLimit), func(t *testing.T) {
+			d, err := newDistributor(ts.URL, http.DefaultClient, lc.Logs, wV, wit.GetLatestCheckpoint, rateLimit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			for range 2 {
+				if err := d.DistributeOnce(ctx); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got, want := fd.lastCheckpoint, wit.result; !bytes.Equal(got, want) {
+				t.Errorf("got %v != want %v", got, want)
+			}
+			if got, want := fd.lastLogID, f_log.ID(lc.lc.Origin); got != want {
+				t.Errorf("got %q != want %q", got, want)
+			}
+			if got, want := fd.lastWitID, "witness"; got != want {
+				t.Errorf("got %q != want %q", got, want)
+			}
+		})
 	}
 }
 
