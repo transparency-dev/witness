@@ -18,6 +18,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -224,6 +227,42 @@ func TestDeadlock(t *testing.T) {
 	_, _, err = w.Update(ctx, 5, mNext, consProof)
 	if err != nil {
 		t.Fatalf("Second Update failed (expected success with fix): %v", err)
+	}
+}
+
+func TestConcurrentUpdatesBeginImmediate(t *testing.T) {
+	p, shutdown, err := New(t.Context(), Opts{Path: filepath.Join(t.TempDir(), "witness.db"), MaxOpenConns: 16, BeginImmediate: true})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := p.Init(t.Context()); err != nil {
+		t.Fatalf("Init(): %v", err)
+	}
+	defer func() { _ = shutdown() }()
+
+	// Updates to different logs overlap between reading the current checkpoint and writing the
+	// next one. With deferred transactions some of these fail with ErrPushback; with
+	// BeginImmediate they must all wait for the write lock and succeed.
+	const numLogs, numUpdates = 8, 10
+	errs := make(chan error, numLogs*numUpdates)
+	var wg sync.WaitGroup
+	for i := range numLogs {
+		wg.Go(func() {
+			origin := fmt.Sprintf("log%d", i)
+			for j := range numUpdates {
+				errs <- p.Update(t.Context(), origin, func(current []byte) ([]byte, error) {
+					time.Sleep(time.Millisecond)
+					return fmt.Appendf(nil, "%s %d", origin, j), nil
+				})
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("Update: %v", err)
+		}
 	}
 }
 
